@@ -1,86 +1,101 @@
 # 🌱 HugaTiera
+
 ### A Platform for Gardening Services with Generative AI Integration
 
-**HugaTiera** is a web-based gardening services platform designed to connect clients with freelance gardeners and landscaping service providers. It aims to make gardening services more accessible by providing a centralized platform where users can discover gardeners, explore service portfolios, submit inquiries, discuss quotations, and arrange gardening services.
+HugaTiera is a web-based gardening services marketplace designed to connect clients with freelance gardeners and landscaping service providers.
 
-The platform also aims to provide AI-powered garden planning assistance to help users explore gardening ideas and possible improvements for their outdoor spaces.
+The platform provides a centralized space where clients can discover gardening services, explore provider portfolios, submit service inquiries, communicate with gardeners, receive indicative quotations, and arrange service bookings.
 
-> **Project Status:** In Development  
-> **Project Type:** Academic Software Engineering Project  
-> **Initial Target Location:** Zamboanga City, Philippines
+HugaTiera also aims to integrate a Generative AI Garden Planning Assistant to help users explore gardening ideas, plant recommendations, and possible improvements for their outdoor spaces.
 
 ---
 
-## 📌 Project Overview
+## 📌 Project Information
 
-Finding reliable gardening service providers and planning outdoor spaces can be challenging for homeowners and property managers. At the same time, freelance gardeners may have difficulty showcasing their work and reaching potential clients.
+| Information | Details |
+|---|---|
+| Project Name | HugaTiera |
+| Project Title | A Platform for Gardening Services with Generative AI Integration |
+| Project Type | Web-Based Marketplace Platform |
+| Project Category | Academic Software Engineering Project |
+| Initial Target Location | Zamboanga City, Philippines |
+| Development Status | In Development |
 
-HugaTiera addresses these challenges by providing a digital marketplace where clients and gardening service providers can connect.
-
-Unlike a traditional booking management system, HugaTiera focuses on the complete service discovery and inquiry process. Clients can explore gardening services, communicate with providers, receive service information or indicative quotations, and decide whether to proceed with a booking.
+---
 
 ## 🎯 Project Objectives
 
 - Connect clients with freelance gardeners and landscaping service providers.
 - Provide gardeners with a platform to showcase their services, skills, and portfolios.
-- Allow clients to discover and compare available gardening services.
+- Help clients discover and compare available gardening services.
 - Support service inquiries and communication between clients and gardeners.
 - Provide a booking and scheduling process after both parties agree.
-- Integrate a Generative AI Garden Planning Assistant for basic gardening ideas and recommendations.
+- Integrate Generative AI to assist users with basic garden planning ideas and recommendations.
+
+---
 
 ## ✨ Key Features
 
-### 👤 Client Features
+### 👤 Client
+
 - Account registration and login.
 - Profile management.
-- Browse available gardeners and gardening services.
-- Search and filter service providers.
+- Browse gardening services.
+- Search and filter gardeners.
 - View gardener profiles and portfolios.
 - Submit service inquiries.
-- Receive responses and indicative quotations.
-- Communicate with gardeners.
+- Receive gardener responses and indicative quotations.
+- Communicate with gardening service providers.
 - Request and manage bookings.
-- View booking history and status.
+- View booking history and statuses.
 - Submit ratings and reviews after completed services.
 - Access the AI Garden Planning Assistant.
 
-### 🌿 Gardener Features
+### 🌿 Gardener
+
 - Gardener registration and login.
 - Profile management.
 - Create and manage gardening service listings.
+- Select gardening service categories.
 - Upload portfolio images.
-- Showcase gardening skills and experience.
-- Receive and respond to client inquiries.
-- Provide service information and indicative quotations.
+- Showcase skills and experience.
+- Receive and manage client inquiries.
+- Respond to inquiries with service information and indicative quotations.
 - Communicate with clients.
 - Accept or decline booking requests.
 - Manage service schedules and booking statuses.
+- View ratings and reviews.
 
-### 🛠️ Administrator Features
+### 🛠️ Administrator
+
 - Administrative dashboard.
 - Manage client and gardener accounts.
 - Manage gardening service categories.
 - Monitor platform activities.
 - Review reported users or content.
+- Monitor inquiries and bookings.
 - View basic platform statistics and reports.
 
 ### 🤖 AI Garden Planning Assistant
-The platform plans to integrate a Generative AI assistant to help users explore basic gardening concepts.
 
-Expected capabilities include:
-- Suggesting suitable plants based on user-provided conditions.
-- Providing basic garden layout ideas.
-- Recommending garden styles.
-- Suggesting improvements for small gardens and terraces.
-- Providing general gardening and maintenance tips.
+The planned AI assistant will help users explore gardening concepts and recommendations.
 
-**AI Integration Approach:**
+Expected capabilities:
+
+- Suggest suitable plants based on user-provided conditions.
+- Provide basic garden layout ideas.
+- Recommend possible garden styles.
+- Suggest improvements for small gardens and terraces.
+- Provide general gardening and maintenance tips.
+
+**AI Integration Strategy:**
+
 - Prioritize text-based AI assistance.
-- Investigate AI APIs with available free-tier access.
-- Keep API credentials on the server side.
+- Investigate APIs with available free-tier access.
+- Protect API credentials using backend environment variables.
 - Apply usage limits to control API consumption.
 - Avoid automatic switching to paid models.
-- Keep image generation optional and subject to available resources and budget.
+- Keep image generation optional and subject to technical feasibility and budget.
 
 AI-generated suggestions are conceptual and should be reviewed before actual implementation.
 
@@ -89,232 +104,288 @@ AI-generated suggestions are conceptual and should be reviewed before actual imp
 ## 🔄 Main Platform Workflow
 
 ```text
-Client
-  |
-  v
-Browse Gardening Services
-  |
-  v
-View Gardener Profile and Portfolio
-  |
-  v
-Submit Service Inquiry
-  |
-  v
-Gardener Receives Inquiry
-  |
-  v
-Gardener Responds with Details
-and Indicative Quotation
-  |
-  v
-Client Reviews the Response
-  |
-  v
-Proceed with Booking?
-  |
-  +---- No ----> End Inquiry
-  |
-  +---- Yes ---> Submit Booking Request
+                  CLIENT
                     |
                     v
-              Gardener Accepts
-              or Declines
+          Browse Gardening Services
                     |
                     v
-              Service Completion
+       View Gardener Profile and Portfolio
                     |
                     v
-              Client Submits Review
+             Submit Inquiry
+                    |
+                    v
+             GARDENER
+                    |
+                    v
+       Respond with Service Information
+          and Indicative Quotation
+                    |
+                    v
+             CLIENT REVIEWS
+                    |
+                    v
+            Proceed to Booking?
+               /       \
+             No         Yes
+             |           |
+             v           v
+        End Inquiry   Submit Booking
+                         |
+                         v
+                  Gardener Accepts
+                    or Declines
+                         |
+                         v
+                  Service Completion
+                         |
+                         v
+                   Client Review
 ```
 
 ---
 
 ## 🧰 Technology Stack
 
-The proposed development technologies are:
+HugaTiera uses a JavaScript-based full-stack architecture with MySQL as its relational database.
 
-| Category | Technology |
-|---|---|
-| Frontend | HTML, CSS, JavaScript |
-| UI Framework | Bootstrap / Custom CSS |
-| Backend | PHP |
-| Database | MySQL |
-| Local Development | XAMPP |
-| Code Editor | Visual Studio Code |
-| Version Control | Git and GitHub |
-| AI Integration | Generative AI API with suitable free-tier availability |
+| Component | Technology | Purpose |
+|---|---|---|
+| Frontend | React.js | User interface and interactive components |
+| Backend | Node.js | Server-side runtime |
+| Backend Framework | Express.js | REST API and application logic |
+| Database | MySQL | Relational data storage |
+| Styling | CSS / Bootstrap / Tailwind CSS | Responsive user interface |
+| Development Server | Vite | Frontend development and build tooling |
+| API Testing | Postman | API testing and debugging |
+| Version Control | Git | Source code management |
+| Repository Hosting | GitHub | Project collaboration and version control |
+| AI Integration | Generative AI API | Garden planning assistance |
 
-*The final implementation may be adjusted based on project requirements and technical feasibility.*
+**Architecture:** React + Express.js + Node.js + MySQL.
+
+*Note: This is a customized MERN-style architecture using MySQL instead of MongoDB. The project's selected database is MySQL.*
 
 ---
 
-## 📂 Project Structure
+## 🏗️ System Architecture
 
-The following is the proposed project organization. The actual structure may change during development.
+```text
++----------------------------------+
+|          React Frontend          |
+|                                  |
+| Client | Gardener | Administrator|
++----------------+-----------------+
+                 |
+                 | HTTP / REST API
+                 v
++----------------------------------+
+|        Express.js Backend        |
+|                                  |
+| Authentication and Authorization|
+| User and Profile Management      |
+| Services and Portfolios          |
+| Inquiries and Quotations         |
+| Messaging and Bookings           |
+| Reviews and Notifications        |
+| AI Integration                   |
++----------------+-----------------+
+                 |
+          +------+------+
+          |             |
+          v             v
++----------------+  +----------------+
+|   MySQL DB     |  | External AI API|
+|                |  |                |
+| Application    |  | Garden Planning|
+| Data           |  | Assistance     |
++----------------+  +----------------+
+```
+
+---
+
+## 📂 Proposed Project Structure
 
 ```text
 HugaTiera/
 │
-├── assets/
-│   ├── css/
-│   ├── js/
-│   └── images/
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── components/
+│   │   ├── layouts/
+│   │   ├── pages/
+│   │   │   ├── client/
+│   │   │   ├── gardener/
+│   │   │   └── admin/
+│   │   ├── services/
+│   │   ├── hooks/
+│   │   ├── context/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   └── package.json
 │
-├── config/
-│   └── database.php
-│
-├── includes/
-│   ├── header.php
-│   ├── footer.php
-│   └── functions.php
-│
-├── admin/
-│
-├── client/
-│
-├── gardener/
-│
-├── ai/
-│
-├── uploads/
+├── backend/
+│   ├── config/
+│   ├── controllers/
+│   ├── middleware/
+│   ├── models/
+│   ├── routes/
+│   ├── services/
+│   ├── utils/
+│   ├── uploads/
+│   ├── app.js
+│   ├── server.js
+│   ├── .env.example
+│   └── package.json
 │
 ├── database/
 │   └── hugatiera.sql
 │
-├── index.php
-├── login.php
-├── register.php
-├── logout.php
-├── README.md
-└── .gitignore
+├── .gitignore
+└── README.md
 ```
+
+*The folder structure is a proposed organization and may evolve during development.*
 
 ---
 
 ## ⚙️ Installation and Setup
 
-Follow these steps to run the project locally once the application and database files are available.
-
 ### Prerequisites
 
-Install the following:
+Install the following development tools:
 
-- [XAMPP](https://www.apachefriends.org/)
+- [Node.js](https://nodejs.org/)
 - [Visual Studio Code](https://code.visualstudio.com/)
 - [Git](https://git-scm.com/)
+- [MySQL Community Server](https://dev.mysql.com/downloads/mysql/)
+
+Optional database management tools:
+
+- [MySQL Workbench](https://dev.mysql.com/downloads/workbench/)
+- phpMyAdmin
 
 ### 1. Clone the Repository
-
-Open your terminal and execute:
 
 ```bash
 git clone https://github.com/YOUR-USERNAME/HugaTiera.git
 ```
 
-Navigate to the project directory:
+Navigate to the project:
 
 ```bash
 cd HugaTiera
 ```
 
-### 2. Move the Project to XAMPP
+### 2. Set Up the MySQL Database
 
-Place the project folder inside:
+1. Start your MySQL server.
+2. Open MySQL Workbench or phpMyAdmin.
+3. Create the project database.
+4. Import the provided SQL file when available.
 
-```text
-C:\xampp\htdocs\
-```
-
-Your project directory should look like:
-
-```text
-C:\xampp\htdocs\HugaTiera\
-```
-
-### 3. Start XAMPP
-
-Open the XAMPP Control Panel and start:
-
-- Apache
-- MySQL
-
-### 4. Create the Database
-
-1. Open your browser.
-2. Navigate to `http://localhost/phpmyadmin`.
-3. Create a database named:
+Example:
 
 ```sql
-hugatiera_db
+CREATE DATABASE hugatiera_db;
 ```
 
-4. Import the provided SQL file:
+The database name and schema should match the backend configuration.
 
-```text
-database/hugatiera.sql
+### 3. Configure the Backend
+
+Navigate to the backend folder:
+
+```bash
+cd backend
 ```
 
-*If the SQL file is not yet available, the database setup is still in development.*
+Install dependencies:
 
-### 5. Configure the Database Connection
+```bash
+npm install
+```
 
-Update the database configuration file according to your local MySQL setup.
+Create a `.env` file based on `.env.example`.
 
 Example configuration:
 
-```php
-<?php
+```env
+PORT=5000
+NODE_ENV=development
 
-$host = "localhost";
-$username = "root";
-$password = "";
-$database = "hugatiera_db";
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_NAME=hugatiera_db
 
-$conn = new mysqli(
-    $host,
-    $username,
-    $password,
-    $database
-);
+JWT_SECRET=your_secure_secret
 
-if ($conn->connect_error) {
-    die("Database connection failed.");
-}
-
-?>
+AI_API_KEY=your_ai_api_key
 ```
 
-Use appropriate credentials for your own environment. Do not commit production credentials to GitHub.
+Do not upload your actual `.env` file or API keys to GitHub.
 
-### 6. Run the Application
+Start the backend using the available development script:
 
-Open your browser and visit:
-
-```text
-http://localhost/HugaTiera/
+```bash
+npm run dev
 ```
+
+*The exact command depends on the final backend package configuration.*
+
+### 4. Configure the Frontend
+
+Open another terminal and navigate to the frontend folder:
+
+```bash
+cd frontend
+```
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the React development server:
+
+```bash
+npm run dev
+```
+
+### 5. Access the Application
+
+Open the local development address displayed by Vite in your terminal.
+
+The backend API will run on the configured Node.js server port.
 
 ---
 
 ## 🔐 Security Considerations
 
-The project will follow basic web application security practices, including:
+The project aims to follow basic web application security practices:
 
-- Password hashing using PHP password functions.
-- Prepared statements for database queries.
+- Secure password hashing.
+- Parameterized MySQL queries.
 - Server-side input validation.
-- Role-based access control.
-- Secure session handling.
-- Validation of uploaded files.
-- Protection of sensitive configuration files.
-- Keeping AI API keys outside publicly accessible source code.
+- Authentication and role-based authorization.
+- Secure session or token management.
+- Protected API routes.
+- File upload validation.
+- Environment variables for sensitive credentials.
+- API request limits.
+- Proper error handling.
+- Protection against unauthorized data access.
 
 ---
 
-## 💳 Payment and Service Limitations
+## 💳 Project Scope and Limitations
 
-HugaTiera is intended to facilitate connections between clients and gardening service providers.
+The initial version focuses on connecting clients with gardening service providers.
 
 The following are outside the initial project scope:
 
@@ -324,9 +395,11 @@ The following are outside the initial project scope:
 - E-commerce for physical gardening supplies.
 - Live GPS tracking.
 - Automated gardener dispatch.
+- Payroll and employee management.
 - Professional CAD or 3D garden modeling.
 - Native Android and iOS applications.
 - Nationwide deployment.
+- Unrelated home services.
 
 Payment arrangements, such as cash or GCash, will be handled directly between clients and gardeners outside the platform.
 
@@ -334,21 +407,24 @@ Payment arrangements, such as cash or GCash, will be handled directly between cl
 
 ## 🚀 Development Roadmap
 
-- [ ] System architecture and database design
-- [ ] Project setup and database configuration
-- [ ] User authentication and role management
+- [ ] Requirements and system architecture
+- [ ] MySQL database design and review
+- [ ] Frontend and backend project setup
+- [ ] MySQL backend connection
+- [ ] Authentication and role-based access control
 - [ ] Client dashboard
 - [ ] Gardener dashboard
 - [ ] Administrator dashboard
-- [ ] Gardener profiles and portfolios
-- [ ] Gardening service listings and categories
+- [ ] Profile management
+- [ ] Gardener service listings
+- [ ] Gardener portfolios
 - [ ] Marketplace search and filtering
 - [ ] Service inquiry and quotation workflow
 - [ ] Client-gardener messaging
 - [ ] Booking and scheduling
 - [ ] Ratings and reviews
-- [ ] AI Garden Planning Assistant
 - [ ] Notifications
+- [ ] AI Garden Planning Assistant
 - [ ] Administrative reports
 - [ ] System testing and debugging
 - [ ] Deployment
@@ -361,7 +437,7 @@ Payment arrangements, such as cash or GCash, will be handled directly between cl
 |---|---|
 | Clients | Homeowners and property managers looking for gardening services. |
 | Gardeners | Freelance gardeners and landscaping service providers. |
-| Administrators | Users responsible for platform administration and monitoring. |
+| Administrators | Users responsible for managing and monitoring the platform. |
 
 ---
 
@@ -369,23 +445,9 @@ Payment arrangements, such as cash or GCash, will be handled directly between cl
 
 The initial implementation focuses on Zamboanga City, Philippines.
 
-The system will be developed as a responsive web application accessible through desktop and mobile browsers.
+HugaTiera will be developed as a responsive web application accessible through desktop and mobile browsers.
 
-Its primary purpose is to establish a centralized platform for discovering gardening services and connecting clients with independent gardening service providers.
-
----
-
-## 📚 Project Information
-
-**Project Name:** HugaTiera
-
-**Project Title:** A Platform for Gardening Services with Generative AI Integration
-
-**Project Category:** Web-Based Marketplace Platform
-
-**Development Purpose:** Academic Software Engineering Project
-
-**Initial Deployment Scope:** Zamboanga City, Philippines
+Its primary purpose is to establish a centralized marketplace for discovering gardening services and connecting clients with independent gardening service providers.
 
 ---
 
@@ -396,5 +458,7 @@ This project is developed for academic purposes. Licensing and permissions for r
 ---
 
 <p align="center">
-  🌱 <strong>HugaTiera</strong> — Connecting People, Gardeners, and Greener Spaces.
+  🌱 <strong>HugaTiera</strong>
+  <br>
+  Connecting People, Gardeners, and Greener Spaces.
 </p>
