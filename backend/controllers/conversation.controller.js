@@ -1,0 +1,142 @@
+const { pool } = require('../config/database')
+const { createNotification } = require('../services/notification.service')
+
+function messageText(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+async function getConversationAccess(conversationId, userId) {
+  const [rows] = await pool.execute(
+    `SELECT id, client_id, gardener_id, inquiry_id
+     FROM conversations
+     WHERE id = ? AND (client_id = ? OR gardener_id = ?)
+     LIMIT 1`,
+    [conversationId, userId, userId],
+  )
+  return rows[0]
+}
+
+async function listConversations(req, res, next) {
+  try {
+    const [conversations] = await pool.execute(
+      `SELECT c.id, c.client_id, c.gardener_id, c.inquiry_id, c.created_at,
+              CASE WHEN c.client_id = ? THEN gp.business_name
+                   ELSE CONCAT(client.first_name, ' ', client.last_name) END AS other_party_name,
+              i.subject AS inquiry_subject,
+              latest.message_text AS latest_message,
+              latest.sent_at AS latest_message_at,
+              COALESCE(unread.unread_count, 0) AS unread_count
+       FROM conversations c
+       JOIN users client ON client.id = c.client_id
+       JOIN gardener_profiles gp ON gp.user_id = c.gardener_id
+       LEFT JOIN inquiries i ON i.id = c.inquiry_id
+       LEFT JOIN (
+         SELECT m1.conversation_id, m1.message_text, m1.sent_at
+         FROM messages m1
+         JOIN (
+           SELECT conversation_id, MAX(id) AS latest_id
+           FROM messages GROUP BY conversation_id
+         ) latest_ids ON latest_ids.latest_id = m1.id
+       ) latest ON latest.conversation_id = c.id
+       LEFT JOIN (
+         SELECT conversation_id, COUNT(*) AS unread_count
+         FROM messages
+         WHERE sender_id <> ? AND read_at IS NULL
+         GROUP BY conversation_id
+       ) unread ON unread.conversation_id = c.id
+       WHERE c.client_id = ? OR c.gardener_id = ?
+       ORDER BY COALESCE(latest.sent_at, c.created_at) DESC`,
+      [req.user.id, req.user.id, req.user.id, req.user.id],
+    )
+    return res.json({ conversations })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function createConversation(req, res, next) {
+  const inquiryId = Number(req.body.inquiryId)
+  if (!Number.isInteger(inquiryId) || inquiryId < 1) {
+    return res.status(400).json({ message: 'A valid inquiry is required.' })
+  }
+
+  try {
+    const [inquiries] = await pool.execute(
+      `SELECT id, client_id, gardener_id
+       FROM inquiries
+       WHERE id = ? AND (client_id = ? OR gardener_id = ?)
+       LIMIT 1`,
+      [inquiryId, req.user.id, req.user.id],
+    )
+    if (!inquiries[0]) return res.status(404).json({ message: 'Inquiry was not found.' })
+
+    const [result] = await pool.execute(
+      `INSERT INTO conversations (client_id, gardener_id, inquiry_id)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [inquiries[0].client_id, inquiries[0].gardener_id, inquiryId],
+    )
+    return res.status(201).json({ id: result.insertId })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function listMessages(req, res, next) {
+  const conversationId = Number(req.params.conversationId)
+  try {
+    const conversation = await getConversationAccess(conversationId, req.user.id)
+    if (!conversation) return res.status(404).json({ message: 'Conversation was not found.' })
+
+    await pool.execute(
+      'UPDATE messages SET read_at = CURRENT_TIMESTAMP WHERE conversation_id = ? AND sender_id <> ? AND read_at IS NULL',
+      [conversationId, req.user.id],
+    )
+    const [messages] = await pool.execute(
+      `SELECT m.id, m.sender_id, m.message_text, m.sent_at, m.read_at,
+              u.first_name, u.last_name
+       FROM messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.conversation_id = ? ORDER BY m.sent_at ASC, m.id ASC`,
+      [conversationId],
+    )
+    return res.json({ conversation, messages })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function sendMessage(req, res, next) {
+  const conversationId = Number(req.params.conversationId)
+  const body = messageText(req.body.message)
+  if (!body || body.length > 5000) {
+    return res.status(400).json({ message: 'Message must contain between 1 and 5,000 characters.' })
+  }
+
+  try {
+    const conversation = await getConversationAccess(conversationId, req.user.id)
+    if (!conversation) return res.status(404).json({ message: 'Conversation was not found.' })
+    const recipientId = conversation.client_id === req.user.id ? conversation.gardener_id : conversation.client_id
+    const [result] = await pool.execute(
+      'INSERT INTO messages (conversation_id, sender_id, message_text) VALUES (?, ?, ?)',
+      [conversationId, req.user.id, body],
+    )
+    await createNotification({
+      userId: recipientId,
+      type: 'new_message',
+      title: 'New message',
+      message: 'You received a new message.',
+      entityType: 'conversation',
+      entityId: conversationId,
+    })
+    return res.status(201).json({ id: result.insertId })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+module.exports = {
+  createConversation,
+  listConversations,
+  listMessages,
+  sendMessage,
+}
