@@ -143,4 +143,3 @@ bookings, reviews, notifications, and reports.
   before Phase 15 is completed.
 - Add an administrator audit table only after confirming the requirement and
   schema change with the project group.
-
