@@ -324,7 +324,8 @@ DB_NAME=hugatiera_db
 
 JWT_SECRET=your_secure_secret
 
-AI_API_KEY=your_ai_api_key
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 Do not upload your actual `.env` file or API keys to GitHub.
@@ -407,27 +408,16 @@ Payment arrangements, such as cash or GCash, will be handled directly between cl
 
 ## 🚀 Development Roadmap
 
-- [ ] Requirements and system architecture
-- [ ] MySQL database design and review
-- [ ] Frontend and backend project setup
-- [ ] MySQL backend connection
-- [ ] Authentication and role-based access control
-- [ ] Client dashboard
-- [ ] Gardener dashboard
-- [ ] Administrator dashboard
-- [ ] Profile management
-- [ ] Gardener service listings
-- [ ] Gardener portfolios
-- [ ] Marketplace search and filtering
-- [ ] Service inquiry and quotation workflow
-- [ ] Client-gardener messaging
-- [ ] Booking and scheduling
-- [ ] Ratings and reviews
-- [ ] Notifications
-- [ ] AI Garden Planning Assistant
-- [ ] Administrative reports
-- [ ] System testing and debugging
-- [ ] Deployment
+The project follows the 16-phase roadmap in
+[`prompt/phase.md`](prompt/phase.md) and the detailed requirements in
+[`prompt/prompts.md`](prompt/prompts.md).
+
+- [x] Phases 1–14: requirements through administrator functions
+- [ ] Phase 15: system integration and testing (in progress)
+- [ ] Phase 16: deployment and documentation
+
+Current confirmed status and remaining work are tracked in
+[`project_progress.md`](project_progress.md).
 
 ---
 
