@@ -34,6 +34,10 @@ run local MySQL, but PHP is not part of the application backend.
 15. **System Integration and Testing** — test all modules, workflows, roles, validation, security, database integrity, and responsive behavior.
 16. **Deployment and Documentation** — prepare deployment configuration, setup instructions, user documentation, demonstrations, and limitations.
 
+## Revision track (scope revision approved 2026-11-10)
+
+After the professor consultation, the concept now has two workflows on one request engine (Case 1 General Service Request, Case 2 Direct Service Provider Inquiry), both requiring mutual agreement before a service is confirmed, with Gemini text and photo understanding (paid image generation postponed). The revision is delivered as steps R0–R7 between Phase 14 and Phase 16, and Phase 15 is completed after R7. Details: `masterprompt.md` Section 11A and `prompts.md`.
+
 ## Cross-phase rules
 
 1. Work on one approved phase or task at a time.

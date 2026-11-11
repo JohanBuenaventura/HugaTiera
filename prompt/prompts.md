@@ -683,3 +683,95 @@ Important:
 - Ensure that the deployed application follows the approved project scope.
 
 Provide a final project completion checklist and identify any remaining limitations.
+
+
+
+=====================================================================
+REVISION TRACK R0–R7 (scope revision approved 2026-11-10)
+=====================================================================
+
+Context: After the professor consultation, HugaTiera supports two workflows on one request engine, and both require mutual agreement before a service is confirmed. See `masterprompt.md` Sections 4, 7, and 11A. These prompts supersede the following older instructions where they conflict: Phase 9 ("client submits a separate booking request; gardener accepts or declines"), Phase 11 (booking requests that the gardener accepts or declines), and Phase 13 (assistant text only). Phases 1–16 above are otherwise unchanged and are NOT repeated.
+
+General rules for every R step:
+- Work on exactly one step, then stop and wait for the user's confirmation.
+- Inspect the existing code and database first. Do not rewrite working features.
+- Present any significant database or API change for review before implementing.
+- Back up the database and get approval before running a migration on the local database.
+- Use parameterized SQL, transactions for related writes, backend validation, ownership checks, and valid state transitions.
+- Never enable paid API billing or paid AI image generation without explicit approval.
+- Run tests and report only results that were actually executed.
+
+---------------------------------------------------------------------
+R0 – Decisions and documentation
+---------------------------------------------------------------------
+Record the approved decisions, update the project documents, and propose the database changes. No code.
+
+---------------------------------------------------------------------
+R1 – Additive database migration
+---------------------------------------------------------------------
+Goal: Prepare the schema for both workflows without breaking existing data.
+- Extend `inquiries` (request type, nullable provider for general requests, category, AI-assisted summary, expiry date `expires_at`, extended statuses including `expired`).
+- Extend `quotations` (response type, proposed changes, revision number, lock timestamp, new statuses, at most one ACTIVE offer per provider per request).
+- Add `quotation_revisions`, `request_images`, `agreements`, `request_events`, and `ai_usage_log`.
+- `agreements` must enforce at the database level: one active agreement per request; an `agreed` agreement requires both approval timestamps; the booking link (`bookings.agreement_id`) is unique.
+- Allow one conversation per request per provider.
+- Link bookings to agreements.
+- Validate the real database first (server version, existing records, ENUM values, duplicates, foreign keys, indexes). Do not assume the proposed SQL runs unchanged.
+- Provide the migration SQL, a rollback note (restoring the backup is the real rollback), and update `database/schema/hugatiera_schema.sql` and `database/README.md`.
+- Back up the database, restore it into a SEPARATE test database, and rehearse the migration there. Leave the original database untouched until the user explicitly approves the real run.
+
+---------------------------------------------------------------------
+R2 – Secure garden-photo upload and storage
+---------------------------------------------------------------------
+Goal: Let clients attach garden photos safely.
+- Validate type, size, and actual file content (not only the MIME type).
+- Use the `sharp` library (approved) to decode and validate every upload, apply EXIF orientation, resize, and re-encode the image with ALL metadata removed, including GPS location. Store only the cleaned copy. Validate type and size as well; reject files that cannot be decoded.
+- Store originals separately from any future generated images.
+- Deliver images only to authorised users (the owning client, the targeted provider, providers with an offer, or approved providers for open general requests). Do not serve them publicly.
+- Handle upload errors and clean up orphaned files.
+
+---------------------------------------------------------------------
+R3 – Mutual agreement engine
+---------------------------------------------------------------------
+Goal: Make the agreement the only way to create a confirmed booking.
+- An agreement records scope of work, price, schedule, location, and conditions, and is proposed by either party.
+- The other party approves, naming the version being approved; approving a version that is no longer current is rejected. Any edit creates a new version and resets approvals.
+- All agreement writes run in one transaction with the agreement row locked.
+- When both parties approve the same version, in a single transaction: check schedule conflicts, mark the agreement agreed, create the booking, update the request status, decline the other open offers, notify both parties, and record the events. Any failure rolls everything back.
+- One active agreement per request; prevent duplicate confirmations.
+- Retire booking creation that bypasses the agreement; route the priced-service direct request through this engine.
+- Keep existing booking progress (in progress, completed, cancelled) and reviews working.
+
+---------------------------------------------------------------------
+R4 – Case 2: Direct Service Provider Inquiry
+---------------------------------------------------------------------
+Goal: Client to one specific provider.
+- Client selects a provider or service, uploads a photo, describes the work, reviews the (AI-assisted) summary, and submits.
+- Provider sees the photo, requirements, and summary; responds with accept, reject, or suggest modifications; may revise before the client accepts.
+- Client is notified, reviews the response, discusses modifications, and proceeds to the agreement.
+
+---------------------------------------------------------------------
+R5 – Case 1: General Service Request
+---------------------------------------------------------------------
+Goal: Client to many providers.
+- Client submits an open request with a photo and requirements, and chooses how long it stays open (`expires_at`: 7, 14, or 30 days; default 14).
+- Approved providers browse open, non-expired requests (area-level location only; exact address is shared only in the agreement) and submit an expression of interest or offer, which they may revise until accepted.
+- Expired requests accept no new offers and no offer revisions. The client may renew or close them. Requests already in agreement are never auto-cancelled or expired. Expired requests show as "Expired" in the provider's "My offers" list.
+- A provider may message the client only after submitting an offer on that request.
+- Client is notified, compares offers with provider profile, ratings, reviews, portfolio, and previous projects, then accepts or rejects.
+- An accepted offer is locked; changes require mutual agreement. Proceed to the agreement.
+
+---------------------------------------------------------------------
+R6 – Gemini assistance (text and photo understanding)
+---------------------------------------------------------------------
+Goal: Practical AI help without paid image generation.
+- Backend endpoints that organise the client's requirements, suggest a category and gardening ideas, and describe the uploaded photo, all returned as editable suggestions that the client approves before submitting.
+- Provider decision-support view (photo, requirements, client-approved AI summary together).
+- Per-user limits stored in the database through `ai_usage_log`; the request flow must still work if AI is unavailable.
+- Keep a provider abstraction so a future image-generation provider can be added after explicit approval.
+- Verify the Gemini model name, free-tier availability, and quotas before relying on them.
+
+---------------------------------------------------------------------
+R7 – Testing and Phase 15 completion
+---------------------------------------------------------------------
+Test both workflows end to end: authorization, ownership, validation, offer revisions and locking, agreement versions and approvals, duplicate-confirmation prevention, schedule conflicts, notifications, image access control, AI failure handling, database integrity, and responsive layouts. Produce the Phase 15 test case table with actual results. Phase 15 is complete only after this step and user confirmation.

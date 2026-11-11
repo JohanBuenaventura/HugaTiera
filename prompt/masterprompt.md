@@ -62,24 +62,47 @@ HugaTiera is more than a basic booking system. Its primary purpose is to provide
 - View inquiries and booking records.
 - Access administrative dashboard and reports.
 
-## 4. IMPORTANT SERVICE WORKFLOW
+## 4. IMPORTANT SERVICE WORKFLOW (REVISED 2026-11-10)
 
-The system must distinguish between an inquiry and a booking.
+The system must distinguish between submitted requests, provider interest/offers, direct inquiries, provider responses, client approvals, mutual agreement, confirmed service arrangements, and completed or cancelled services.
 
-Follow this workflow:
+Two workflows exist in the same platform and share one request engine (the extended `inquiries` and `quotations` tables, plus notifications, conversations, and bookings).
 
-1. Client discovers a gardener or gardening service.
-2. Client submits an inquiry describing the gardening needs.
-3. Gardener reviews the inquiry.
-4. Gardener responds with service information, availability, and an indicative quotation.
-5. Client reviews the response and decides whether to proceed.
-6. If the client agrees, the client submits a booking request.
-7. Gardener accepts or declines the booking request.
-8. Both parties can monitor the booking status.
-9. The service is completed.
-10. Eligible clients can submit reviews.
+### Case 1 – General Service Request (client to providers)
 
-Do not automatically convert inquiries into bookings.
+1. The client uploads an actual photo of the garden, lawn, terrace, or outdoor space.
+2. The client describes what they want (trimming, weeding, adding plants, cleaning, general improvement, other).
+3. Generative AI helps the client understand and organise the requirements (service description, gardening suggestions). The client reviews and edits the AI output.
+4. The client submits the request. It becomes visible to approved providers.
+5. Providers browse open requests and submit an expression of interest or service offer. A provider may revise the offer until the client accepts it; revision history is preserved.
+6. The client is notified and reviews each provider's profile, experience, ratings and reviews, previous projects, portfolio, and proposed details, and compares multiple offers.
+7. The client accepts or rejects an offer. An accepted offer is locked from unilateral changes.
+8. Both parties proceed to the mutual agreement step.
+
+### Case 2 – Direct Service Provider Inquiry (client to a specific provider)
+
+1. The client browses providers and selects a specific provider.
+2. The client uploads a photo and describes the improvements wanted.
+3. Generative AI interprets the photo and requirements (first version: text and photo understanding only; a generated design image is postponed).
+4. The client reviews and submits the inquiry to the selected provider.
+5. The provider receives the original photo, the requirements, the AI-assisted summary, and other relevant information.
+6. The provider evaluates feasibility and accepts, rejects, or suggests modifications.
+7. The client is notified, reviews the response, and may discuss modifications.
+8. Both parties proceed to the mutual agreement step.
+
+### Mutual agreement (applies to BOTH cases and to priced-service direct requests)
+
+Accepting an offer or inquiry does NOT book the service. Before a service arrangement is confirmed, both parties must agree on: (1) the actual scope of work, (2) the price or service cost, (3) the schedule or preferred date, and (4) other relevant conditions.
+
+A booking (confirmed service arrangement) is created only when both the client and the provider have approved the same agreement version. Editing an agreement creates a new version and resets approvals. Duplicate confirmations and conflicting request states must be prevented. Important actions and approvals are recorded in an audit trail.
+
+The existing priced-service "direct booking" feature is kept, but it must follow the same agreement step.
+
+Do not automatically convert an inquiry, request, offer, or acceptance into a booking.
+
+The AI-generated content is only a client-reviewed suggestion or visual reference; it is never a guarantee, approval, price, or commitment.
+
+After completion, eligible clients can submit reviews.
 
 ## 5. TECHNOLOGY STACK
 
@@ -135,27 +158,28 @@ MySQL stores user accounts, profiles, services, inquiries, quotations, conversat
 AI Integration:
 The backend communicates with the selected AI provider. API keys must never be exposed in frontend code.
 
-## 7. AI GARDEN PLANNING ASSISTANT
+## 7. AI GARDEN PLANNING ASSISTANT (REVISED 2026-11-10)
 
-The initial implementation should prioritize a text-based AI assistant.
+Generative AI is one of HugaTiera's main applied emerging technologies. The first revised version is **text and uploaded-photo understanding only**, using the Gemini API through the Express backend.
 
-Possible functions:
-- Suggest suitable plants based on user requirements.
-- Recommend basic garden layouts and styles.
-- Suggest ideas for small gardens, terraces, and home spaces.
-- Provide basic plant care and maintenance recommendations.
-- Suggest gardening approaches based on available space and preferences.
+Responsibilities in the first version:
+- Gardening requirement assistance: help clients describe needs, interpret instructions, organise requirements into a clear service description, and give gardening suggestions.
+- Photo understanding: describe the uploaded garden photo (for example overgrown lawn, bare fence line) to help the client and the provider understand the space, where the model supports image input.
+- Provider decision support: present the original photo, the client's requirements, and the client-reviewed AI summary together so the provider can judge feasibility.
+
+Postponed (later phase, requires explicit user approval): AI-generated or AI-edited garden design images. Do not implement or enable them, and do not enable paid API billing, without approval. Keep the design extensible: original uploads and any future generated images must be stored and recorded separately, and AI usage must be logged, so an image-generation provider can be added without redesign.
+
+AI must NOT independently approve service requests, select providers, confirm bookings, determine final prices, or guarantee gardening outcomes.
 
 AI implementation rules:
-- Verify the provider's current API availability and pricing.
-- Prefer a suitable free tier if available.
-- Never assume a consumer AI subscription includes API credits.
-- Store API keys in backend environment variables.
-- Implement input validation and reasonable usage limits.
-- Handle API errors, rate limits, and exhausted quotas.
+- Verify the provider's current API availability, pricing, free-tier eligibility, quotas, and regional availability before use. Do not assume a text model can generate or edit images.
+- Prefer a suitable free tier. Never assume a consumer AI subscription includes API credits.
+- Store API keys in backend environment variables. Never expose them in the frontend.
+- Implement input validation (including uploaded images) and reasonable per-user usage limits stored in the database.
+- Handle API errors, rate limits, and exhausted quotas gracefully; the request flow must still work without AI.
 - Do not silently switch to a paid API.
-- Clearly communicate that AI recommendations are suggestions and may require professional verification.
-- Treat image generation as optional, not a required MVP feature.
+- Do not send passwords, private messages, or unnecessary personal data to the provider.
+- Clearly communicate that AI output is a suggestion that may require professional verification.
 
 ## 8. PROJECT SCOPE LIMITATIONS
 
@@ -169,7 +193,7 @@ Do not add these features unless the group and adviser approve them:
 - Native Android or iOS applications.
 - Nationwide rollout.
 - Unrelated home services.
-- Advanced AI image editing or generation that introduces unapproved costs.
+- Advanced AI image editing or generation that introduces unapproved costs (postponed; requires explicit approval and verified pricing).
 
 Keep the system manageable for an academic project.
 
@@ -248,6 +272,21 @@ Follow this exact development order:
 14. Administrator Functions
 15. System Integration and Testing
 16. Deployment and Documentation
+
+## 11A. REVISION TRACK (SCOPE REVISION APPROVED 2026-11-10)
+
+After the professor consultation, the concept was revised (Section 4 and Section 7). The revision is implemented as a track of steps that sits between Phase 14 and Phase 16 and is completed as part of Phase 15. It does not renumber the 16 phases and does not repeat completed phases.
+
+- R0 – Record decisions and update documentation; propose database changes for review.
+- R1 – Additive database migration (extend `inquiries` and `quotations`, including a request expiry date; add images, offer revisions, agreements, request events, AI usage log; conversations per provider; bookings linked to agreements). Rehearsed on a restored copy before the real database is touched.
+- R2 – Secure garden-photo upload and storage (the `sharp` library decodes, validates, resizes, and re-encodes each image with all metadata including GPS removed; access-controlled delivery; originals separate from any future generated images).
+- R3 – Mutual agreement engine (transactional, versioned, approvals reset on edit); booking creation allowed only from an agreed agreement; priced-service direct requests routed through it.
+- R4 – Case 2 (Direct Service Provider Inquiry) end to end: photo, requirements, provider feasibility response, modification discussion, agreement.
+- R5 – Case 1 (General Service Request) end to end: open requests, provider board, offers with revisions, comparison, accept/reject, agreement.
+- R6 – Gemini requirement assistance and photo understanding; provider decision-support view; database-backed AI usage limits.
+- R7 – Automated and manual testing of all workflows; completes Phase 15.
+
+Rules: one R step at a time; user confirmation after each step; schema changes are reviewed before they are applied; the database is backed up before any migration; no step is marked complete until its tests have been run.
 
 ## 12. GITHUB AND PROJECT CONTINUITY
 
