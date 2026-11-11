@@ -329,3 +329,18 @@ At the beginning of a new coding task:
 6. Follow the user's specific task and stop when that task is complete.
 
 If the user is asking only a question, brainstorming, or documentation clarification, answer that request without automatically changing application code.
+
+
+## Implementation Plan Reference
+
+- Read `docs/implementation/implementation-plan.md`
+  before implementing tasks covered by the plan.
+- Treat the implementation plan as the approved technical reference.
+- Do not silently change approved database schemas,
+  migrations, or architectural decisions.
+- Report discrepancies between the plan and existing code
+  before proceeding.
+- Never modify the original production database during
+  migration testing.
+- Update `project_progress.md` after completing and
+  verifying implementation tasks.
