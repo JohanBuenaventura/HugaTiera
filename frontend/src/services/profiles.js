@@ -32,4 +32,5 @@ export const profileApi = {
   adminActivity: () => request('/admin/activity'),
   adminReports: () => request('/admin/reports'),
   updateReport: (id, status) => request(`/admin/reports/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  createReport: (details) => request('/profiles/reports', { method: 'POST', body: JSON.stringify(details) }),
 }

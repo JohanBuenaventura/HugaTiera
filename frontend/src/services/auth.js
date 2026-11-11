@@ -1,18 +1,29 @@
 const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 async function request(path, options = {}) {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
-  const data = response.status === 204 ? null : await response.json()
+  let response
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  } catch (networkError) {
+    const error = new Error('Cannot connect to the HugaTiera backend server. Please verify the backend is running.')
+    error.status = 0
+    error.cause = networkError
+    throw error
+  }
+
+  const data = response.status === 204 ? null : await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw new Error(data?.message || 'The request could not be completed.')
+    const error = new Error(data?.message || 'The request could not be completed.')
+    error.status = response.status
+    throw error
   }
 
   return data

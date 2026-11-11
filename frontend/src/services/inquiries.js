@@ -17,5 +17,7 @@ export const inquiriesApi = {
   create: (details) => request('/inquiries', { method: 'POST', body: JSON.stringify(details) }),
   close: (id, status) => request(`/inquiries/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   quote: (id, details) => request(`/inquiries/${id}/quotations`, { method: 'POST', body: JSON.stringify(details) }),
+  reviseQuote: (quotationId, details) => request(`/inquiries/quotations/${quotationId}`, { method: 'PUT', body: JSON.stringify(details) }),
+  withdrawQuote: (quotationId) => request(`/inquiries/quotations/${quotationId}/withdraw`, { method: 'POST' }),
   quoteStatus: (id, status) => request(`/inquiries/quotations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 }
