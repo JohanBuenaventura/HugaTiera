@@ -17,6 +17,7 @@ HugaTiera/
 ├── README.md                         Project overview and setup
 ├── project_progress.md               Confirmed development progress
 ├── recommended_changes.md            Current audit and improvement recommendations
+├── system_bug_and_missing_features.md Phase 15 bug and feature audit tracker
 ├── to_ask.md                         Initial review task
 └── .memory/                          Local project context
 ```
@@ -46,6 +47,7 @@ frontend/
 │   │   ├── ServiceDetailPage.jsx
 │   │   └── ServicesPage.jsx
 │   ├── services/
+│   │   ├── agreements.js
 │   │   ├── ai.js
 │   │   ├── api.js
 │   │   ├── auth.js
@@ -53,6 +55,7 @@ frontend/
 │   │   ├── communication.js
 │   │   ├── inquiries.js
 │   │   ├── profiles.js
+│   │   ├── requestImages.js
 │   │   ├── reviews.js
 │   │   └── services.js
 │   ├── App.css
@@ -79,6 +82,7 @@ backend/
 │   └── database.js
 ├── controllers/
 │   ├── admin.controller.js
+│   ├── agreement.controller.js
 │   ├── ai.controller.js
 │   ├── auth.controller.js
 │   ├── booking.controller.js
@@ -87,6 +91,7 @@ backend/
 │   ├── notification.controller.js
 │   ├── portfolio.controller.js
 │   ├── profile.controller.js
+│   ├── requestImage.controller.js
 │   ├── review.controller.js
 │   └── service.controller.js
 ├── middleware/
@@ -94,6 +99,7 @@ backend/
 │   └── upload.middleware.js
 ├── routes/
 │   ├── admin.routes.js
+│   ├── agreement.routes.js
 │   ├── ai.routes.js
 │   ├── auth.routes.js
 │   ├── booking.routes.js
@@ -104,13 +110,22 @@ backend/
 │   ├── notification.routes.js
 │   ├── portfolio.routes.js
 │   ├── profile.routes.js
+│   ├── requestImage.routes.js
 │   ├── review.routes.js
 │   └── service.routes.js
 ├── services/
 │   ├── ai.service.js
 │   └── notification.service.js
+├── tests/
+│   ├── integration.test.js
+│   ├── r2.requestImages.test.js
+│   ├── r3.agreements.test.js
+│   └── r4.directInquiry.test.js
 ├── uploads/
-│   └── portfolios/
+│   ├── portfolios/
+│   └── request-images/
+│       ├── originals/
+│       └── generated/
 ├── app.js
 ├── server.js
 ├── .env.example
@@ -126,14 +141,20 @@ integration.
 
 ```text
 database/
+├── backups/                          Local SQL dumps (git-ignored)
+├── migrations/
+│   ├── 001_unified_requests_and_agreements.sql
+│   └── 001_unified_requests_and_agreements_rollback.sql
 ├── schema/
 │   └── hugatiera_schema.sql
 └── README.md
 ```
 
-The schema currently defines users, role profiles, service categories,
-services, portfolios, inquiries, quotations, conversations, messages,
-bookings, reviews, notifications, and reports.
+The schema and additive migration define 19 tables: `users`, `client_profiles`,
+`gardener_profiles`, `service_categories`, `services`, `portfolios`, `inquiries`,
+`request_images`, `quotations`, `quotation_revisions`, `agreements`,
+`conversations`, `messages`, `bookings`, `reviews`, `request_events`,
+`ai_usage_log`, `notifications`, and `reports`.
 
 ## Current structural recommendations
 
