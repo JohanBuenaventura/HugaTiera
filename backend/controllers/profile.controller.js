@@ -136,7 +136,71 @@ async function updateProfile(req, res, next) {
   }
 }
 
+async function createReport(req, res, next) {
+  const reason = text(req.body.reason)
+  const details = text(req.body.details) || null
+  const reportedUserId = req.body.reportedUserId ? Number(req.body.reportedUserId) : null
+  const reportedServiceId = req.body.reportedServiceId ? Number(req.body.reportedServiceId) : null
+  const reportedMessageId = req.body.reportedMessageId ? Number(req.body.reportedMessageId) : null
+
+  if (!reason || reason.length > 255) {
+    return res.status(400).json({ message: 'A report reason between 1 and 255 characters is required.' })
+  }
+  if (details && details.length > 2000) {
+    return res.status(400).json({ message: 'Report details must be 2,000 characters or fewer.' })
+  }
+
+  const hasValidTarget = [reportedUserId, reportedServiceId, reportedMessageId].some(
+    (targetId) => Number.isInteger(targetId) && targetId > 0,
+  )
+  if (!hasValidTarget) {
+    return res.status(400).json({ message: 'A valid user, service, or message target is required to submit a report.' })
+  }
+  if (reportedUserId === req.user.id) {
+    return res.status(400).json({ message: 'You cannot submit a report against your own account.' })
+  }
+
+  try {
+    if (reportedUserId) {
+      const [users] = await pool.execute('SELECT id FROM users WHERE id = ? LIMIT 1', [reportedUserId])
+      if (!users[0]) return res.status(404).json({ message: 'Reported user was not found.' })
+    }
+    if (reportedServiceId) {
+      const [services] = await pool.execute('SELECT id, gardener_id FROM services WHERE id = ? LIMIT 1', [reportedServiceId])
+      if (!services[0]) return res.status(404).json({ message: 'Reported service was not found.' })
+      if (services[0].gardener_id === req.user.id) {
+        return res.status(400).json({ message: 'You cannot report your own service listing.' })
+      }
+    }
+    if (reportedMessageId) {
+      const [messages] = await pool.execute('SELECT id, sender_id FROM messages WHERE id = ? LIMIT 1', [reportedMessageId])
+      if (!messages[0]) return res.status(404).json({ message: 'Reported message was not found.' })
+      if (messages[0].sender_id === req.user.id) {
+        return res.status(400).json({ message: 'You cannot report your own message.' })
+      }
+    }
+
+    const [result] = await pool.execute(
+      `INSERT INTO reports
+        (reporter_id, reported_user_id, reported_service_id, reported_message_id, reason, details)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        req.user.id,
+        reportedUserId || null,
+        reportedServiceId || null,
+        reportedMessageId || null,
+        reason,
+        details,
+      ],
+    )
+    return res.status(201).json({ id: result.insertId, status: 'open' })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 module.exports = {
+  createReport,
   getProfile,
   updateProfile,
 }

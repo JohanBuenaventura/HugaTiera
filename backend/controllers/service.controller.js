@@ -95,8 +95,11 @@ async function listServices(req, res, next) {
 }
 
 async function getGardener(req, res, next) {
+  const gardenerId = Number(req.params.gardenerId)
+  if (!Number.isInteger(gardenerId) || gardenerId < 1) {
+    return res.status(400).json({ message: 'A valid gardener profile is required.' })
+  }
   try {
-    const gardenerId = Number(req.params.gardenerId)
     const [gardeners] = await pool.execute(`
       SELECT u.id, u.first_name, u.last_name, gp.business_name, gp.description,
              gp.service_area, gp.years_of_experience
@@ -111,7 +114,7 @@ async function getGardener(req, res, next) {
       [gardenerId],
     )
     const [portfolios] = await pool.execute(
-      'SELECT id, title, description FROM portfolios WHERE gardener_id = ? ORDER BY created_at DESC',
+      'SELECT id, title, description, image_path FROM portfolios WHERE gardener_id = ? ORDER BY created_at DESC',
       [gardenerId],
     )
     const [reviews] = await pool.execute(
@@ -122,7 +125,20 @@ async function getGardener(req, res, next) {
        ORDER BY r.created_at DESC`,
       [gardenerId],
     )
-    return res.json({ gardener: gardeners[0], services, portfolios, reviews })
+    const reviewCount = reviews.length
+    const averageRating = reviewCount > 0
+      ? Number((reviews.reduce((sum, item) => sum + Number(item.rating), 0) / reviewCount).toFixed(1))
+      : null
+    return res.json({
+      gardener: {
+        ...gardeners[0],
+        average_rating: averageRating,
+        review_count: reviewCount,
+      },
+      services,
+      portfolios,
+      reviews,
+    })
   } catch (error) {
     return next(error)
   }

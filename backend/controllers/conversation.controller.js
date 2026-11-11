@@ -56,25 +56,68 @@ async function listConversations(req, res, next) {
 
 async function createConversation(req, res, next) {
   const inquiryId = Number(req.body.inquiryId)
-  if (!Number.isInteger(inquiryId) || inquiryId < 1) {
-    return res.status(400).json({ message: 'A valid inquiry is required.' })
+  const bookingId = Number(req.body.bookingId)
+  const hasInquiry = Number.isInteger(inquiryId) && inquiryId > 0
+  const hasBooking = Number.isInteger(bookingId) && bookingId > 0
+
+  if (!hasInquiry && !hasBooking) {
+    return res.status(400).json({ message: 'A valid inquiry or booking is required.' })
   }
 
   try {
-    const [inquiries] = await pool.execute(
-      `SELECT id, client_id, gardener_id
-       FROM inquiries
-       WHERE id = ? AND (client_id = ? OR gardener_id = ?)
-       LIMIT 1`,
-      [inquiryId, req.user.id, req.user.id],
+    let clientId
+    let gardenerId
+    let linkedInquiryId = null
+
+    if (hasInquiry) {
+      const [inquiries] = await pool.execute(
+        `SELECT id, client_id, gardener_id
+         FROM inquiries
+         WHERE id = ? AND (client_id = ? OR gardener_id = ?)
+         LIMIT 1`,
+        [inquiryId, req.user.id, req.user.id],
+      )
+      if (!inquiries[0]) return res.status(404).json({ message: 'Inquiry was not found.' })
+      clientId = inquiries[0].client_id
+      gardenerId = inquiries[0].gardener_id
+      linkedInquiryId = inquiries[0].id
+    } else {
+      const [bookings] = await pool.execute(
+        `SELECT id, client_id, gardener_id, inquiry_id
+         FROM bookings
+         WHERE id = ? AND (client_id = ? OR gardener_id = ?)
+         LIMIT 1`,
+        [bookingId, req.user.id, req.user.id],
+      )
+      if (!bookings[0]) return res.status(404).json({ message: 'Booking was not found.' })
+      clientId = bookings[0].client_id
+      gardenerId = bookings[0].gardener_id
+      linkedInquiryId = bookings[0].inquiry_id || null
+    }
+
+    if (linkedInquiryId) {
+      const [result] = await pool.execute(
+        `INSERT INTO conversations (client_id, gardener_id, inquiry_id)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+        [clientId, gardenerId, linkedInquiryId],
+      )
+      return res.status(201).json({ id: result.insertId })
+    }
+
+    const [existing] = await pool.execute(
+      `SELECT id FROM conversations
+       WHERE client_id = ? AND gardener_id = ? AND inquiry_id IS NULL
+       ORDER BY id DESC LIMIT 1`,
+      [clientId, gardenerId],
     )
-    if (!inquiries[0]) return res.status(404).json({ message: 'Inquiry was not found.' })
+    if (existing[0]) {
+      return res.status(201).json({ id: existing[0].id })
+    }
 
     const [result] = await pool.execute(
-      `INSERT INTO conversations (client_id, gardener_id, inquiry_id)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-      [inquiries[0].client_id, inquiries[0].gardener_id, inquiryId],
+      'INSERT INTO conversations (client_id, gardener_id, inquiry_id) VALUES (?, ?, NULL)',
+      [clientId, gardenerId],
     )
     return res.status(201).json({ id: result.insertId })
   } catch (error) {

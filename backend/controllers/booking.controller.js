@@ -13,14 +13,18 @@ async function listBookings(req, res, next) {
   const field = req.user.role === 'client' ? 'b.client_id' : 'b.gardener_id'
   try {
     const [bookings] = await pool.execute(
-      `SELECT b.id, b.inquiry_id, b.quotation_id, b.client_id, b.gardener_id,
+      `SELECT b.id, b.inquiry_id, b.quotation_id, b.agreement_id, b.client_id, b.gardener_id,
               b.service_id, b.scheduled_start, b.scheduled_end, b.location,
               b.notes, b.status, b.requested_at, b.updated_at,
               s.title AS service_title,
+              a.version AS agreement_version,
+              a.amount AS agreed_amount,
+              a.scope_of_work AS agreed_scope,
               CONCAT(client.first_name, ' ', client.last_name) AS client_name,
               gp.business_name AS gardener_name
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id
+       LEFT JOIN agreements a ON a.id = b.agreement_id
        JOIN users client ON client.id = b.client_id
        JOIN gardener_profiles gp ON gp.user_id = b.gardener_id
        WHERE ${field} = ?
@@ -36,14 +40,22 @@ async function listBookings(req, res, next) {
 async function getBooking(req, res, next) {
   try {
     const [bookings] = await pool.execute(
-      `SELECT b.id, b.inquiry_id, b.quotation_id, b.client_id, b.gardener_id,
+      `SELECT b.id, b.inquiry_id, b.quotation_id, b.agreement_id, b.client_id, b.gardener_id,
               b.service_id, b.scheduled_start, b.scheduled_end, b.location,
               b.notes, b.status, b.requested_at, b.updated_at,
               s.title AS service_title,
+              a.version AS agreement_version,
+              a.amount AS agreed_amount,
+              a.price_basis AS agreed_price_basis,
+              a.scope_of_work AS agreed_scope,
+              a.conditions AS agreed_conditions,
+              a.client_approved_at,
+              a.gardener_approved_at,
               CONCAT(client.first_name, ' ', client.last_name) AS client_name,
               gp.business_name AS gardener_name
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id
+       LEFT JOIN agreements a ON a.id = b.agreement_id
        JOIN users client ON client.id = b.client_id
        JOIN gardener_profiles gp ON gp.user_id = b.gardener_id
        WHERE b.id = ? AND (b.client_id = ? OR b.gardener_id = ?)
@@ -57,114 +69,14 @@ async function getBooking(req, res, next) {
   }
 }
 
-async function createBooking(req, res, next) {
-  if (req.user.role !== 'client') return res.status(403).json({ message: 'Only clients can submit booking requests.' })
-  const quotationId = Number(req.body.quotationId)
-  const serviceId = Number(req.body.serviceId)
-  const scheduledStart = text(req.body.scheduledStart)
-  const scheduledEnd = text(req.body.scheduledEnd)
-  const location = text(req.body.location) || null
-  const notes = text(req.body.notes) || null
-
-  const hasQuotation = Number.isInteger(quotationId) && quotationId > 0
-  const hasService = Number.isInteger(serviceId) && serviceId > 0
-  if (hasQuotation === hasService) return res.status(400).json({ message: 'Provide either an accepted quotation or an eligible service for booking.' })
-  if (!validDateTime(scheduledStart) || !validDateTime(scheduledEnd)) return res.status(400).json({ message: 'A start and end date/time are required.' })
-  if (new Date(scheduledEnd) <= new Date(scheduledStart)) return res.status(400).json({ message: 'The booking end must be after the start.' })
-  if (!location || location.length > 255) return res.status(400).json({ message: 'A valid service location is required.' })
-  if (notes && notes.length > 5000) return res.status(400).json({ message: 'Booking notes are too long.' })
-
-  const connection = await pool.getConnection()
-  try {
-    await connection.beginTransaction()
-    let bookingSource
-    if (hasQuotation) {
-      const [quotations] = await connection.execute(
-        `SELECT q.id, q.inquiry_id, q.gardener_id, q.status,
-                i.client_id, i.service_id
-         FROM quotations q JOIN inquiries i ON i.id = q.inquiry_id
-         WHERE q.id = ? AND i.client_id = ? FOR UPDATE`,
-        [quotationId, req.user.id],
-      )
-      const quotation = quotations[0]
-      if (!quotation || quotation.status !== 'accepted') {
-        await connection.rollback()
-        return res.status(409).json({ message: 'Only an accepted quotation can be booked.' })
-      }
-      const [existing] = await connection.execute(
-        'SELECT id FROM bookings WHERE quotation_id = ? AND status NOT IN ("declined", "cancelled") LIMIT 1',
-        [quotationId],
-      )
-      if (existing[0]) {
-        await connection.rollback()
-        return res.status(409).json({ message: 'This quotation already has a booking.' })
-      }
-      bookingSource = {
-        inquiryId: quotation.inquiry_id,
-        quotationId: quotation.id,
-        gardenerId: quotation.gardener_id,
-        serviceId: quotation.service_id,
-        message: 'A client submitted a booking request for your accepted quotation.',
-      }
-    } else {
-      const [services] = await connection.execute(
-        `SELECT s.id, s.gardener_id
-         FROM services s
-         JOIN users u ON u.id = s.gardener_id AND u.is_active = TRUE
-         JOIN gardener_profiles gp ON gp.user_id = u.id AND gp.is_approved = TRUE
-         JOIN service_categories c ON c.id = s.category_id AND c.is_active = TRUE
-         WHERE s.id = ? AND s.is_active = TRUE AND s.indicative_price IS NOT NULL
-         LIMIT 1 FOR UPDATE`,
-        [serviceId],
-      )
-      if (!services[0]) {
-        await connection.rollback()
-        return res.status(409).json({ message: 'This service is not eligible for direct booking. Please send an inquiry instead.' })
-      }
-      bookingSource = {
-        inquiryId: null,
-        quotationId: null,
-        gardenerId: services[0].gardener_id,
-        serviceId: services[0].id,
-        message: 'A client submitted a direct booking request for your service.',
-      }
-    }
-
-    const [conflicts] = await connection.execute(
-      `SELECT id FROM bookings
-       WHERE gardener_id = ? AND status IN ('pending', 'accepted', 'in_progress')
-         AND scheduled_start < ? AND scheduled_end > ?
-       LIMIT 1`,
-      [bookingSource.gardenerId, scheduledEnd.replace('T', ' '), scheduledStart.replace('T', ' ')],
-    )
-    if (conflicts[0]) {
-      await connection.rollback()
-      return res.status(409).json({ message: 'The gardener already has a booking during that time.' })
-    }
-
-    const [result] = await connection.execute(
-      `INSERT INTO bookings
-       (inquiry_id, quotation_id, client_id, gardener_id, service_id, scheduled_start, scheduled_end, location, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [bookingSource.inquiryId, bookingSource.quotationId, req.user.id, bookingSource.gardenerId, bookingSource.serviceId, scheduledStart.replace('T', ' '), scheduledEnd.replace('T', ' '), location, notes],
-    )
-    await createNotification({
-      userId: bookingSource.gardenerId,
-      type: 'new_booking',
-      title: 'New booking request',
-      message: bookingSource.message,
-      entityType: 'booking',
-      entityId: result.insertId,
-      connection,
-    })
-    await connection.commit()
-    return res.status(201).json({ id: result.insertId, status: 'pending' })
-  } catch (error) {
-    await connection.rollback()
-    return next(error)
-  } finally {
-    connection.release()
+async function createBooking(req, res) {
+  if (req.user.role !== 'client') {
+    return res.status(403).json({ message: 'Only clients can submit booking requests.' })
   }
+  return res.status(409).json({
+    code: 'MUTUAL_AGREEMENT_REQUIRED',
+    message: 'Direct booking creation is not allowed. A confirmed booking is created automatically only after both the client and the gardener approve the same mutual agreement version.',
+  })
 }
 
 const transitions = {
