@@ -57,7 +57,7 @@ HugaTiera is an academic gardening services platform intended initially for Zamb
 
 It connects clients who need gardening, landscaping, and related services with gardeners who offer those services.
 
-The platform should allow users to discover gardeners and their services, explore portfolios, submit inquiries, receive indicative quotations, communicate, and request bookings.
+The platform should allow users to discover gardeners and their services, explore portfolios, submit general requests or direct inquiries with garden photos, receive AI-assisted help, receive offers and indicative quotations, communicate, reach a mutual agreement, and confirm service arrangements.
 
 HugaTiera is a services marketplace, not an e-commerce store for physical gardening products.
 
@@ -95,6 +95,9 @@ Follow the current direction in `prompt/masterprompt.md`:
 - Keep provider keys in backend environment variables.
 - Verify current provider pricing, free-tier eligibility, quotas, and availability before recommending or implementing a provider.
 - Do not assume a consumer ChatGPT or Gemini subscription includes API credits.
+- First revised version: **text and uploaded-photo understanding only** (Gemini API). Paid AI image generation/editing is **postponed** and must not be implemented or enabled, and paid API billing must not be enabled, without the user's explicit approval.
+- Keep the AI layer extensible (provider abstraction, usage logging, original and generated images stored separately) so image generation can be added later without redesign.
+- The AI must never approve requests, select providers, confirm bookings, set final prices, or guarantee outcomes.
 
 Never replace MySQL with MongoDB. Do not describe the project as requiring a traditional MongoDB-based MERN stack. The approved direction is React + Express + Node.js + MySQL.
 
@@ -108,23 +111,23 @@ The platform has three primary roles:
 - **Gardener:** manages a professional profile, service listings and portfolio, responds to inquiries, provides quotations, communicates with clients, and manages booking requests and service progress.
 - **Administrator:** manages accounts and categories, monitors platform activity and reports, and accesses administrative dashboards and reports.
 
-### Critical inquiry-to-booking rule
+### Critical request-to-confirmation rule (revised 2026-11-10)
 
-An inquiry is not a booking.
+An inquiry, request, provider interest, offer, response, or client acceptance is **not** a booking.
 
-The expected workflow is:
+HugaTiera supports two workflows that share one request engine (extended `inquiries` and `quotations` tables):
 
-1. A client discovers a gardener or service.
-2. The client submits an inquiry describing the gardening requirements.
-3. The gardener reviews and responds to the inquiry.
-4. The gardener provides relevant details, availability, and an indicative quotation.
-5. The client reviews the response and decides whether to proceed.
-6. Only then does the client submit a separate booking request.
-7. The gardener accepts or declines the booking request.
-8. Both parties track the booking and service status.
-9. After completion, an eligible client may submit a review.
+**Case 1 – General Service Request:** the client uploads a garden photo and requirements (with AI text/photo assistance), submits an open request, approved providers browse open requests and submit an expression of interest or offer, the client reviews and compares providers and accepts or rejects an offer.
 
-Never automatically convert an inquiry into a booking.
+**Case 2 – Direct Service Provider Inquiry:** the client selects a specific provider, uploads a photo and requirements (with AI assistance), submits the inquiry, and the provider evaluates feasibility and accepts, rejects, or suggests modifications; the client reviews the response.
+
+**Both cases then require a mutual agreement** on actual scope of work, price, schedule, and other conditions. A booking (confirmed service arrangement) is created **only** when both the client and the provider have approved the same agreement version. The existing priced-service direct booking is kept but must go through this agreement step.
+
+Offer rules: a provider may revise an offer until the client accepts it (latest offer is active, history preserved). An accepted offer is locked; later changes require mutual agreement.
+
+Never automatically convert an inquiry, offer, or acceptance into a booking. Prevent duplicate confirmations and conflicting states.
+
+After completion, an eligible client may submit a review.
 
 ## 6. Scope Boundaries
 
@@ -138,7 +141,7 @@ Do not add the following unless the user and project group/adviser explicitly ap
 - Native Android or iOS applications.
 - Nationwide rollout.
 - Unrelated home services.
-- Costly or advanced AI image generation/editing as a required feature.
+- Costly or advanced AI image generation/editing as a required feature. (Postponed for a later phase; do not implement or enable paid billing without explicit approval.)
 
 Do not introduce extra modules, complex architecture, or dependencies merely to make the project appear more advanced.
 
@@ -174,6 +177,15 @@ Rules:
 - If the progress file is missing, outdated, or unclear, ask the user for the current status rather than guessing.
 - A phase is not complete merely because code was generated. Completion requires the relevant checks to be run and results to be reported accurately.
 - Wait for the user's confirmation before moving to the next phase.
+
+### Revision Track (scope revision approved 2026-11-10)
+
+The revised workflows (Case 1 General Service Request, Case 2 Direct Service Provider Inquiry, mutual agreement, Gemini photo understanding) are implemented as the **Revision Track R0–R7**, defined in `prompt/masterprompt.md` Section 11A and `prompt/prompts.md`. The track sits between Phase 14 and Phase 16 and does not renumber the 16 phases. Phase 15 is completed only after R7.
+
+- Work on one R step at a time and stop for user confirmation after each step.
+- Present significant database or architecture changes for review before implementing them.
+- Back up the database and get approval before running any schema migration against the local database.
+- Do not mark Phase 15 or any R step complete until its tests have actually been run and reported.
 
 ## 8. Required Workflow for Coding Tasks
 
