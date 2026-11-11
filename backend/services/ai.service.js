@@ -1,13 +1,21 @@
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite'
+const DEFAULT_MODEL = 'gemini-2.5-flash-lite'
 const MAX_INPUT_LENGTH = 3000
 const MAX_OUTPUT_TOKENS = 700
+
+function normalizeModelName(configuredModel) {
+  const trimmed = typeof configuredModel === 'string' ? configuredModel.trim() : ''
+  if (!trimmed || trimmed === 'gemini-3.5-flash-lite') {
+    return DEFAULT_MODEL
+  }
+  return trimmed
+}
 
 function getConfig() {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured.')
   return {
     apiKey,
-    model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+    model: normalizeModelName(process.env.GEMINI_MODEL),
   }
 }
 
