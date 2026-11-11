@@ -325,7 +325,7 @@ DB_NAME=hugatiera_db
 JWT_SECRET=your_secure_secret
 
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_MODEL=gemini-2.5-flash-lite
 ```
 
 Do not upload your actual `.env` file or API keys to GitHub.
