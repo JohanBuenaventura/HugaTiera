@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Leaf } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
@@ -45,7 +45,9 @@ export function RegisterPage() {
   const { register } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', role: 'client' })
+  const [params] = useSearchParams()
+  const initialRole = params.get('role') === 'gardener' ? 'gardener' : 'client'
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', role: initialRole })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
