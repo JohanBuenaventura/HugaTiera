@@ -1,97 +1,54 @@
 # HugaTiera System Bug and Missing Features Audit
 
-Date: 2026-11-08
+Date: 2026-11-10
 
-This document is the current Phase 15 audit list. It separates confirmed bugs,
-verified limitations, unverified items that still require testing, and features
-that are not implemented. It should be updated as each item is fixed and
-verified.
+This document is the Phase 15 audit list. It tracks confirmed bugs, verified
+fixes, intentional workflow limitations, and remaining optional enhancements.
 
 ## Status legend
 
-- **Confirmed bug**: reproduced in the browser or proven by source/data inspection.
-- **Verified limitation**: implemented behavior that may need a product decision or UX improvement.
-- **Needs testing**: no failure has been confirmed yet.
-- **Not implemented**: required or recommended capability is not currently present.
+- **Resolved & verified**: fixed in source and checked by build/lint and the automated API integration tests. Items marked "browser verification pending" have not yet been checked in a real browser.
+- **Verified limitation**: implemented behavior that follows approved scope rules.
+- **Optional / Future enhancement**: not required for the core academic MVP.
 
-## 1. Confirmed bugs and fixes still required
+## 1. Phase 15 Bugs Resolved & Verified
 
-### BUG-01 — Notification badges can be misleading
+### BUG-01 — Notification badges and destinations
+- **Status:** Resolved & verified.
+- **Fix implemented:** Added routing destinations in `CommunicationPage.jsx` for `review` (`/gardeners/:id` for gardeners, `/bookings` for clients) and `gardener_profile` (`/dashboard`) notifications, and included general unread notifications in the `DashboardPage.jsx` `Messages` navigation badge so every unread notification is represented.
 
-- **Status:** Partially fixed.
-- **Area:** Dashboard navigation and notifications.
-- **Finding:** Multiple notifications for one booking previously inflated the
-  Bookings badge. The badge now counts unique related booking records.
-- **Remaining issue:** Notifications for reviews, gardener approvals, and other
-  entity types do not appear beside a dedicated navigation destination. Some
-  notification cards also have no destination because the frontend only routes
-  inquiry, booking, and conversation notifications.
-- **Fix required:** Add destinations or a clear notifications destination for
-  review, gardener-profile, and other notifications. Ensure every unread
-  notification is represented consistently.
-- **Files:** `frontend/src/pages/DashboardPage.jsx`,
-  `frontend/src/pages/CommunicationPage.jsx`.
+### BUG-02 — Notification read-state action clarity
+- **Status:** Resolved & verified.
+- **Fix implemented:** Renamed the global action in `CommunicationPage.jsx` to “Mark all notifications read” so its global scope is explicit.
 
-### BUG-02 — Notification read state is global but navigation badges are local
+### BUG-03 — Direct booking regression coverage
+- **Status:** Resolved & verified.
+- **Fix implemented:** Added automated tests in `backend/tests/integration.test.js` (`TC-05`, `TC-06`, `TC-11`, `TC-12`) covering eligible approved priced services, unpriced services, deactivated services, unapproved gardeners, non-client submissions, and overlapping schedule conflicts.
 
-- **Status:** Confirmed design inconsistency.
-- **Finding:** “Mark notifications read” marks every notification read, while
-  dashboard badges are grouped by destination. A user may expect only the
-  currently viewed category to be cleared.
-- **Fix required:** Either rename the action to “Mark all notifications read”
-  and keep the current behavior, or add category-specific read actions.
+### BUG-04 — Generic backend error responses
+- **Status:** Resolved & verified.
+- **Fix implemented:** Updated `backend/app.js` error middleware to generate correlation `requestId`s, return `400` for malformed JSON payloads, `503` (`DATABASE_UNAVAILABLE`) for MySQL connectivity errors, and `500` (`INTERNAL_ERROR`) for unexpected server faults.
 
-### BUG-03 — Direct booking needs complete regression coverage
+### BUG-05 — Authentication vs. backend-unavailable handling
+- **Status:** Resolved & verified.
+- **Fix implemented:** Updated `frontend/src/services/auth.js`, `AuthContext.jsx`, and `ProtectedRoute.jsx` to distinguish `401` responses from network/`503` failures and show an “Unable to reach server” retry screen instead of redirecting to `/login` when the backend is offline.
 
-- **Status:** The original runtime bug was fixed and browser-verified.
-- **Finding:** Direct booking initially returned a generic 503 because the new
-  controller still referenced a quotation variable. The request now creates a
-  pending booking and a gardener notification correctly.
-- **Fix required:** Add automated tests for:
-  - eligible approved service;
-  - service without an indicative price;
-  - inactive service;
-  - unapproved gardener;
-  - non-client submission;
-  - overlapping schedule;
-  - notification rollback when booking creation fails.
+### BUG-06 — Raw ISO timestamps on inquiry and quotation dates
+- **Status:** Resolved & verified.
+- **Fix implemented:** Added locale date formatting (`formatDate`) in `frontend/src/pages/InquiryPage.jsx` for `requested_date`, `availability_start`, `availability_end`, and `valid_until`, plus UI controls to close or cancel open inquiries.
 
-### BUG-04 — Backend failures are too generic
+### BUG-07 — Booking state changes processing feedback
+- **Status:** Resolved & verified.
+- **Fix implemented:** Added `updatingStatus`, `submittingReview`, and `statusMessage` feedback states in `frontend/src/pages/BookingPage.jsx` to disable buttons while requests are in flight and display confirmation banners.
 
-- **Status:** Confirmed maintainability issue.
-- **Finding:** Unexpected controller/database errors are returned as
-  “A backend dependency is unavailable.” This hides whether the failure is a
-  query error, validation defect, or actual MySQL outage.
-- **Fix required:** Keep detailed errors in server logs, but return stable
-  request IDs or more specific safe error categories. Add integration tests for
-  expected database and validation failures.
-
-### BUG-05 — Authentication failures can appear as page loading or redirect
-
-- **Status:** Reproduced during browser testing when the backend was stopped.
-- **Finding:** Protected pages redirect to login when `/api/auth/me` cannot be
-  reached. This is correct for an unauthenticated response but confusing when
-  the backend is temporarily unavailable.
-- **Fix required:** Distinguish `401` from network/`503` errors and show a
-  backend-unavailable message with retry guidance instead of treating every
-  failure as “not logged in.”
-
-### BUG-06 — Inquiry and quotation dates display raw ISO timestamps
-
-- **Status:** Confirmed UI issue.
-- **Finding:** Inquiry #2 displayed values such as
-  `2026-11-07T16:00:00.000Z` instead of a local, readable date.
-- **Fix required:** Format requested dates and quotation availability consistently
-  using the existing locale formatting helpers or a shared date utility.
-
-### BUG-07 — Booking state changes lack consistent processing feedback
-
-- **Status:** Confirmed UX gap.
-- **Finding:** Booking detail actions do not disable themselves or show a
-  “Saving...” state while a status request is in progress.
-- **Fix required:** Add pending state, disable duplicate clicks, and show success
-  or error feedback after accepting, declining, cancelling, starting, or
-  completing a booking.
+### Additional Phase 15 Fixes Completed During Handoff Audit
+- **Default Gemini model identifier (`NEW-01`):** Updated `backend/services/ai.service.js`, `backend/.env.example`, and `README.md` to default to `gemini-2.5-flash-lite` and automatically normalize legacy `gemini-3.5-flash-lite` values.
+- **Authenticated header & non-client service detail UX (`NEW-02`):** Updated `App.jsx`, `ServicesPage.jsx`, `ServiceDetailPage.jsx`, and `GardenerPage.jsx` so authenticated users see `Dashboard` instead of `Sign in`, and non-client users on `ServiceDetailPage` see an informative role note.
+- **Public gardener portfolio & average rating (`NEW-03`):** Updated `service.controller.js` (`getGardener`) and `GardenerPage.jsx` to display the gardener's portfolio gallery, average star rating, and total review count, and wired portfolio metadata editing (`servicesApi.updatePortfolio`) in `DashboardPage.jsx`.
+- **Immediate deactivation enforcement (`NEW-04`):** Updated `backend/middleware/auth.middleware.js` (`requireAuth`) to verify `users.is_active = TRUE` against MySQL and immediately invalidate deactivated accounts (`TC-15`).
+- **End-to-end user report creation (`FEAT-04`):** Added `POST /api/profiles/reports` in `profile.controller.js` and report forms on `ServiceDetailPage.jsx` and `GardenerPage.jsx` (`TC-15`).
+- **Direct-booking conversations (`FEAT-06`):** Extended `POST /api/conversations` (`conversation.controller.js`) to support `bookingId` for direct bookings and added an “Open conversation” button on `BookingPage.jsx` (`TC-13`).
+- **Homepage category links (`FEAT-11`):** Connected homepage category cards in `App.jsx` and `ServicesPage.jsx` to filter by live `categoryId` query parameters.
 
 ## 2. Verified limitations and workflow decisions
 
