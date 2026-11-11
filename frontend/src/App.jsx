@@ -72,6 +72,7 @@ function Button({ children, variant = 'primary', href = '/services', onClick }) 
 function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [featuredServices, setFeaturedServices] = useState([])
+  const [categoryMap, setCategoryMap] = useState({})
   const [featuredError, setFeaturedError] = useState('')
   const { user } = useAuth()
 
@@ -81,6 +82,15 @@ function HomePage() {
     servicesApi.list({ sort: 'newest', limit: 3 })
       .then((result) => setFeaturedServices(result.services))
       .catch((error) => setFeaturedError(error.message))
+    servicesApi.categories()
+      .then((result) => {
+        const byName = {}
+        for (const item of result.categories || []) {
+          byName[item.name.toLowerCase()] = item.id
+        }
+        setCategoryMap(byName)
+      })
+      .catch(() => {})
   }, [])
 
   return (
@@ -101,7 +111,7 @@ function HomePage() {
             <Link to="/services" onClick={closeMenu}>Explore services</Link>
             <a href="#how-it-works" onClick={closeMenu}>How it works</a>
             <Link to="/assistant" onClick={closeMenu}>Garden assistant</Link>
-            <Button variant="outline" href="/login" onClick={closeMenu}>Sign in</Button>
+            <Button variant="outline" href={user ? '/dashboard' : '/login'} onClick={closeMenu}>{user ? 'Dashboard' : 'Sign in'}</Button>
           </nav>
         </div>
       </header>
@@ -149,14 +159,18 @@ function HomePage() {
               <Link className="text-link" to="/services">View all services <ArrowRight size={16} /></Link>
             </div>
             <div className="category-grid">
-              {categories.map(({ title, description, icon: Icon }) => (
-                <article className="category-card" key={title}>
-                  <div className="category-icon"><Icon size={22} /></div>
-                  <h3>{title}</h3>
-                  <p>{description}</p>
-                  <Link to="/services" aria-label={`Explore ${title}`}>Explore <ArrowRight size={15} /></Link>
-                </article>
-              ))}
+              {categories.map(({ title, description, icon: Icon }) => {
+                const matchedId = categoryMap[title.toLowerCase()]
+                const targetUrl = matchedId ? `/services?categoryId=${matchedId}` : '/services'
+                return (
+                  <article className="category-card" key={title}>
+                    <div className="category-icon"><Icon size={22} /></div>
+                    <h3>{title}</h3>
+                    <p>{description}</p>
+                    <Link to={targetUrl} aria-label={`Explore ${title}`}>Explore <ArrowRight size={15} /></Link>
+                  </article>
+                )
+              })}
             </div>
             <div className="featured-heading"><div><p className="eyebrow">Live marketplace</p><h3>Recently added approved services.</h3></div><Link className="text-link" to="/services">Browse all <ArrowRight size={16} /></Link></div>
             {featuredError && <div className="form-error" role="alert">{featuredError}</div>}
@@ -195,7 +209,7 @@ function HomePage() {
         <section className="section join-section" id="join">
           <div className="container join-card">
             <div><p className="eyebrow">Ready when you are</p><h2>Good gardens start with good questions.</h2><p>Create an account to discover services, or join as a gardener and share your work.</p></div>
-            <div className="join-actions"><Button href="/services">I need a gardener</Button><Button variant="outline" href="/register">I offer services</Button></div>
+            <div className="join-actions"><Button href="/services">I need a gardener</Button><Button variant="outline" href="/register?role=gardener">I offer services</Button></div>
           </div>
         </section>
       </main>
