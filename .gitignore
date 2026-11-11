@@ -94,3 +94,6 @@ coverage/
 *.sqlite3
 *.db
 *.sql.bak
+
+# Local database backups contain personal data and password hashes; never commit them
+database/backups/
