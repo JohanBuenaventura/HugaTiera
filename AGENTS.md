@@ -333,7 +333,7 @@ If the user is asking only a question, brainstorming, or documentation clarifica
 
 ## Implementation Plan Reference
 
-- Read `docs/implementation/implementation_plan.md`
+- Read `docs/implementation/implementation-plan.md`
   before implementing tasks covered by the plan.
 - Treat the implementation plan as the approved technical reference.
 - Do not silently change approved database schemas,
