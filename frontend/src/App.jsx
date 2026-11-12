@@ -24,6 +24,10 @@ import InquiryPage from './pages/InquiryPage'
 import CommunicationPage from './pages/CommunicationPage'
 import BookingPage from './pages/BookingPage'
 import AssistantPage from './pages/AssistantPage'
+import {
+  FLOATING_MESSAGE_ICON_LABEL,
+  shouldShowFloatingMessageIcon,
+} from './services/profiles'
 import { servicesApi } from './services/services'
 
 const categories = [
@@ -222,7 +226,16 @@ function HomePage() {
           <p className="copyright">© 2026 HugaTiera</p>
         </div>
       </footer>
-      <Link className="floating-help" to={user ? '/messages' : '/login'} aria-label={user ? 'Open messages' : 'Sign in to contact HugaTiera'} title={user ? 'Open messages' : 'Sign in to contact HugaTiera'}><MessageCircle size={20} /></Link>
+      {shouldShowFloatingMessageIcon(user) && (
+        <Link
+          className="floating-help"
+          to="/messages"
+          aria-label={FLOATING_MESSAGE_ICON_LABEL}
+          title={FLOATING_MESSAGE_ICON_LABEL}
+        >
+          <MessageCircle size={20} />
+        </Link>
+      )}
       <span className="search-decoration" aria-hidden="true"><Search size={16} /></span>
     </div>
   )
@@ -234,7 +247,35 @@ function PublicRedirect() {
 }
 
 function App() {
-  return <BrowserRouter><AuthProvider><Routes><Route path="/" element={<HomePage />} /><Route path="/services" element={<ServicesPage />} /><Route path="/services/:serviceId" element={<ServiceDetailPage />} /><Route path="/gardeners/:gardenerId" element={<GardenerPage />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route element={<ProtectedRoute />}><Route path="/assistant" element={<AssistantPage />} /><Route path="/dashboard" element={<DashboardPage />} /><Route path="/inquiries" element={<InquiryPage />} /><Route path="/inquiries/new" element={<InquiryPage create />} /><Route path="/inquiries/:inquiryId" element={<InquiryPage detail />} /><Route path="/messages" element={<CommunicationPage />} /><Route path="/bookings" element={<BookingPage />} /><Route path="/bookings/new" element={<BookingPage create />} /><Route path="/bookings/:bookingId" element={<BookingPage detail />} /></Route><Route path="*" element={<PublicRedirect />} /></Routes></AuthProvider></BrowserRouter>
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/services" element={<ServicesPage />} />
+          <Route path="/services/:serviceId" element={<ServiceDetailPage />} />
+          <Route path="/gardeners/:gardenerId" element={<GardenerPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/assistant" element={<AssistantPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/inquiries/:inquiryId" element={<InquiryPage detail />} />
+            <Route element={<ProtectedRoute roles={['client', 'gardener']} />}>
+              <Route path="/profile" element={<DashboardPage profileView />} />
+              <Route path="/inquiries" element={<InquiryPage />} />
+              <Route path="/inquiries/new" element={<InquiryPage create />} />
+              <Route path="/messages" element={<CommunicationPage />} />
+              <Route path="/bookings" element={<BookingPage />} />
+              <Route path="/bookings/new" element={<BookingPage create />} />
+              <Route path="/bookings/:bookingId" element={<BookingPage detail />} />
+            </Route>
+          </Route>
+          <Route path="*" element={<PublicRedirect />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  )
 }
 
 export default App
