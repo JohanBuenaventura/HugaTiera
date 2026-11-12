@@ -3,7 +3,12 @@ import { ArrowLeft, Leaf } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
-import { bookingsApi } from '../services/bookings'
+import {
+  bookingsApi,
+  buildBookingAgreementSummary,
+  formatStatusLabel,
+  getStatusBadgeClass,
+} from '../services/bookings'
 import { inquiriesApi } from '../services/inquiries'
 import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
@@ -150,7 +155,7 @@ function BookingDetails({ id }) {
     try {
       await bookingsApi.status(id, status)
       await load()
-      setStatusMessage(`Booking status updated to ${status.replace('_', ' ')}.`)
+      setStatusMessage(`Booking status updated to ${formatStatusLabel(status)}.`)
     } catch (statusError) {
       setError(statusError.message)
     } finally {
@@ -184,14 +189,20 @@ function BookingDetails({ id }) {
 
   if (!booking) return <section className="container booking-content">{error ? <div className="form-error">{error}</div> : <p>Loading booking...</p>}</section>
   const gardener = user.role === 'gardener'
+  const agreementSummary = buildBookingAgreementSummary(booking, user)
   return (
     <section className="container booking-content">
       <Link className="back-link" to="/bookings"><ArrowLeft size={15} /> Back to bookings</Link>
       <p className="eyebrow">Booking #{booking.id}</p>
       <h1>{booking.service_title || 'Gardening service'}</h1>
       <div className="booking-status-row">
-        <span className={`inquiry-status status-${booking.status}`}>{booking.status.replace('_', ' ')}</span>
+        <span className={getStatusBadgeClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
         <span>{gardener ? booking.client_name : booking.gardener_name}</span>
+        {agreementSummary.inquiryPath && (
+          <Link className="text-link" to={agreementSummary.inquiryPath}>
+            View source inquiry #{booking.inquiry_id}
+          </Link>
+        )}
         <button className="table-action" type="button" onClick={openConversation}>Open conversation</button>
       </div>
       {statusMessage && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{statusMessage}</div>}
@@ -202,6 +213,38 @@ function BookingDetails({ id }) {
           <span><strong>Ends</strong>{new Date(booking.scheduled_end).toLocaleString()}</span>
           <span><strong>Location</strong>{booking.location}</span>
         </div>
+        {agreementSummary.hasAgreement && (
+          <div className="booking-agreement-summary">
+            <p className="eyebrow">Mutual service agreement</p>
+            <h2>{agreementSummary.versionLabel}</h2>
+            <div className="detail-facts booking-agreement-facts">
+              {agreementSummary.amountLabel && (
+                <span><strong>Agreed price</strong>{agreementSummary.amountLabel}</span>
+              )}
+              <span><strong>Client approval</strong>{agreementSummary.clientApproval.label}</span>
+              <span><strong>Gardener approval</strong>{agreementSummary.gardenerApproval.label}</span>
+            </div>
+            {agreementSummary.scopeOfWork && (
+              <>
+                <h3>Agreed scope of work</h3>
+                <p className="inquiry-description">{agreementSummary.scopeOfWork}</p>
+              </>
+            )}
+            {agreementSummary.conditions && (
+              <>
+                <h3>Agreed conditions</h3>
+                <p className="inquiry-description">{agreementSummary.conditions}</p>
+              </>
+            )}
+            {agreementSummary.inquiryPath && (
+              <p className="booking-agreement-link">
+                <Link className="text-link" to={agreementSummary.inquiryPath}>
+                  Open originating inquiry #{booking.inquiry_id}
+                </Link>
+              </p>
+            )}
+          </div>
+        )}
         <h2>Additional information</h2>
         <p className="inquiry-description">{booking.notes || 'No additional information provided.'}</p>
         <div className="inline-actions">
@@ -263,7 +306,33 @@ function BookingList() {
   const [bookings, setBookings] = useState([])
   const [error, setError] = useState('')
   useEffect(() => { bookingsApi.list().then((result) => setBookings(result.bookings)).catch((loadError) => setError(loadError.message)) }, [])
-  return <section className="container booking-content"><p className="eyebrow">Service schedule</p><h1>Bookings.</h1>{error && <div className="form-error">{error}</div>}{!error && bookings.length === 0 && <div className="empty-state">You do not have any bookings yet.</div>}<div className="booking-list">{bookings.map((booking) => <Link className="booking-list-item" to={`/bookings/${booking.id}`} key={booking.id}><div><strong>{booking.service_title || 'Gardening service'}</strong><span>{new Date(booking.scheduled_start).toLocaleString()}</span></div><span className={`inquiry-status status-${booking.status}`}>{booking.status.replace('_', ' ')}</span></Link>)}</div></section>
+  return (
+    <section className="container booking-content">
+      <p className="eyebrow">Service schedule</p>
+      <h1>Bookings.</h1>
+      {error && <div className="form-error">{error}</div>}
+      {!error && bookings.length === 0 && <div className="empty-state">You do not have any bookings yet.</div>}
+      <div className="booking-list">
+        {bookings.map((booking) => (
+          <Link className="booking-list-item" to={`/bookings/${booking.id}`} key={booking.id}>
+            <div>
+              <strong>{booking.service_title || 'Gardening service'}</strong>
+              <span>
+                {[
+                  new Date(booking.scheduled_start).toLocaleString(),
+                  booking.agreement_version != null ? `Agreement v${booking.agreement_version}` : null,
+                  booking.agreed_amount != null ? `PHP ${Number(booking.agreed_amount).toLocaleString()}` : null,
+                ].filter(Boolean).join(' · ')}
+              </span>
+            </div>
+            <span className={getStatusBadgeClass(booking.status)}>
+              {formatStatusLabel(booking.status)}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  )
 }
 
 export default function BookingPage({ detail = false, create = false }) {
