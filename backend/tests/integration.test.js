@@ -711,4 +711,256 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(tooLongAi.status, 400)
   })
+
+  test('TC-17: Phase 2 (ISS-05, ISS-06, ISS-07) — Role-specific profile/dashboard access, Admin booking-route guards, and floating message icon visibility', async () => {
+    const profileHelpers = await import('../../frontend/src/services/profiles.js')
+
+    // 1. ISS-05: Client and Gardener profile retrieval, normalization, and updates
+    const getClientProfile = await apiRequest('/profiles/me', { cookie: clientCookie })
+    assert.equal(getClientProfile.status, 200)
+    assert.equal(getClientProfile.data.user.role, 'client')
+    const clientForm = profileHelpers.buildProfileForm(getClientProfile.data)
+    assert.equal(clientForm.firstName, 'Maria')
+    assert.equal(clientForm.lastName, 'Santos')
+    assert.equal(clientForm.address, 'Tetuan')
+    assert.equal(clientForm.city, 'Zamboanga City')
+
+    const getGardenerProfile = await apiRequest('/profiles/me', { cookie: gardenerCookie })
+    assert.equal(getGardenerProfile.status, 200)
+    assert.equal(getGardenerProfile.data.user.role, 'gardener')
+    const gardenerForm = profileHelpers.buildProfileForm(getGardenerProfile.data)
+    assert.equal(gardenerForm.firstName, 'Ramon')
+    assert.equal(gardenerForm.lastName, 'Verde')
+    assert.equal(gardenerForm.businessName, 'Verde Zamboanga Gardens')
+    assert.equal(gardenerForm.serviceArea, 'Zamboanga City')
+    assert.equal(gardenerForm.yearsOfExperience, 6)
+
+    // Verify dashboard tab resolution separates overview from profile/settings
+    assert.equal(profileHelpers.resolveDashboardTab(null, false), 'overview')
+    assert.equal(profileHelpers.resolveDashboardTab('profile', false), 'profile')
+    assert.equal(profileHelpers.resolveDashboardTab('settings', false), 'profile')
+    assert.equal(profileHelpers.resolveDashboardTab(null, true), 'profile')
+
+    // Verify existing profile update still persists and returns updated fields
+    const updatedClientProfile = await apiRequest('/profiles/me', {
+      method: 'PUT',
+      cookie: clientCookie,
+      body: {
+        firstName: 'Maria',
+        lastName: 'Santos',
+        phone: '09171234568',
+        address: 'Pasonanca',
+        city: 'Zamboanga City',
+        bio: 'Updated bio from dedicated profile settings tab.',
+      },
+    })
+    assert.equal(updatedClientProfile.status, 200)
+    assert.equal(updatedClientProfile.data.user.phone, '09171234568')
+    assert.equal(updatedClientProfile.data.profile.address, 'Pasonanca')
+    assert.equal(updatedClientProfile.data.profile.bio, 'Updated bio from dedicated profile settings tab.')
+
+    // 2. ISS-06: Admin navigation and booking-route authorization behavior
+    const adminNav = profileHelpers.getDashboardNavLinks('administrator')
+    assert.ok(adminNav.some((item) => item.label === 'Overview' && item.to === '/dashboard'))
+    assert.ok(adminNav.some((item) => item.label === 'Approvals' && item.href === '#admin-approvals'))
+    assert.ok(adminNav.some((item) => item.label === 'Activity' && item.href === '#admin-activity'))
+    assert.ok(adminNav.some((item) => item.label === 'Reports' && item.href === '#admin-reports'))
+    assert.ok(adminNav.some((item) => item.label === 'Accounts' && item.href === '#admin-accounts'))
+    assert.equal(adminNav.some((item) => item.to === '/bookings' || item.to === '/inquiries' || item.to === '/messages' || item.to === '/dashboard?tab=profile'), false)
+
+    for (const role of ['client', 'gardener']) {
+      const userNav = profileHelpers.getDashboardNavLinks(role, { inquiries: 2, messages: 1, bookings: 3 })
+      assert.ok(userNav.some((item) => item.to === '/dashboard' && item.label === 'Overview'))
+      assert.ok(userNav.some((item) => item.to === '/inquiries' && item.badge === 2))
+      assert.ok(userNav.some((item) => item.to === '/messages' && item.badge === 1))
+      assert.ok(userNav.some((item) => item.to === '/bookings' && item.badge === 3))
+      assert.ok(userNav.some((item) => item.to === '/dashboard?tab=profile' && item.label === 'Profile'))
+    }
+
+    // Admin requests to personal /api/bookings and /api/inquiries endpoints are explicitly denied (403)
+    const adminListBookings = await apiRequest('/bookings', { cookie: adminCookie })
+    assert.equal(adminListBookings.status, 403)
+
+    const adminGetBooking = await apiRequest(`/bookings/${inquiryBookingId}`, { cookie: adminCookie })
+    assert.equal(adminGetBooking.status, 403)
+
+    const adminPatchBooking = await apiRequest(`/bookings/${inquiryBookingId}/status`, {
+      method: 'PATCH',
+      cookie: adminCookie,
+      body: { status: 'cancelled' },
+    })
+    assert.equal(adminPatchBooking.status, 403)
+
+    const adminPostBooking = await apiRequest('/bookings', {
+      method: 'POST',
+      cookie: adminCookie,
+      body: {},
+    })
+    assert.equal(adminPostBooking.status, 403)
+
+    const adminListPersonalInquiries = await apiRequest('/inquiries', { cookie: adminCookie })
+    assert.equal(adminListPersonalInquiries.status, 403)
+
+    // Admin accesses platform bookings & inquiries via properly scoped /api/admin/activity & /api/admin/summary
+    const adminActivity = await apiRequest('/admin/activity', { cookie: adminCookie })
+    assert.equal(adminActivity.status, 200)
+    assert.ok(Array.isArray(adminActivity.data.bookings))
+    assert.ok(adminActivity.data.bookings.some((b) => b.id === inquiryBookingId))
+
+    const adminSummary = await apiRequest('/admin/summary', { cookie: adminCookie })
+    assert.equal(adminSummary.status, 200)
+    assert.ok(Number(adminSummary.data.counts.bookings) >= 2)
+
+    // 3. ISS-07: Guest, Admin, Client, and Gardener floating message icon visibility & accessible label
+    assert.equal(profileHelpers.shouldShowFloatingMessageIcon(null), false)
+    assert.equal(profileHelpers.shouldShowFloatingMessageIcon(undefined), false)
+    assert.equal(profileHelpers.shouldShowFloatingMessageIcon({ id: 1, role: 'administrator' }), false)
+    assert.equal(profileHelpers.shouldShowFloatingMessageIcon({ id: clientId, role: 'client' }), true)
+    assert.equal(profileHelpers.shouldShowFloatingMessageIcon({ id: gardenerId, role: 'gardener' }), true)
+    assert.equal(profileHelpers.FLOATING_MESSAGE_ICON_LABEL, 'Open messages and notifications')
+  })
+
+  test('TC-18: Phase 3 (ISS-08, ISS-09) — Workflow status labels, unknown status fallbacks, mobile CSS wrapping, and booking mutual agreement summaries', async () => {
+    const fs = require('node:fs')
+    const path = require('node:path')
+    const bookingHelpers = await import('../../frontend/src/services/bookings.js')
+
+    // 1. ISS-08: Verify all newly supported and existing workflow status labels
+    const expectedLabels = {
+      provider_selected: 'Provider Selected',
+      in_agreement: 'Agreement in Progress',
+      confirmed: 'Confirmed',
+      expired: 'Expired',
+      withdrawn: 'Withdrawn',
+      proposed: 'Proposed',
+      agreed: 'Agreed',
+      superseded: 'Superseded',
+      in_progress: 'In Progress',
+      completed: 'Completed',
+      pending: 'Pending',
+      open: 'Open',
+      responded: 'Responded',
+      closed: 'Closed',
+      cancelled: 'Cancelled',
+      draft: 'Draft',
+      sent: 'Sent',
+      accepted: 'Accepted',
+      declined: 'Declined',
+    }
+    for (const [rawStatus, expectedLabel] of Object.entries(expectedLabels)) {
+      assert.equal(bookingHelpers.formatStatusLabel(rawStatus), expectedLabel, `Status ${rawStatus} should render as "${expectedLabel}"`)
+      assert.equal(bookingHelpers.getStatusBadgeClass(rawStatus), `inquiry-status status-${rawStatus}`)
+    }
+
+    // 2. ISS-08: Unknown status fallback behavior
+    assert.equal(bookingHelpers.formatStatusLabel('awaiting_site_visit'), 'Awaiting Site Visit')
+    assert.equal(bookingHelpers.formatStatusLabel(''), 'Unknown')
+    assert.equal(bookingHelpers.formatStatusLabel(null), 'Unknown')
+    assert.equal(bookingHelpers.formatStatusLabel(undefined), 'Unknown')
+    assert.equal(bookingHelpers.getStatusBadgeClass('awaiting_site_visit'), 'inquiry-status status-awaiting_site_visit')
+    assert.equal(bookingHelpers.getStatusBadgeClass(''), 'inquiry-status status-unknown')
+    assert.equal(bookingHelpers.getStatusBadgeClass(null), 'inquiry-status status-unknown')
+
+    // 3. ISS-08: Verify CSS status badge definitions and mobile flex-wrap rules in frontend/src/App.css
+    const cssText = fs.readFileSync(path.join(__dirname, '../../frontend/src/App.css'), 'utf8')
+    for (const cls of [
+      '.status-provider_selected',
+      '.status-in_agreement',
+      '.status-confirmed',
+      '.status-expired',
+      '.status-withdrawn',
+      '.status-proposed',
+      '.status-agreed',
+      '.status-superseded',
+      '.status-pending',
+      '.status-in_progress',
+      '.status-completed',
+      '.status-unknown',
+    ]) {
+      assert.ok(cssText.includes(cls), `App.css must define ${cls}`)
+    }
+    assert.match(cssText, /\.inquiry-status-row\s*\{[^}]*flex-wrap:\s*wrap/)
+    assert.match(cssText, /\.booking-status-row\s*\{[^}]*flex-wrap:\s*wrap/)
+    assert.match(cssText, /\.inline-actions\s*\{[^}]*flex-wrap:\s*wrap/)
+
+    // 4. ISS-09: Booking agreement summary with complete live backend data
+    const liveBookingRes = await apiRequest(`/bookings/${inquiryBookingId}`, { cookie: clientCookie })
+    assert.equal(liveBookingRes.status, 200)
+    const liveBooking = liveBookingRes.data.booking
+
+    const completeSummary = bookingHelpers.buildBookingAgreementSummary(liveBooking, { id: clientId, role: 'client' })
+    assert.equal(completeSummary.hasAgreement, true)
+    assert.equal(completeSummary.versionLabel, 'Confirmed via Mutual Agreement v1')
+    assert.match(completeSummary.amountLabel, /4,500\.00/)
+    assert.match(completeSummary.amountLabel, /fixed project/)
+    assert.equal(completeSummary.scopeOfWork, 'Includes shrub planting, soil prep, and stepping stones.')
+    assert.equal(completeSummary.conditions, 'Gate code available upon arrival.')
+    assert.equal(completeSummary.clientApproval.approved, true)
+    assert.match(completeSummary.clientApproval.label, /^Approved on /)
+    assert.equal(completeSummary.gardenerApproval.approved, true)
+    assert.match(completeSummary.gardenerApproval.label, /^Approved on /)
+    assert.equal(completeSummary.inquiryPath, `/inquiries/${inquiryId}`)
+
+    // 5. ISS-09: Inquiry link visibility and authorization checks
+    // Gardener who owns the booking can access the originating inquiry link
+    const gardenerSummary = bookingHelpers.buildBookingAgreementSummary(liveBooking, { id: gardenerId, role: 'gardener' })
+    assert.equal(gardenerSummary.inquiryPath, `/inquiries/${inquiryId}`)
+
+    // Unrelated user or unauthenticated user does not get the originating inquiry link
+    const outsiderSummary = bookingHelpers.buildBookingAgreementSummary(liveBooking, { id: 999999, role: 'client' })
+    assert.equal(outsiderSummary.inquiryPath, null)
+    const guestSummary = bookingHelpers.buildBookingAgreementSummary(liveBooking, null)
+    assert.equal(guestSummary.inquiryPath, null)
+
+    // 6. ISS-09: Booking agreement summary with null or incomplete data (never invents approvals or fields)
+    const legacyBooking = {
+      id: 1,
+      inquiry_id: null,
+      agreement_id: null,
+      agreement_version: null,
+      agreed_amount: null,
+      agreed_price_basis: null,
+      agreed_scope: null,
+      agreed_conditions: null,
+      client_approved_at: null,
+      gardener_approved_at: null,
+      client_id: clientId,
+      gardener_id: gardenerId,
+    }
+    const legacySummary = bookingHelpers.buildBookingAgreementSummary(legacyBooking, { id: clientId, role: 'client' })
+    assert.equal(legacySummary.hasAgreement, false)
+    assert.equal(legacySummary.versionLabel, null)
+    assert.equal(legacySummary.amountLabel, null)
+    assert.equal(legacySummary.scopeOfWork, null)
+    assert.equal(legacySummary.conditions, null)
+    assert.equal(legacySummary.clientApproval.approved, false)
+    assert.equal(legacySummary.gardenerApproval.approved, false)
+    assert.equal(legacySummary.inquiryPath, null)
+
+    // Incomplete agreement data: client approved, gardener timestamp missing -> must not claim gardener approved
+    const partialBooking = {
+      id: 2,
+      inquiry_id: inquiryId,
+      agreement_id: 10,
+      agreement_version: 2,
+      agreed_amount: 1800,
+      agreed_price_basis: null,
+      agreed_scope: 'Trim hedges only',
+      agreed_conditions: '',
+      client_approved_at: '2026-11-12T10:00:00.000Z',
+      gardener_approved_at: null,
+      client_id: clientId,
+      gardener_id: gardenerId,
+    }
+    const partialSummary = bookingHelpers.buildBookingAgreementSummary(partialBooking, { id: clientId, role: 'client' })
+    assert.equal(partialSummary.hasAgreement, true)
+    assert.equal(partialSummary.versionLabel, 'Confirmed via Mutual Agreement v2')
+    assert.match(partialSummary.amountLabel, /1,800\.00/)
+    assert.equal(partialSummary.scopeOfWork, 'Trim hedges only')
+    assert.equal(partialSummary.conditions, null)
+    assert.equal(partialSummary.clientApproval.approved, true)
+    assert.equal(partialSummary.gardenerApproval.approved, false)
+    assert.equal(partialSummary.gardenerApproval.label, 'Pending / Not recorded')
+    assert.equal(partialSummary.inquiryPath, `/inquiries/${inquiryId}`)
+  })
 })
