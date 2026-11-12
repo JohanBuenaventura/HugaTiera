@@ -1,6 +1,6 @@
 # HugaTiera Revision: Consolidated Implementation Plan
 
-Status: **proposal for your review. No code, database, or migration has been changed.** Only documentation was updated (see the end).
+Status: **Approved technical reference. Steps R0–R6 have been implemented and verified on `hugatiera_db_migration_test` (`hugatiera_db` remains untouched). Step R7 remains pending.**
 
 ## 1. Approved decisions
 
@@ -273,14 +273,14 @@ Adding generation later needs only: one new `feature` value (`image_generation`)
 
 | Step | Content | Gate |
 |---|---|---|
-| R0 | Docs updated, plan proposed (this document) | **Your review** |
-| R1 | Back up DB, migration + schema/README update, test on a copy | Your approval before running on the local DB |
-| R2 | Secure photo upload and access control | Confirmation |
-| R3 | Agreement engine, booking gating, priced-service routing | Confirmation |
-| R4 | Case 2 end to end | Confirmation |
-| R5 | Case 1 end to end | Confirmation |
-| R6 | Gemini requirements and photo understanding, provider view, DB-backed limits | Confirmation, after the live-API check |
-| R7 | Tests and manual verification, completes Phase 15 | Confirmation |
+| R0 | Docs updated, plan proposed (this document) | **Completed & approved** |
+| R1 | Back up DB, migration + schema/README update, test on a copy | **Completed on `hugatiera_db_migration_test`** (`hugatiera_db` untouched) |
+| R2 | Secure photo upload and access control | **Completed & verified** |
+| R3 | Agreement engine, booking gating, priced-service routing | **Completed & verified** |
+| R4 | Case 2 end to end | **Completed & verified** |
+| R5 | Case 1 end to end | **Completed & verified** |
+| R6 | Gemini requirements and photo understanding, provider view, DB-backed limits | **Completed & verified** |
+| R7 | Tests and manual verification, completes Phase 15 | Pending (after R6 confirmation) |
 
 ## 7. Testing plan (extends `backend/tests/integration.test.js`)
 - Offer revision allowed before acceptance, rejected after acceptance (locked).
