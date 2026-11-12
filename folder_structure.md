@@ -10,6 +10,9 @@ HugaTiera/
 ├── frontend/                         React + Vite application
 ├── backend/                          Node.js + Express REST API
 ├── database/                         MySQL schema and database documentation
+├── docs/
+│   └── implementation/
+│       └── implementation-plan.md    Approved Revision Track (R0–R7) technical reference
 ├── prompt/                           Master prompt and phase instructions
 ├── project_documentation_and_requirements/
 ├── .gitignore
@@ -120,7 +123,9 @@ backend/
 │   ├── integration.test.js
 │   ├── r2.requestImages.test.js
 │   ├── r3.agreements.test.js
-│   └── r4.directInquiry.test.js
+│   ├── r4.directInquiry.test.js
+│   ├── r5.generalRequest.test.js
+│   └── r6.aiAssistance.test.js
 ├── uploads/
 │   ├── portfolios/
 │   └── request-images/
