@@ -1,350 +1,139 @@
-# HugaTiera – Backend
+# HugaTiera — Backend API (`backend/`)
 
-The backend of **HugaTiera**, a Gardening Service Platform, built using Node.js, Express, and MySQL.
+The Node.js + Express 5 REST API backend for **HugaTiera**, providing authentication, role-based access control, unified Case 1 / Case 2 service requests, versioned mutual agreements, `sharp`-sanitized image uploads, Gemini AI text & photo assistance, and MySQL persistence.
 
-The backend handles API requests, authentication, business logic, and database operations.
+---
 
-## Tech Stack
+## 1. Technology Stack
 
-- Node.js – JavaScript runtime
-- Express.js – Backend framework
-- MySQL – Relational database
-- MySQL2 – MySQL database driver
-- CORS – Cross-origin resource sharing
-- dotenv – Environment variable management
-- Nodemon – Automatic server restarting during development
+- **Node.js & Express.js (`^5.3.0`):** REST API server (`CommonJS`)
+- **MySQL2 (`^3.24.6`):** `mysql2/promise` connection pool, parameterized SQL, and ACID transactions
+- **Authentication:** `jsonwebtoken` (`^9.0.2`), `bcryptjs` (`^3.0.2`), `cookie-parser` (`^1.4.7`)
+- **Image Processing:** `multer` (`^2.5.0`) + `sharp` (`^0.35.5`) for image decoding, `1920×1920` resizing, and complete EXIF/GPS metadata removal
+- **AI Integration:** Google Gemini REST API (`gemini-3.8-flash` primary, `gemini-3.5-flash-lite` automatic fallback)
 
-## Prerequisites
+---
 
-Before installing the project, make sure you have:
+## 2. Environment Configuration (`backend/.env`)
 
-1. Node.js (LTS version recommended)
-2. npm (included with Node.js)
-3. Git
-4. XAMPP (for local MySQL database)
-5. Visual Studio Code (recommended)
-
-Verify your installation:
-
-```bash
-node -v
-npm -v
-git --version
-```
-
-## Installation Guide
-
-### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-```
-
-Navigate to the backend directory:
-
-```bash
-cd HugaTiera/backend
-```
-
-### 2. Install Dependencies
-
-Run:
-
-```bash
-npm install
-```
-
-This installs the packages defined in package.json.
-
-If you are setting up the project from scratch and the dependencies have not yet been installed, use:
-
-```bash
-npm install express mysql2 cors dotenv
-npm install -D nodemon
-```
-
-### 3. Configure Environment Variables
-
-Create a `.env` file inside the backend directory.
-
-Example:
+Copy [backend/.env.example](file:///c:/xampp/htdocs/HugaTiera/backend/.env.example) to `backend/.env`:
 
 ```env
 PORT=5000
-
+FRONTEND_URL=http://localhost:5173
 DB_HOST=localhost
+DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
 DB_NAME=hugatiera_db
-DB_PORT=3306
+JWT_SECRET=replace_with_a_long_random_secret_key
+GEMINI_API_KEY=replace_with_your_gemini_api_key
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
+GEMINI_THINKING_LEVEL=low
+AI_HOURLY_LIMIT=10
 ```
 
-Replace the database name with the actual database name used by the team.
+---
 
-**Important:** Do not commit `.env` to GitHub. Use `.env.example` to share the required variable names without exposing credentials.
-
-### 4. Set Up MySQL Using XAMPP
-
-1. Open XAMPP Control Panel.
-2. Start Apache (if using phpMyAdmin).
-3. Start MySQL.
-4. Open your browser.
-5. Navigate to:
-
-```text
-http://localhost/phpmyadmin
-```
-
-6. Create the project database using the agreed database name.
-7. Import the database SQL file if one is provided by the team.
-
-Note: The backend connects directly to MySQL using the MySQL2 package. PHP is not required for the Node.js API.
-
-### 5. Run the Backend Server
-
-Start the development server:
-
-```bash
-npm run dev
-```
-
-For normal execution:
-
-```bash
-npm start
-```
-
-The backend will eventually be accessible at:
-
-```text
-http://localhost:5000
-```
-
-The health endpoint is available at:
-
-```text
-http://localhost:5000/api/health
-```
-
-The health endpoint verifies that the backend can reach MySQL.
-
-Authentication endpoints:
-
-```text
-POST /api/auth/register
-POST /api/auth/login
-POST /api/auth/logout
-GET  /api/auth/me
-```
-
-Authentication uses an HttpOnly JWT cookie. Public registration accepts only
-client and gardener roles; administrator accounts must be created through a
-protected administrative process.
-
-Profile and dashboard endpoints:
-
-```text
-GET  /api/profiles/me
-PUT  /api/profiles/me
-GET  /api/admin/summary
-PATCH /api/admin/users/:userId/status
-```
-
-Profile and administrator endpoints require authentication. Administrator
-summary and account-management endpoints additionally require the
-`administrator` role.
-
-Gardening service and portfolio endpoints:
-
-```text
-GET    /api/services
-GET    /api/services/:serviceId
-GET    /api/services/categories
-GET    /api/services/mine
-POST   /api/services
-PUT    /api/services/:serviceId
-DELETE /api/services/:serviceId
-GET    /api/portfolios/:portfolioId/image
-GET    /api/portfolios/me
-POST   /api/portfolios
-PUT    /api/portfolios/:portfolioId
-DELETE /api/portfolios/:portfolioId
-```
-
-Service management and portfolio changes require an authenticated gardener
-and are restricted to records owned by that gardener. Portfolio uploads accept
-JPEG, PNG, and WebP images up to 5 MB.
-
-Marketplace endpoints:
-
-```text
-GET /api/services
-GET /api/services/categories
-GET /api/services/:serviceId
-GET /api/gardeners/:gardenerId
-```
-
-`GET /api/services` supports `keyword`, `categoryId`, `serviceArea`, `sort`,
-`page`, and `limit` query parameters. Supported sort values are `newest`,
-`price_low`, and `price_high`.
-
-Inquiry and quotation endpoints:
-
-```text
-GET    /api/inquiries
-GET    /api/inquiries/:inquiryId
-POST   /api/inquiries
-PATCH  /api/inquiries/:inquiryId/status
-POST   /api/inquiries/:inquiryId/quotations
-PATCH  /api/inquiries/quotations/:quotationId/status
-```
-
-Clients create inquiries and accept or decline quotations. Gardeners can view
-their assigned inquiries and send indicative quotations. Creating or accepting
-a quotation does not create a booking; booking requests remain a separate
-workflow.
-
-Messaging and notification endpoints:
-
-```text
-GET    /api/conversations
-POST   /api/conversations
-GET    /api/conversations/:conversationId/messages
-POST   /api/conversations/:conversationId/messages
-GET    /api/notifications
-PATCH  /api/notifications/:notificationId/read
-PATCH  /api/notifications/read-all
-```
-
-Conversation access is limited to the associated client and gardener.
-Messages are stored in MySQL, incoming messages are marked read when their
-conversation is opened, and unread notification counts are returned by the
-notifications endpoint.
-
-Booking and scheduling endpoints:
-
-```text
-GET    /api/bookings
-POST   /api/bookings
-GET    /api/bookings/:bookingId
-PATCH  /api/bookings/:bookingId/status
-```
-
-Clients can create bookings only from accepted quotations. Gardeners can accept
-or decline pending requests, start accepted services, and mark in-progress
-services completed. Clients can cancel pending or accepted bookings. Accepted
-schedule overlaps are rejected, and booking status changes create notifications.
-
-Ratings and review endpoints:
-
-```text
-GET    /api/reviews/gardeners/:gardenerId
-GET    /api/reviews/bookings/:bookingId
-POST   /api/reviews
-```
-
-Only the client who owns a completed booking can submit its review, and each
-booking can be reviewed once. Public gardener profiles display visible reviews.
-
-AI Garden Planning Assistant:
-
-```text
-POST /api/ai/garden-plan
-```
-
-The endpoint requires authentication, accepts a gardening request up to 3,000
-characters, and limits each authenticated user to 10 requests per hour. It
-calls Gemini from the backend only. Configure `GEMINI_API_KEY` and optionally
-`GEMINI_MODEL` in `.env`; the verified default is `gemini-3.5-flash-lite`.
-Never place the key in frontend code. If the key is missing or the provider
-quota is unavailable, the API reports an explicit configuration or provider
-error instead of silently switching providers.
-
-Administrator endpoints:
-
-```text
-GET    /api/admin/summary
-PATCH  /api/admin/users/:userId/status
-GET    /api/admin/categories
-POST   /api/admin/categories
-PATCH  /api/admin/categories/:categoryId
-GET    /api/admin/services
-PATCH  /api/admin/services/:serviceId/status
-GET    /api/admin/activity
-GET    /api/admin/reports
-PATCH  /api/admin/reports/:reportId
-```
-
-All administrator endpoints require an authenticated `administrator` account.
-They provide account management, category management, service moderation,
-platform activity monitoring, and report review using MySQL data.
-
-## Available Commands
+## 3. Available npm Scripts
 
 | Command | Description |
 |---|---|
-| `npm install` | Install dependencies |
-| `npm run dev` | Start development server with Nodemon |
-| `npm start` | Start server normally |
+| `npm install` | Install backend dependencies |
+| `npm run dev` | Start development server with Nodemon (`http://localhost:5000`) |
+| `npm start` | Start Express server (`node server.js`) |
+| `npm test` | Run core integration test suite (`tests/integration.test.js`) |
+| `npm run test:r2` | Run Step R2 garden photo upload & access control tests |
+| `npm run test:r3` | Run Step R3 mutual agreement engine & concurrency tests |
+| `npm run test:r4` | Run Step R4 Case 2 direct inquiry tests |
+| `npm run test:r5` | Run Step R5 Case 1 general service request tests |
+| `npm run test:r6` | Run Step R6/R7 Gemini AI assistance, fallback, & rate-limit tests |
 
-## Project Structure
+> **Important:** Always set `DB_NAME=hugatiera_db_migration_test` when running automated tests so the production database (`hugatiera_db`) is not modified.
+
+---
+
+## 4. Registered API Route Modules (`backend/app.js`)
+
+For full request/response schemas and authorization rules, see [docs/api-reference.md](file:///c:/xampp/htdocs/HugaTiera/docs/api-reference.md).
+
+- `GET /api/health` — Server and MySQL connectivity check (`health.routes.js`)
+- `/api/auth` — `register`, `login`, `logout`, `me`, `administrator-check` (`auth.routes.js`)
+- `/api/profiles` — `GET/PUT /me`, `POST /reports` (`profile.routes.js`)
+- `/api/services` — Public search, categories, service detail, and gardener service CRUD (`service.routes.js`)
+- `/api/gardeners` — `GET /:gardenerId` public gardener profile, portfolio, and rating summary (`gardener.routes.js`)
+- `/api/portfolios` — Portfolio photo upload, public image delivery, edit, and delete (`portfolio.routes.js`)
+- `/api/request-images` — `sharp` EXIF-stripped garden photo upload, authenticated delivery, description update, and draft deletion (`requestImage.routes.js`)
+- `/api/inquiries` — Case 1 & Case 2 requests, Open Requests Board (`/open`), request renewal, quotations, revisions, withdrawal, and acceptance (`inquiry.routes.js`)
+- `/api/agreements` — Versioned mutual agreements, priced-service direct agreement proposal (`/direct-service`), edits, two-party approval, and cancellation (`agreement.routes.js`)
+- `/api/bookings` — Confirmed booking list, detail (with Mutual Agreement Summary), and status progression (`booking.routes.js`; direct `POST /api/bookings` returns `409 MUTUAL_AGREEMENT_REQUIRED`)
+- `/api/reviews` — Public gardener reviews and completed-booking client review creation (`review.routes.js`)
+- `/api/conversations` — 1-to-1 conversations (with Case 1 active-offer gating) and messages (`conversation.routes.js`)
+- `/api/notifications` — In-app notification list and mark-read endpoints (`notification.routes.js`)
+- `/api/ai` — `GET /usage`, `POST /garden-plan`, `POST /requirements`, `POST /photo-analysis` (`ai.routes.js`)
+- `/api/admin` — Platform summary metrics, user activation, pending gardener approval queue, category/service moderation, activity monitor, and report resolution (`admin.routes.js`)
+
+---
+
+## 5. Directory Structure
 
 ```text
 backend/
 ├── config/
 │   └── database.js
 ├── controllers/
+│   ├── admin.controller.js
+│   ├── agreement.controller.js
+│   ├── ai.controller.js
+│   ├── auth.controller.js
+│   ├── booking.controller.js
+│   ├── conversation.controller.js
+│   ├── inquiry.controller.js
+│   ├── notification.controller.js
+│   ├── portfolio.controller.js
+│   ├── profile.controller.js
+│   ├── requestImage.controller.js
+│   ├── review.controller.js
+│   └── service.controller.js
 ├── middleware/
-├── models/
+│   ├── auth.middleware.js
+│   └── upload.middleware.js
 ├── routes/
+│   ├── admin.routes.js
+│   ├── agreement.routes.js
+│   ├── ai.routes.js
+│   ├── auth.routes.js
+│   ├── booking.routes.js
+│   ├── conversation.routes.js
+│   ├── gardener.routes.js
+│   ├── health.routes.js
+│   ├── inquiry.routes.js
+│   ├── notification.routes.js
+│   ├── portfolio.routes.js
+│   ├── profile.routes.js
+│   ├── requestImage.routes.js
+│   ├── review.routes.js
+│   └── service.routes.js
 ├── services/
-├── utils/
+│   ├── ai.service.js
+│   └── notification.service.js
+├── tests/
+│   ├── integration.test.js
+│   ├── r2.requestImages.test.js
+│   ├── r3.agreements.test.js
+│   ├── r4.directInquiry.test.js
+│   ├── r5.generalRequest.test.js
+│   └── r6.aiAssistance.test.js
 ├── uploads/
-├── app.js
-├── server.js
-├── .env
+│   ├── portfolios/
+│   └── request-images/
+│       ├── originals/
+│       └── generated/
 ├── .env.example
-├── .gitignore
+├── app.js
 ├── package.json
-└── package-lock.json
+├── package-lock.json
+├── readme.md
+└── server.js
 ```
-
-The remaining module folders will be added during their respective development phases.
-
-## Important Reminders
-
-- Always run `npm install` after pulling new dependency changes.
-- Do not upload `node_modules` to GitHub.
-- Never commit `.env`.
-- Do not hardcode database credentials.
-- Keep database queries and business logic organized.
-- Validate incoming API requests.
-- Use the existing API routes and naming conventions.
-- Coordinate with the frontend team before changing API response formats.
-
-## Troubleshooting
-
-**Problem: Database connection failed**
-
-Check:
-- MySQL is running in XAMPP.
-- Database name is correct.
-- Username and password are correct.
-- MySQL port is correct.
-
-**Problem: Cannot find module**
-
-Run:
-
-```bash
-npm install
-```
-
-**Problem: npm run dev cannot find server.js**
-
-The backend entry point has not yet been created. Make sure the backend setup files are available before starting the server.
-
----
-
-HugaTiera – Gardening Service Platform  
-Backend Development Team

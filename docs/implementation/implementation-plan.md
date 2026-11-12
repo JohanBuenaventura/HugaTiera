@@ -1,6 +1,6 @@
 # HugaTiera Revision: Consolidated Implementation Plan
 
-Status: **Approved technical reference. Steps R0–R6 have been implemented and verified on `hugatiera_db_migration_test` (`hugatiera_db` remains untouched). Step R7 remains pending.**
+Status: **Approved technical reference. Steps R0–R7 (automated regression suites), Production Migration 001 on `hugatiera_db` (executed November 12, 2026), and Post-Migration Audit Phases 1–3 (`ISS-01` through `ISS-10`, 53/53 automated backend tests passing) have been implemented and verified.**
 
 ## 1. Approved decisions
 
@@ -274,13 +274,13 @@ Adding generation later needs only: one new `feature` value (`image_generation`)
 | Step | Content | Gate |
 |---|---|---|
 | R0 | Docs updated, plan proposed (this document) | **Completed & approved** |
-| R1 | Back up DB, migration + schema/README update, test on a copy | **Completed on `hugatiera_db_migration_test`** (`hugatiera_db` untouched) |
-| R2 | Secure photo upload and access control | **Completed & verified** |
-| R3 | Agreement engine, booking gating, priced-service routing | **Completed & verified** |
-| R4 | Case 2 end to end | **Completed & verified** |
-| R5 | Case 1 end to end | **Completed & verified** |
-| R6 | Gemini requirements and photo understanding, provider view, DB-backed limits | **Completed & verified** |
-| R7 | Tests and manual verification, completes Phase 15 | Pending (after R6 confirmation) |
+| R1 | Back up DB, migration + schema/README update, test on a copy | **Completed on `hugatiera_db_migration_test` & executed on `hugatiera_db` (2026-11-12)** |
+| R2 | Secure photo upload and access control | **Completed & verified (`12/12` tests passing)** |
+| R3 | Agreement engine, booking gating, priced-service routing | **Completed & verified (`5/5` suites passing)** |
+| R4 | Case 2 end to end | **Completed & verified (`6/6` suites passing)** |
+| R5 | Case 1 end to end | **Completed & verified (`6/6` suites passing)** |
+| R6 | Gemini requirements and photo understanding, provider view, DB-backed limits | **Completed & verified (`9/9` suites passing)** |
+| R7 | Automated regression suites (`53/53` passing), Production Migration 001 & Audit Fixes (`ISS-01`–`ISS-10`) | **Automated & integration verification completed; manual browser/live-key checks noted in `project_progress.md`** |
 
 ## 7. Testing plan (extends `backend/tests/integration.test.js`)
 - Offer revision allowed before acceptance, rejected after acceptance (locked).

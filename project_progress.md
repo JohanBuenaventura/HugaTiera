@@ -2,23 +2,41 @@
 
 ## Project Information
 - Project: HugaTiera
-- Frontend: React.js + Vite
-- Backend: Node.js + Express.js
-- Database: MySQL
+- Frontend: React.js (`^19.3.1`) + Vite (`^8.3.6`)
+- Backend: Node.js + Express.js (`^5.3.0`)
+- Database: MySQL / MariaDB (`InnoDB`, `19` tables, `46` foreign keys)
 - Architecture: REST API
 
 ## Current Phase
-Phase: 15 – System Integration and Testing
+Phase: 15 – System Integration and Testing (with Revision Track R0–R7, Production Migration 001, and Post-Migration Audit Phases 1–3 completed)
 
-Status: In progress (partially verified; NOT complete)
+Status: **Automated integration, Production Migration 001 on `hugatiera_db`, Post-Migration Audit Phases 1–3 (`ISS-01`–`ISS-10`), and comprehensive documentation synchronization completed (`53/53` automated backend tests passing, frontend lint & production build passing). Manual live-key Gemini and browser visual checks remain noted below before final Phase 15 sign-off.**
 
-Scope revision (approved 2026-11-10): the system concept was revised after the professor consultation (two unified request workflows, mutual agreement before confirmation, Gemini-assisted photo understanding). The work is tracked as the **Revision Track R0–R7** in `prompt/masterprompt.md` (Section 11A) and `prompt/prompts.md`. It sits between the completed Phases 1–14 and Phase 16. The 16-phase numbering is unchanged. Current step: **R6 / R7 AI Resilience – Gemini Requirements Assistant, Uploaded-Photo Understanding, Configurable Automatic Model Fallback (`GEMINI_FALLBACK_MODEL`), Provider Decision-Support View & Concurrency-Safe Database-Backed Rate Limits (`backend/services/ai.service.js`, `backend/controllers/ai.controller.js`, `backend/routes/ai.routes.js`, `backend/controllers/requestImage.controller.js`, `backend/routes/requestImage.routes.js`, `frontend/src/services/ai.js`, `frontend/src/services/requestImages.js`, `frontend/src/pages/AssistantPage.jsx`, `frontend/src/pages/InquiryPage.jsx`, `backend/tests/r6.aiAssistance.test.js`) implemented and verified with all 51 automated backend tests passing across `integration`, `r2`, `r3`, `r4`, `r5`, and `r6` suites on `hugatiera_db_migration_test`; original working database (`hugatiera_db`) remains untouched per user instruction.**
+Scope revision (approved 2026-11-10): the system concept was revised after the professor consultation (two unified request workflows, mutual agreement before confirmation, Gemini-assisted photo understanding). The work is tracked as the **Revision Track R0–R7** in `prompt/masterprompt.md` (Section 11A) and `prompt/prompts.md`. It sits between the completed Phases 1–14 and Phase 16. The 16-phase numbering is unchanged.
+
+### Summary of Completed Revision, Migration & Audit Milestones (November 2026)
+1. **Steps R0 / R0b:** Architectural decisions, state machines, and additive 19-table schema changes documented in `docs/implementation/implementation-plan.md` and approved by the user.
+2. **Step R1:** Additive migration (`database/migrations/001_unified_requests_and_agreements.sql`), structural rollback (`001_unified_requests_and_agreements_rollback.sql`), and fresh-install schema (`database/schema/hugatiera_schema.sql`) rehearsed and verified against `hugatiera_db_migration_test`.
+3. **Step R2:** Secure garden photo upload and authenticated delivery (`/api/request-images`, `sharp` validation, `1920×1920` resize, complete EXIF/GPS metadata removal, separate `originals/` and `generated/` folders, 24h orphan cleanup) verified by `backend/tests/r2.requestImages.test.js` (`12/12` passing).
+4. **Step R3:** Versioned mutual agreement engine (`/api/agreements`) and booking creation gating (`POST /api/bookings` retired with `409 MUTUAL_AGREEMENT_REQUIRED`, priced-service agreements routed via `POST /api/agreements/direct-service`, two-party approval required on the exact same version) verified by `backend/tests/r3.agreements.test.js` (`5/5` suites passing).
+5. **Step R4:** Case 2 Direct Service Provider Inquiry end to end (`serviceId` or `gardenerId`, draft photo attachment, feasibility response types `offer`/`feasible`/`modifications`/`cannot_do`, offer revision snapshots in `quotation_revisions`, withdrawal, locking on acceptance, lazy expiry) verified by `backend/tests/r4.directInquiry.test.js` (`6/6` suites passing).
+6. **Step R5:** Case 1 General Service Request, Open Service Requests Board (`GET /api/inquiries/open` with area-level privacy), multi-provider offer isolation, client comparison enrichment, Case 1 conversation gating, and request renewal (`POST /api/inquiries/:inquiryId/renew`) verified by `backend/tests/r5.generalRequest.test.js` (`6/6` suites passing).
+7. **Steps R6 / R7:** Gemini Requirements Assistant (`POST /api/ai/requirements`), Uploaded-Photo Understanding (`POST /api/ai/photo-analysis`), Configurable Automatic Model Fallback (`GEMINI_MODEL=gemini-3.8-flash` primary → `GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite` fallback on transient `429`/`5xx`/timeout/network errors), Provider Decision-Support View, and Concurrency-Safe Database-Backed Rate Limits (`SELECT ... FOR UPDATE` + `ai_usage_log`) verified by `backend/tests/r6.aiAssistance.test.js` (`9/9` suites passing).
+8. **Production Database Migration 001 (Executed 2026-11-12):**
+   - Completed preflight report, backup verification (`hugatiera_db_backup_20261112_201307.sql` restored into `hugatiera_db_backup_verify` with `14/14` `CHECKSUM TABLE` parity), and final pre-migration backup (`hugatiera_db_pre_migration001_final_20261112_202700.sql`).
+   - Executed `database/migrations/001_unified_requests_and_agreements.sql` (SHA-256 `c7422e9a253d7a15e870a1290c850e30358b35d020e94bc7d269a8961f0e8a8d`) once against `hugatiera_db`.
+   - Verified `19` tables, `46` foreign keys, `19/19` table DDL parity with `hugatiera_db_migration_test`, preservation of all existing rows, and normalization of duplicate active Quotation ID `3` on `inquiry_id = 2` / `gardener_id = 16` from `'sent'` to `'withdrawn'`.
+9. **Post-Migration Audit & Approved Implementation Phases 1–3 (`ISS-01`–`ISS-10`, Executed 2026-11-12):**
+   - **Phase 1 (`ISS-01`, `ISS-02`, `ISS-03`, `ISS-04`, `ISS-10`):** Fixed authenticated request image URLs using `getRequestImageFileUrl(img.id)` (`API_ORIGIN`), changed Admin Activity SQL joins (`listActivity`) to `LEFT JOIN` with `'Open General Request'` fallback so unassigned Case 1 requests appear, updated Gardener dashboard inquiry counts (`getProfile`) to include Case 1 requests where the gardener submitted an offer, added SQL `COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(u.first_name, ' ', u.last_name))` display-name fallbacks across `service.controller.js`, `inquiry.controller.js`, `booking.controller.js`, and `admin.controller.js`, and synchronized `.env.example` files. Verified with **`51/51` backend tests passing**, frontend lint passing, and frontend build passing.
+   - **Phase 2 (`ISS-05`, `ISS-06`, `ISS-07`):** Reorganized Client and Gardener dashboards into `Overview` and `Profile & Settings` tabs (`DashboardPage.jsx`), updated Administrator header navigation to show only `Admin Panel` and `Messages`, restricted `/api/bookings` and `GET /api/inquiries` to `requireRole('client', 'gardener')` (`403` for administrators), added `totalInquiries` and `totalBookings` to `GET /api/admin/summary` (`openInquiries / totalInquiries` and `completedBookings / totalBookings`), updated the landing page floating message button (`App.jsx`) to hide on `/messages` and show an unread badge, and added `TC-17` to `backend/tests/integration.test.js`. Verified with **`52/52` backend tests passing**, frontend lint passing, and frontend build passing.
+   - **Phase 3 (`ISS-08`, `ISS-09`):** Added human-readable status formatting (`formatStatusLabel` in `InquiryPage.jsx`, `BookingPage.jsx`, and `DashboardPage.jsx`), distinct CSS badge classes for all Revision Track statuses (`provider_selected`, `in_agreement`, `confirmed`, `expired`, `withdrawn`, `proposed`, `agreed`, `superseded`, `in_progress`, `completed`, `pending`), responsive flex-wrap rules at `<= 560px`, enriched `GET /api/bookings` and `GET /api/bookings/:bookingId` with `LEFT JOIN agreements a ON a.id = b.agreement_id`, rendered the read-only **Mutual Agreement Summary** panel on `BookingDetailPage`, and added `TC-18` to `backend/tests/integration.test.js`. Verified with **`53/53` backend tests passing**, frontend lint passing, and frontend build passing.
 
 ## Phase 15 Verification Status (accurate record)
-- **Verified by execution:** frontend `npm run lint` and `npm run build` pass; backend `npm test` (`backend/tests/integration.test.js`, 13 tests, TC-01 to TC-16) passes against the local MySQL database (run outside the sandbox because the sandbox blocks MySQL port 3306).
-- **Implemented but NOT browser-verified:** notification routing/badges, inquiry date formatting, inquiry close/cancel buttons, booking "Saving..." states, backend-offline retry screen, gardener portfolio gallery and rating display, portfolio edit UI, report forms, homepage category links, direct-booking conversation button.
-- **Still pending manual verification:** responsive layouts (mobile/tablet/desktop), live Gemini request (`GEMINI_MODEL=gemini-3.8-flash` configured in `backend/.env`, awaiting live API key test), administrator success-path UI, notification delivery with real accounts.
-- **Phase 15 cannot be marked complete** until the manual checks above pass and the revision track is integrated and re-tested.
+- **Verified by execution:**
+  - Frontend `npm --prefix frontend run lint` (`0` errors, `0` warnings) and `npm --prefix frontend run build` pass.
+  - All 6 automated backend test suites (**`53/53` tests total**: `integration.test.js` `15/15`, `r2.requestImages.test.js` `12/12`, `r3.agreements.test.js` `5/5`, `r4.directInquiry.test.js` `6/6`, `r5.generalRequest.test.js` `6/6`, and `r6.aiAssistance.test.js` `9/9`) pass sequentially against `hugatiera_db_migration_test`.
+  - Production Migration 001 executed and verified on `hugatiera_db` (`19` tables, `46` foreign keys).
+- **Still pending manual verification:** live Gemini request with a real `GEMINI_API_KEY` against the live Google endpoint, and interactive browser verification of responsive layouts across physical/emulated mobile/tablet/desktop viewports.
 
 ## Phase Checklist
 
@@ -36,156 +54,46 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 - [x] Phase 12 – Ratings and Reviews
 - [x] Phase 13 – AI Garden Planning Assistant
 - [x] Phase 14 – Administrator Functions
-- [ ] Phase 15 – System Integration and Testing
+- [ ] Phase 15 – System Integration and Testing (Automated suites `53/53`, Production Migration 001, and Audit Phases 1–3 `ISS-01`–`ISS-10` complete; awaiting final user sign-off)
 - [ ] Phase 16 – Deployment and Documentation
 
 ## Completed Features
 - Approved React + Vite, Node.js + Express.js, and MySQL architecture.
-- MySQL schema initialized in `database/schema/hugatiera_schema.sql`.
+- 19-table MySQL schema in `database/schema/hugatiera_schema.sql` and Migration 001 in `database/migrations/001_unified_requests_and_agreements.sql` (applied to both `hugatiera_db_migration_test` and `hugatiera_db`).
 - Backend health endpoint at `GET /api/health`.
-- Backend-to-MySQL connectivity verified locally.
-- Frontend lint and production build verified.
-- Responsive HugaTiera landing page foundation implemented.
-- Reusable navigation, logo, button, service-card, workflow, assistant, and footer UI patterns added.
-- Client and gardener registration with validation and hashed passwords implemented.
-- JWT authentication using HttpOnly cookies implemented.
-- Login, logout, current-session, protected frontend route, and role-protected backend checks implemented.
-- Administrator self-registration rejected.
-- Role-specific profile retrieval and updates connected to MySQL.
-- Client and gardener dashboard activity counts connected to MySQL.
-- Administrator summary and basic account activation management implemented.
-- Gardener service listing CRUD with category assignment and ownership checks implemented.
-- Public approved-service browsing and service detail data implemented.
-- Portfolio image upload, metadata update, deletion, and validated image delivery implemented.
-- Public marketplace search and filtering by keyword, category, and service area implemented.
-- Marketplace sorting and pagination implemented.
-- Service detail and public gardener profile pages implemented.
-- Client inquiry creation, listing, detail, and status updates implemented.
-- Gardener quotation creation with transactional inquiry response updates implemented.
-- Client quotation acceptance and decline implemented.
-- Inquiry and quotation frontend routes, forms, lists, and detail views implemented.
-- Inquiry workflow explicitly does not create bookings automatically.
-- REST conversations and message history with client/gardener ownership checks implemented.
-- Message sending, timestamps, and read tracking implemented.
-- Notifications for inquiries, quotations, quotation decisions, and new messages implemented.
-- Notification listing, unread counts, and mark-read actions implemented.
-- Messaging and notifications frontend page implemented at `/messages`.
-- Client booking requests can be submitted from accepted quotations.
-- Booking schedules, details, history, and ownership checks implemented.
-- Gardener booking acceptance, decline, service progress, and completion implemented.
-- Client booking cancellation and schedule conflict prevention implemented.
-- Booking status notifications implemented.
-- Completed-booking review eligibility and ownership checks implemented.
-- Duplicate reviews are prevented at the application and database levels.
-- Client ratings and written feedback implemented.
-- Visible reviews displayed on public gardener profiles.
-- Backend-mediated text Garden Planning Assistant implemented with Gemini configuration.
-- Assistant input validation, 10 requests-per-hour user limit, timeout, quota, and credential error handling implemented.
-- Authenticated assistant page implemented at `/assistant` with examples and safety disclaimer.
-- Administrator account management and role-protected dashboard implemented.
-- Administrator category creation, activation, and deactivation implemented.
-- Administrator service listing monitoring and moderation implemented.
-- Administrator inquiry and booking activity monitoring implemented.
-- Administrator report review and status management implemented.
-- Phase 15 core API workflow smoke-tested from registration through profile update, service creation/search, inquiry, quotation, booking lifecycle, messaging, notifications, and review creation.
-- Phase 15 validation checks confirmed protected endpoints, invalid-input responses, database relationship integrity, frontend lint/build, and secret exposure protections.
-- Phase 15 audit updated the roadmap and current folder-structure documentation to match the approved 16-phase React/Express/MySQL project.
-- Phase 15 UI fixes made homepage service/navigation actions functional and exposed gardener approval/public-visibility status.
-- Client and gardener dashboards now show recent inquiries, booking activity, and role-specific next actions.
-- Dashboard navigation now shows unread notification counts, and related notifications can open their workflow records.
-- Dashboard unread badges are now separated by destination: inquiries, bookings, and messages each show only their related unread activity.
-- Dashboard unread badges count unique related workflow records, so repeated booking status notifications do not inflate the displayed count.
-- Messages and notifications now use a more spacious responsive layout with separate conversation and notification sections.
-- Direct booking requests are supported for approved active services with indicative pricing, while inquiry-to-quotation booking remains available.
-- Service-detail inquiry navigation now validates service IDs and shows clear errors instead of failing ambiguously.
-- Homepage now displays recently added approved services from the marketplace API.
-- Inquiry and related workflow records now commit atomically with their notifications.
-- Inquiry list and detail pages now provide loading, validation, and explicit error states for authenticated users.
-- Fixed the gardener inquiry-detail blank page caused by passing a promise-returning loader directly to `useEffect`.
-- Implemented Phase 15 bug fixes (`BUG-01` through `BUG-07`; verified by lint/build/API tests, browser verification pending), including full notification routing (`review`, `gardener_profile`), locale date formatting on inquiries/quotations, inquiry close/cancel UI actions, booking status processing feedback, and `401` vs. `503`/network separation in `AuthContext` and `ProtectedRoute`.
-- Added public gardener portfolio gallery rendering, average rating calculation, and gardener dashboard portfolio metadata editing (`PUT /api/portfolios/:portfolioId`).
-- Added user-submitted report creation (`POST /api/profiles/reports`) on service detail and gardener profile pages, connected to administrator report moderation.
-- Extended conversation creation (`POST /api/conversations`) to support direct bookings without an inquiry, and added an “Open conversation” action on booking detail pages.
-- Updated `requireAuth` middleware to verify active user status (`users.is_active = TRUE`) in MySQL so deactivated accounts lose access immediately.
-- Updated default Gemini model configuration to `gemini-3.8-flash` (preserving valid Gemini 3.x models such as `gemini-3.8-flash` and `gemini-3.5-flash-lite`, with explicit legacy mapping only for retired 1.x placeholder identifiers and Gemini 3 `thinkingConfig` compatibility).
-- Added and executed automated backend integration & regression test suite (`backend/tests/integration.test.js`, 13 test suites covering `TC-01` through `TC-16`, all passing).
-- Implemented Step R2 secure garden photo upload and authenticated delivery (`/api/request-images`, `backend/middleware/upload.middleware.js`, `backend/controllers/requestImage.controller.js`, `backend/routes/requestImage.routes.js`, `frontend/src/services/requestImages.js`, `backend/server.js`) with `sharp` image decoding, auto-orientation, resizing within 1920×1920, complete EXIF/GPS/XMP/IPTC metadata removal, separate `originals/` and `generated/` storage, periodic + upload-triggered orphan cleanup (DB-first delete + disk-orphan sweep), and role/ownership access checks (verified by `backend/tests/r2.requestImages.test.js`, 12/12 passing, and `backend/tests/integration.test.js`, 13/13 passing on `hugatiera_db_migration_test`).
-- Implemented Step R3 mutual agreement engine and booking creation gating (`backend/controllers/agreement.controller.js`, `backend/routes/agreement.routes.js`, `backend/controllers/booking.controller.js`, `frontend/src/services/agreements.js`, `frontend/src/pages/BookingPage.jsx`, `frontend/src/pages/InquiryPage.jsx`, `frontend/src/pages/ServiceDetailPage.jsx`):
-  - Retired direct `POST /api/bookings` creation (`409 MUTUAL_AGREEMENT_REQUIRED`) and routed priced-service arrangements through `POST /api/agreements/direct-service`.
-  - Enforced explicit two-party approval on the exact same agreement version before a booking is confirmed (`status = 'accepted'`, linked via `bookings.agreement_id`).
-  - Enforced versioned agreement editing (`PUT /api/agreements/:id` marks version $N$ as `'superseded'`, inserts version $N+1$ linked via `previous_agreement_id`, and resets both `client_approved_at` and `gardener_approved_at` to `NULL`).
-  - Protected all agreement writes with parent-inquiry `SELECT ... FOR UPDATE` serialization, stale-version rejection (`409`), duplicate-approval rejection (`409`), schedule conflict checks, and atomic rollback on mid-transaction failures (verified by `backend/tests/r3.agreements.test.js`, `5/5` comprehensive suites including `Promise.all` concurrency tests passing on `hugatiera_db_migration_test`).
-- Implemented Step R4 Case 2 Direct Service Provider Inquiry end-to-end (`backend/controllers/inquiry.controller.js`, `backend/routes/inquiry.routes.js`, `frontend/src/services/inquiries.js`, `frontend/src/pages/GardenerPage.jsx`, `frontend/src/pages/InquiryPage.jsx`, `backend/tests/r4.directInquiry.test.js`):
-  - Supported Case 2 direct inquiries initiated either from a specific service (`?serviceId=`) or directly from a gardener profile (`?gardenerId=`), with optional category, AI-assisted requirement summary (`aiSummary`), expiration period (`expiresInDays`), and transactional attachment of uploaded draft photos (`imageIds` via `attachImagesToInquiry`).
-  - Enforced strict Case 2 authorization so only an approved gardener who is the targeted `inquiry.gardener_id` can view or respond to a direct inquiry, and blocked unapproved/inactive providers or mismatched service-provider pairs.
-  - Added feasibility assessment and response types (`offer`, `feasible`, `modifications`, `cannot_do`, `interest`) with required `proposedChanges` validation for `modifications`, offer revision history (`PUT /api/inquiries/quotations/:quotationId` snapshotting prior versions into `quotation_revisions`), and offer withdrawal (`POST /api/inquiries/quotations/:quotationId/withdraw`) before acceptance.
-  - Enforced offer locking (`locked_at = NOW()`) and `status = 'provider_selected'` (`booking = null`) upon client acceptance, blocking `cannot_do` acceptance (`409`) and preventing unilateral offer revisions or withdrawals after acceptance (`409`).
-  - Implemented lazy request expiration (`checkAndPersistLazyExpiry`) that transitions `open`/`responded` inquiries past `expires_at` to `expired` while preserving inquiries already in `provider_selected`, `in_agreement`, or `confirmed`.
-  - Verified with `backend/tests/r4.directInquiry.test.js` (`6/6` suites passing, `36/36` total backend tests passing across `integration`, `r2`, `r3`, and `r4`).
-- Implemented Step R5 Case 1 General Service Request, Open Provider Board, Multi-Provider Offers & Comparison end-to-end (`backend/controllers/inquiry.controller.js`, `backend/controllers/conversation.controller.js`, `backend/routes/inquiry.routes.js`, `frontend/src/services/inquiries.js`, `frontend/src/services/communication.js`, `frontend/src/pages/InquiryPage.jsx`, `frontend/src/pages/DashboardPage.jsx`, `backend/tests/r5.generalRequest.test.js`):
-  - Enabled clients to create open Case 1 general service requests (`requestType = 'general'`, `gardener_id = NULL`, `service_id = NULL`, default `expiresInDays = 14`, optional `categoryId`, `aiSummary`, area-level `location`, and transactional garden photo attachment), while rejecting `serviceId`/`gardenerId` on general requests (`400`) and preserving full Case 2 compatibility.
-  - Added the Open Service Requests Board (`GET /api/inquiries/open`) for approved, active gardeners and administrators with lazy expiry evaluation, `categoryId` and `area` filters, attached garden photos, and strict client privacy protection (area-level `location` and `client_first_name` only; street address, phone, email, and last name are never exposed on the open board).
-  - Enforced multi-provider offer isolation on Case 1 requests so viewing gardeners only see their own quotation(s) on `GET /api/inquiries/:inquiryId`, while the owning client receives all provider offers enriched with comparison data (`gardener_rating`, `gardener_review_count`, `gardener_completed_bookings`, `gardener_experience_years`, `gardener_service_area`, `gardener_bio`, and up to 4 `gardener_portfolios` preview items).
-  - Implemented Case 1 conversation gating (`POST /api/conversations` & `POST /api/conversations/:conversationId/messages`) so a provider on a general request can open or message in a per-provider `(inquiry_id, gardener_id)` thread with the client only while holding an active (`sent` or `accepted`) offer (`403` otherwise).
-  - Added client request renewal (`POST /api/inquiries/:inquiryId/renew` with `expiresInDays` 1–90, default 14) to restore expired requests to `responded` (when `'sent'` offers exist) or `open`, while keeping expired requests visible in offer-holding providers' `GET /api/inquiries` list labelled `expired`.
-  - Enabled clients to decline a previously accepted offer when no active (`proposed` or `agreed`) agreement exists (returning the request to `responded`/`open` and resetting `gardener_id = NULL` on general requests so another provider can be selected), and verified full end-to-end transition through the R3 mutual agreement engine (which automatically declines competing open offers upon booking confirmation).
-  - Verified with `backend/tests/r5.generalRequest.test.js` (`6/6` suites passing, `42/42` total backend tests passing sequentially across `integration`, `r2`, `r3`, `r4`, and `r5`).
-- Implemented Step R6 Gemini Requirements Assistant, Uploaded-Photo Understanding, Provider Decision-Support View & Database-Backed Rate Limits (`backend/services/ai.service.js`, `backend/controllers/ai.controller.js`, `backend/routes/ai.routes.js`, `backend/controllers/requestImage.controller.js`, `backend/routes/requestImage.routes.js`, `frontend/src/services/ai.js`, `frontend/src/services/requestImages.js`, `frontend/src/pages/AssistantPage.jsx`, `frontend/src/pages/InquiryPage.jsx`, `backend/tests/r6.aiAssistance.test.js`):
-  - Introduced a provider abstraction (`createGeminiProvider`, `getAiProvider`, `setAiProviderForTesting`, `resetAiProvider`) in `backend/services/ai.service.js` supporting `generateGardenPlan`, `generateRequirementAssistance`, and multimodal `analyzeGardenPhoto` (sending `sharp`-sanitized `inline_data` to Gemini `gemini-3.8-flash` with Gemini 3 `thinkingConfig: { thinkingLevel: 'low' }` and non-thought part extraction), while explicitly blocking `generateGardenImage` with `501 IMAGE_GENERATION_POSTPONED`.
-  - Added configurable automatic model fallback (`GEMINI_FALLBACK_MODEL`, e.g. `gemini-3.5-flash-lite`, via `executeWithModelFallback` and `isEligibleForFallback`) that retries once on transient upstream failures (`429`, `500`, `502`, `503`, `504`, `TIMEOUT`, `NETWORK_ERROR`), never retries on `400`/`401`/`403`/validation errors, consumes exactly one quota slot per user operation, and records distinct audit states in `ai_usage_log` (`error_code = NULL` on primary success, `error_code = 'FALLBACK_FROM_<PRIMARY_CODE>'` on fallback success with `model` set to the actual fallback model, and `error_code = 'FALLBACK_FAILED:<PRIMARY>-><FALLBACK>'` with `model = '<primary>-><fallback>'` when both models fail).
-  - Replaced in-memory rate limiting with concurrency-safe MySQL per-user hourly rate limiting (`10` calls/hour across `'garden_plan'`, `'requirements'`, and `'photo_analysis'`) using atomic slot reservation (`SELECT id FROM users WHERE id = ? FOR UPDATE` + `'RESERVED_IN_FLIGHT'` reservation updated on completion) and outcome logging (`'success'`, `'error'`, `'rate_limited'` with `error_code` and no raw prompt text stored) in `ai_usage_log`, plus `GET /api/ai/usage`.
-  - Added `POST /api/ai/photo-analysis` (persisting the generated description to `request_images.ai_description`) and `PATCH /api/request-images/:imageId` (`updateRequestImageDescription`) so the uploading client can review, edit, or manually write the photo description before or after AI analysis.
-  - Added `POST /api/ai/requirements` returning editable JSON suggestions (`structuredSummary`, `refinedDescription`, `suggestedCategoryId`, `suggestedCategoryName`, `gardeningIdeas`, `followUpQuestions`) integrated into `InquiryForm`, with non-blocking fallback when AI is unavailable or rate-limited.
-  - Added the Provider Decision-Support View in `InquiryDetails` so gardeners evaluating a Case 1 or Case 2 inquiry see the client's requirements, client-reviewed AI requirement summary (`ai_summary`), and uploaded garden photos alongside their `ai_description` space notes.
-  - Verified with `backend/tests/r6.aiAssistance.test.js` (`9/9` suites including fallback Scenarios A–H and `Promise.all` 15-request concurrency verification passing, `51/51` total backend tests passing sequentially across `integration`, `r2`, `r3`, `r4`, `r5`, and `r6`).
+- Client and gardener registration with validation, hashed passwords, and `HttpOnly` JWT cookies.
+- Live `users.is_active = TRUE` verification in `requireAuth` so deactivated accounts immediately lose access.
+- Role-specific profile retrieval, updates, and tabbed `Overview` vs `Profile & Settings` dashboards (`ISS-05`).
+- Gardener service listing CRUD, portfolio upload/edit/delete, public marketplace search/filter/sort/pagination, and automatic full-name fallback when `business_name` is empty (`ISS-04`).
+- Step R2 secure garden photo upload and authenticated delivery (`/api/request-images`, `sharp` resize + EXIF/GPS strip, `getRequestImageFileUrl` frontend origin resolution `ISS-01`).
+- Step R3 versioned mutual agreement engine (`/api/agreements`), priced-service direct agreement routing (`POST /api/agreements/direct-service`), two-party approval gating before booking confirmation, and read-only Mutual Agreement Summary on booking details (`ISS-09`).
+- Step R4 Case 2 Direct Service Provider Inquiry (feasibility responses `offer`/`feasible`/`modifications`/`cannot_do`, offer revisions in `quotation_revisions`, withdrawal, offer locking, lazy expiry).
+- Step R5 Case 1 General Service Request, Open Service Requests Board (`GET /api/inquiries/open`), multi-provider offer isolation, client side-by-side comparison metrics, Case 1 conversation gating, and request renewal (`POST /api/inquiries/:inquiryId/renew`).
+- Step R6/R7 Gemini Requirements Assistant (`POST /api/ai/requirements`), Uploaded-Photo Understanding (`POST /api/ai/photo-analysis`), primary (`gemini-3.8-flash`) to fallback (`gemini-3.5-flash-lite`) resilience, Provider Decision-Support View, and concurrency-safe MySQL rate limiting (`ai_usage_log`).
+- Administrator moderation dashboard with `openInquiries / totalInquiries` and `completedBookings / totalBookings` metrics (`ISS-06`), unassigned Case 1 activity visibility (`ISS-02`), pending gardener approval queue, category/service moderation, and report resolution.
+- Human-readable workflow status labels, distinct status badge colors, and mobile flex-wrapping (`ISS-08`).
 
 ## Database Status
-- Original working database `hugatiera_db` remains untouched with 14 tables (backed up to `database/backups/hugatiera_db_pre_R1_20261111.sql`, git-ignored).
-- Additive migration (`database/migrations/001_unified_requests_and_agreements.sql`), structural rollback (`database/migrations/001_unified_requests_and_agreements_rollback.sql`), and updated fresh-install schema (`database/schema/hugatiera_schema.sql`, 19 tables) have been rehearsed and verified against the separate test database `hugatiera_db_migration_test` on MariaDB 10.4.32.
-- Schema documentation and updated Mermaid ER diagram are in `database/README.md`.
+- **Production Database (`hugatiera_db`):** Migrated via Migration 001 on **November 12, 2026**. Confirmed `19` tables and `46` foreign keys, with pre-migration backups preserved in `database/backups/` (git-ignored). **Do not rerun Migration 001 on `hugatiera_db`.**
+- **Automated Test Database (`hugatiera_db_migration_test`):** Confirmed `19` tables and `46` foreign keys (`19/19` DDL match with `hugatiera_db`). Used exclusively by the automated backend test suites (`DB_NAME=hugatiera_db_migration_test`).
+- Complete 19-table schema documentation, 46 FK summary, Mermaid ERD, and Migration 001 record are in `database/README.md`.
 
-## Known Issues
-- Live Gemini generation has never been verified against a real API key; it requires a valid `GEMINI_API_KEY` in `backend/.env`, and the model name must be confirmed against the live API.
-- Responsive layouts, administrator success-path UI, and real-account notification delivery still need manual verification.
-- Direct booking creation bypassing mutual agreement has been retired (`POST /api/bookings` returns `409 MUTUAL_AGREEMENT_REQUIRED`); both inquiry-based and priced-service arrangements now require explicit two-party approval of the same mutual agreement version (R3 completed).
-- Uploaded portfolio images (`GET /api/portfolios/:portfolioId/image`) remain publicly viewable by design for gardener portfolios, whereas client garden photos (`/api/request-images`) now enforce magic-byte + `sharp` decode validation, EXIF/GPS removal, and authenticated access control (R2 completed).
-- The AI assistant rate limit and usage tracking are now persisted in the MySQL `ai_usage_log` table (`10` calls/hour per user across `garden_plan`, `requirements`, and `photo_analysis`; R6 completed).
-- Optional post-MVP enhancements (password-reset emails, external email/SMS notifications, a dedicated admin audit log) remain out of scope unless requested.
-- Test records created by earlier manual testing remain in the local database until cleanup is approved. The automated test suites (`integration`, `r2`, `r3`, `r4`, `r5`, and `r6`) target `hugatiera_db_migration_test` exclusively and remove the records they create.
-- `npm --prefix backend audit` reports 2 moderate advisories in `minimatch` (`7.0.0 - 11.0.0`, `GHSA-g3hv-75wg-m249`), a transitive dependency of `nodemon` (`devDependencies` only; `sharp` and production dependencies have 0 vulnerabilities). Resolving it via `npm audit fix --force` would downgrade `nodemon` to `3.1.11` and was intentionally not run without user approval.
+## Known Issues & Limitations
+- Live Gemini generation requires a valid `GEMINI_API_KEY` in `backend/.env` when testing against the live Google API.
+- Direct booking creation bypassing mutual agreement is retired by design (`POST /api/bookings` returns `409 MUTUAL_AGREEMENT_REQUIRED`); all new bookings are created via mutual agreement approval (`POST /api/agreements/:agreementId/approve`).
+- Online payments, physical product e-commerce, GPS dispatch, and paid AI image generation (`501 IMAGE_GENERATION_POSTPONED`) remain intentionally out of scope.
+- `npm --prefix backend audit` reports 2 moderate advisories in `minimatch` (a transitive dependency of `nodemon` in `devDependencies` only; production dependencies have `0` vulnerabilities).
 
-## Important Development Decisions
-- Use MySQL, not MongoDB.
-- Use React + Vite for the frontend.
-- Use Node.js + Express.js for the backend.
-- Do not introduce unapproved paid services; do not enable paid Gemini billing without the user's explicit approval.
-- Implement text-based AI assistance first.
-
-### Revised system decisions (approved by the user 2026-11-10)
-1. **Two workflows, one engine.** Case 1 (General Service Request: open to all approved providers) and Case 2 (Direct Service Provider Inquiry: one chosen provider) share the extended `inquiries` and `quotations` tables.
-2. **Mutual agreement is required for BOTH cases.** A provider interest/offer/response, or a client acceptance, never confirms a booking. A booking is created only when both parties approve the same agreement covering scope, price, schedule, and conditions. The existing priced-service direct booking is kept but routed through this agreement step.
-3. **Provider offers can be revised** until the client accepts. The latest offer is the active one and revision history is preserved. An accepted offer is locked; later changes require mutual agreement.
-4. **AI scope for the first version: text and photo understanding only** (Gemini API). Paid AI image generation is postponed. The architecture must stay extensible so an image-generation provider can be added later (original and generated images stored separately, usage logged).
-5. **The AI never** approves requests, selects providers, confirms bookings, sets final prices, or guarantees outcomes. AI-generated content is a client-reviewed suggestion.
-6. **Data model:** extend `inquiries` and `quotations` (approved with conditions). Significant schema changes must be presented for review before implementation (documented in `docs/implementation/implementation-plan.md`).
-7. **Photo processing:** the `sharp` library is approved (added in R2) to validate, resize, and re-encode uploads with all metadata, including GPS location, removed.
-8. **Request expiry:** `inquiries.expires_at`; expired requests accept no new offers; requests already in mutual agreement are never auto-cancelled or auto-expired.
-9. **Conversation access:** in Case 1 a provider may message the client only after submitting an offer.
-10. **Migration safety:** back up, restore into a separate test database, rehearse there; the original database is changed only after explicit user approval.
-
-## Revision Track Status (Phase 15 scope revision)
-- [x] R0 – Decisions recorded; `masterprompt.md`, `prompts.md`, `AGENTS.md`, and this file updated.
-- [x] R0b – User reviewed and approved the proposed database changes with six clarifications (sharp, `expires_at`, Case 1 conversation access, live DB inspection, transactional agreement versioning, test-DB rehearsal).
-- [x] R1 (Active on `hugatiera_db_migration_test`; `hugatiera_db` kept untouched per user instruction) – Additive database migration (`001_unified_requests_and_agreements.sql`), rollback script, fresh-install schema (`hugatiera_schema.sql`), and `database/README.md` completed and verified on the test database.
-- [x] R2 – Secure garden-photo upload and storage (`sharp` processing, EXIF/GPS removal, separate `originals/` and `generated/` folders, scheduled + upload-triggered orphan cleanup with DB/file consistency and disk-orphan sweep, authenticated delivery, 12/12 automated tests passing in `backend/tests/r2.requestImages.test.js`).
-- [x] R3 – Mutual agreement engine; booking creation gated behind it (versioned agreements, approval reset on edit, stale-version protection, `Promise.all` concurrency serialization, atomic rollback verification, priced-service routing, `5/5` R3 suites + `13/13` Phase 15 suites passing on `hugatiera_db_migration_test`).
-- [x] R4 – Case 2 (direct inquiry) end to end (direct inquiry via `serviceId` or `gardenerId`, transactional draft photo attachment & rollback, targeted-provider feasibility responses & offer revisions in `quotation_revisions`, offer withdrawal, lazy expiry, offer locking on acceptance, and transition into R3 mutual agreement; `6/6` R4 suites + `30/30` existing suites passing on `hugatiera_db_migration_test`).
-- [x] R5 – Case 1 (general request, provider board, offers, comparison) end to end (`GET /api/inquiries/open`, `POST /api/inquiries/:inquiryId/renew`, multi-provider offer isolation & client comparison enrichment, Case 1 conversation gating, re-selection before agreement, and R3 mutual agreement confirmation; `6/6` R5 suites + `36/36` existing suites passing on `hugatiera_db_migration_test`).
-- [x] R6 – Gemini requirements assistant and photo understanding; provider decision-support view (`POST /api/ai/requirements`, `POST /api/ai/photo-analysis`, `GET /api/ai/usage`, `PATCH /api/request-images/:imageId`, provider abstraction with `501 IMAGE_GENERATION_POSTPONED` guard, Gemini 3 `thinkingConfig` compatibility, concurrency-safe MySQL `ai_usage_log` rate limits & usage logging, and Provider Decision-Support View; `7/7` R6 suites + `42/42` existing suites passing on `hugatiera_db_migration_test`).
-- [ ] R7 – Automated and manual testing; completes Phase 15.
+## Revision Track & Post-Migration Audit Status
+- [x] R0 / R0b – Decisions recorded and database plan approved.
+- [x] R1 – Migration 001, rollback script, and 19-table schema verified on `hugatiera_db_migration_test` and executed on `hugatiera_db` (2026-11-12).
+- [x] R2 – Secure garden photo upload, `sharp` EXIF/GPS stripping, and authenticated delivery (`12/12` tests passing).
+- [x] R3 – Mutual agreement engine and booking gating (`5/5` suites passing).
+- [x] R4 – Case 2 Direct Service Provider Inquiry end to end (`6/6` suites passing).
+- [x] R5 – Case 1 General Service Request, Open Board, and Offer Comparison end to end (`6/6` suites passing).
+- [x] R6 – Gemini requirements assistant, photo understanding, fallback model (`gemini-3.5-flash-lite`), Provider Decision-Support View, and DB rate limits (`9/9` suites passing).
+- [x] R7 (Automated Suites) & Post-Migration Audit Phases 1–3 (`ISS-01` through `ISS-10`) – All 10 audit findings implemented and verified (`53/53` backend tests passing, frontend lint & build passing).
 
 ## Next Tasks
-- User reviews Step R6 results and confirms whether to proceed to Step R7 (Automated and manual testing to complete Phase 15).
-- Keep `hugatiera_db` untouched and continue using `hugatiera_db_migration_test` until the user explicitly approves applying Migration 001 to `hugatiera_db`.
-- Finish the pending manual Phase 15 verification (responsive layouts, live Gemini, admin UI, notifications).
-- Phase 16 (Deployment and Documentation) starts only after R7 and user confirmation.
+- User reviews the updated project documentation (`README.md`, `database/README.md`, `docs/architecture-and-workflows.md`, `docs/api-reference.md`, `project_progress.md`, `system_bug_and_missing_features.md`, `folder_structure.md`).
+- Perform final live browser/presentation walk-through and confirm readiness for Phase 16 sign-off.

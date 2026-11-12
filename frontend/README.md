@@ -1,158 +1,91 @@
-# HugaTiera – Frontend
+# HugaTiera — Frontend Application (`frontend/`)
 
-The frontend of **HugaTiera**, a Gardening Service Platform, built using React and Vite.
+The React 19 + Vite 8 single-page application for **HugaTiera**, providing public service discovery, role-specific Client, Gardener, and Administrator dashboards, Case 1 & Case 2 service request wizards, offer comparison, versioned mutual agreement workspaces, booking tracking, messaging, and AI garden planning tools.
 
-## Tech Stack
+---
 
-- React – UI development
-- Vite – Development server and build tool
-- JavaScript – Programming language
-- ESLint – Code linting
-- Axios – API communication
-- React Router DOM – Client-side navigation
-- Lucide React – Icon library
+## 1. Technology Stack
 
-## Prerequisites
+- **React (`^19.3.1`) & React DOM (`^19.3.1`)**
+- **Vite (`^8.3.6`)**
+- **React Router DOM (`^7.18.5`)**
+- **Axios (`^1.21.0`)** with `withCredentials: true` for `HttpOnly` cookie sessions
+- **Lucide React (`^1.69.0`)** for icons
+- **ESLint (`^10.14.0`)**
 
-Before installing the project, make sure you have:
+---
 
-1. Node.js (LTS version recommended)
-2. npm (included with Node.js)
-3. Git
-4. Visual Studio Code (recommended)
+## 2. Environment Configuration (`frontend/.env`)
 
-Verify your installation:
-
-```bash
-node -v
-npm -v
-git --version
-```
-
-## Installation Guide
-
-### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-```
-
-Navigate to the frontend directory:
-
-```bash
-cd HugaTiera/frontend
-```
-
-### 2. Install Dependencies
-
-Install the project dependencies:
-
-```bash
-npm install
-```
-
-### 3. Install Additional Packages
-
-If the dependencies are not already included in package.json, install:
-
-```bash
-npm install axios react-router-dom lucide-react
-```
-
-### 4. Configure Environment Variables
-
-Create a `.env` file in the frontend directory.
-
-Example:
+Copy [frontend/.env.example](file:///c:/xampp/htdocs/HugaTiera/frontend/.env.example) to `frontend/.env`:
 
 ```env
 VITE_API_URL=http://localhost:5000/api
 ```
 
-This will be used when connecting the frontend to the backend API.
+> **Important:** Never place backend secrets (`GEMINI_API_KEY`, `JWT_SECRET`, or database credentials) in `frontend/.env`.
 
-**Important:** Only expose public configuration values in frontend environment variables. Never put database passwords, API secrets, or private credentials here.
+---
 
-### 5. Run the Development Server
-
-```bash
-npm run dev
-```
-
-Open the URL provided by Vite, usually:
-
-```text
-http://localhost:5173
-```
-
-## Available Commands
+## 3. Available npm Scripts
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Start development server |
-| `npm run build` | Build production files |
-| `npm run preview` | Preview production build |
-| `npm run lint` | Check code using ESLint |
+| `npm install` | Install frontend dependencies |
+| `npm run dev` | Start Vite development server (`http://localhost:5173`) |
+| `npm run build` | Build production bundle into `dist/` |
+| `npm run preview` | Preview production build locally |
+| `npm run lint` | Run ESLint across `src/` |
 
-## Project Structure
+---
+
+## 4. Directory Structure
 
 ```text
 frontend/
 ├── public/
+│   ├── favicon.svg
+│   └── icons.svg
 ├── src/
 │   ├── assets/
+│   │   ├── hero.png
+│   │   ├── react.svg
+│   │   └── vite.svg
 │   ├── components/
-│   ├── pages/
-│   ├── layouts/
-│   ├── services/
-│   ├── hooks/
+│   │   └── ProtectedRoute.jsx
 │   ├── context/
+│   │   ├── AuthContext.jsx
+│   │   └── auth-context.js
+│   ├── pages/
+│   │   ├── AssistantPage.jsx
+│   │   ├── AuthPage.jsx
+│   │   ├── BookingPage.jsx
+│   │   ├── CommunicationPage.jsx
+│   │   ├── DashboardPage.jsx
+│   │   ├── GardenerPage.jsx
+│   │   ├── InquiryPage.jsx
+│   │   ├── ServiceDetailPage.jsx
+│   │   └── ServicesPage.jsx
+│   ├── services/
+│   │   ├── agreements.js
+│   │   ├── ai.js
+│   │   ├── api.js
+│   │   ├── auth.js
+│   │   ├── bookings.js
+│   │   ├── communication.js
+│   │   ├── inquiries.js
+│   │   ├── profiles.js
+│   │   ├── requestImages.js
+│   │   └── services.js
+│   ├── App.css
 │   ├── App.jsx
-│   ├── main.jsx
-│   └── index.css
-├── .env
+│   ├── index.css
+│   └── main.jsx
 ├── .env.example
-├── .gitignore
 ├── eslint.config.js
 ├── index.html
 ├── package.json
+├── package-lock.json
+├── README.md
 └── vite.config.js
 ```
-
-Note: Additional folders will be created as development progresses.
-
-## Important Reminders
-
-- Always run `npm install` after pulling new changes that modify package.json or package-lock.json.
-- Do not upload the `node_modules` folder to GitHub.
-- Do not commit your `.env` file.
-- Follow the existing component and folder structure.
-- Run `npm run lint` before committing your changes.
-- Coordinate with the backend team when modifying API endpoints.
-
-## Troubleshooting
-
-**Problem: npm install fails**
-
-Try:
-
-```bash
-npm cache verify
-npm install
-```
-
-**Problem: Port 5173 is already in use**
-
-Vite may automatically use another available port. Check the terminal for the correct URL.
-
-**Problem: Backend connection failed**
-
-Check that:
-- The backend server is running.
-- The API URL in `.env` is correct.
-- The backend CORS configuration allows the frontend origin.
-
----
-
-HugaTiera – Gardening Service Platform  
-Frontend Development Team
