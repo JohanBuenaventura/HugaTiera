@@ -48,9 +48,11 @@ async function getProfile(req, res, next) {
       const [result] = await pool.execute(`
         SELECT
           (SELECT COUNT(*) FROM services WHERE gardener_id = ? AND is_active = TRUE) AS services,
-          (SELECT COUNT(*) FROM inquiries WHERE gardener_id = ?) AS inquiries,
+          (SELECT COUNT(*) FROM inquiries i
+           WHERE i.gardener_id = ?
+              OR EXISTS (SELECT 1 FROM quotations q WHERE q.inquiry_id = i.id AND q.gardener_id = ?)) AS inquiries,
           (SELECT COUNT(*) FROM bookings WHERE gardener_id = ?) AS bookings
-      `, [user.id, user.id, user.id])
+      `, [user.id, user.id, user.id, user.id])
       counts = result[0]
     }
 

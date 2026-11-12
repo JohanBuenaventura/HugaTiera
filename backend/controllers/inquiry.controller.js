@@ -88,17 +88,53 @@ async function checkAndPersistLazyExpiry(connection, inquiry, actorId = null) {
 }
 
 async function listInquiries(req, res, next) {
-  const field = req.user.role === 'client' ? 'i.client_id' : 'i.gardener_id'
+  if (!['client', 'gardener'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'You do not have permission to access this resource.' })
+  }
   try {
-    // Lazily mark any open/responded inquiries for this user that have passed expires_at
+    if (req.user.role === 'client') {
+      await pool.execute(
+        `UPDATE inquiries i
+         SET i.status = 'expired'
+         WHERE i.client_id = ?
+           AND i.status IN ('open', 'responded')
+           AND i.expires_at IS NOT NULL
+           AND i.expires_at <= NOW()`,
+        [req.user.id],
+      )
+
+      const [inquiries] = await pool.execute(
+        `SELECT i.id, i.request_type, i.client_id, i.gardener_id, i.service_id, i.category_id,
+                i.subject, i.description, i.ai_summary, i.requested_date, i.location,
+                i.status, i.expires_at, i.created_at, i.updated_at,
+                s.title AS service_title,
+                sc.name AS category_name,
+                u.first_name AS client_first_name, u.last_name AS client_last_name,
+                gp.business_name,
+                COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name,
+                (SELECT COUNT(*) FROM quotations q WHERE q.inquiry_id = i.id AND q.status <> 'withdrawn') AS offer_count
+         FROM inquiries i
+         LEFT JOIN services s ON s.id = i.service_id
+         LEFT JOIN service_categories sc ON sc.id = COALESCE(i.category_id, s.category_id)
+         JOIN users u ON u.id = i.client_id
+         LEFT JOIN users gu ON gu.id = i.gardener_id
+         LEFT JOIN gardener_profiles gp ON gp.user_id = i.gardener_id
+         WHERE i.client_id = ?
+         ORDER BY i.updated_at DESC`,
+        [req.user.id],
+      )
+      return res.json({ inquiries })
+    }
+
+    // Gardener: lazily mark any open/responded inquiries targeted to or quoted by this gardener that passed expires_at
     await pool.execute(
       `UPDATE inquiries i
        SET i.status = 'expired'
-       WHERE ${field} = ?
+       WHERE (i.gardener_id = ? OR EXISTS (SELECT 1 FROM quotations q WHERE q.inquiry_id = i.id AND q.gardener_id = ?))
          AND i.status IN ('open', 'responded')
          AND i.expires_at IS NOT NULL
          AND i.expires_at <= NOW()`,
-      [req.user.id],
+      [req.user.id, req.user.id],
     )
 
     const [inquiries] = await pool.execute(
@@ -108,17 +144,133 @@ async function listInquiries(req, res, next) {
               s.title AS service_title,
               sc.name AS category_name,
               u.first_name AS client_first_name, u.last_name AS client_last_name,
-              gp.business_name
+              gp.business_name,
+              COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name,
+              my_q.id AS my_quotation_id,
+              my_q.status AS my_quotation_status,
+              my_q.response_type AS my_response_type,
+              my_q.amount AS my_quotation_amount,
+              my_q.revision_number AS my_revision_number
        FROM inquiries i
        LEFT JOIN services s ON s.id = i.service_id
        LEFT JOIN service_categories sc ON sc.id = COALESCE(i.category_id, s.category_id)
        JOIN users u ON u.id = i.client_id
+       LEFT JOIN users gu ON gu.id = i.gardener_id
        LEFT JOIN gardener_profiles gp ON gp.user_id = i.gardener_id
-       WHERE ${field} = ?
+       LEFT JOIN quotations my_q ON my_q.id = (
+         SELECT q2.id
+         FROM quotations q2
+         WHERE q2.inquiry_id = i.id AND q2.gardener_id = ?
+         ORDER BY q2.created_at DESC, q2.id DESC
+         LIMIT 1
+       )
+       WHERE i.gardener_id = ? OR my_q.id IS NOT NULL
        ORDER BY i.updated_at DESC`,
-      [req.user.id],
+      [req.user.id, req.user.id],
     )
     return res.json({ inquiries })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function listOpenRequests(req, res, next) {
+  try {
+    if (req.user.role === 'gardener') {
+      const [profiles] = await pool.execute(
+        'SELECT is_approved FROM gardener_profiles WHERE user_id = ? LIMIT 1',
+        [req.user.id],
+      )
+      if (!profiles[0] || !profiles[0].is_approved) {
+        return res.status(403).json({
+          message: 'Your gardener profile must be approved by an administrator before browsing open service requests.',
+        })
+      }
+    } else if (req.user.role !== 'administrator') {
+      return res.status(403).json({
+        message: 'Only approved gardeners and administrators can browse the open requests board.',
+      })
+    }
+
+    // Lazily expire any open/responded general requests whose expires_at has passed
+    await pool.execute(
+      `UPDATE inquiries
+       SET status = 'expired'
+       WHERE request_type = 'general'
+         AND status IN ('open', 'responded')
+         AND expires_at IS NOT NULL
+         AND expires_at <= NOW()`,
+    )
+
+    const rawCategoryId = req.query?.categoryId ?? req.query?.category_id
+    const categoryId = (rawCategoryId !== undefined && rawCategoryId !== null && String(rawCategoryId).trim() !== '')
+      ? parsePositiveInt(rawCategoryId)
+      : null
+    const areaFilter = text(req.query?.area ?? req.query?.location)
+
+    const whereClauses = [
+      "i.request_type = 'general'",
+      "i.status IN ('open', 'responded')",
+      '(i.expires_at IS NULL OR i.expires_at > NOW())',
+    ]
+    const params = [req.user.id]
+
+    if (categoryId) {
+      whereClauses.push('i.category_id = ?')
+      params.push(categoryId)
+    }
+    if (areaFilter) {
+      whereClauses.push('i.location LIKE ?')
+      params.push(`%${areaFilter}%`)
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT i.id, i.request_type, i.category_id,
+              i.subject, i.description, i.ai_summary, i.requested_date, i.location,
+              i.status, i.expires_at, i.created_at, i.updated_at,
+              sc.name AS category_name,
+              u.first_name AS client_first_name,
+              (SELECT COUNT(*) FROM quotations q WHERE q.inquiry_id = i.id AND q.status IN ('sent', 'accepted')) AS offer_count,
+              my_q.id AS my_quotation_id,
+              my_q.status AS my_quotation_status,
+              my_q.response_type AS my_response_type,
+              my_q.amount AS my_quotation_amount
+       FROM inquiries i
+       LEFT JOIN service_categories sc ON sc.id = i.category_id
+       JOIN users u ON u.id = i.client_id AND u.is_active = TRUE
+       LEFT JOIN quotations my_q ON my_q.id = (
+         SELECT q2.id
+         FROM quotations q2
+         WHERE q2.inquiry_id = i.id AND q2.gardener_id = ?
+         ORDER BY q2.created_at DESC, q2.id DESC
+         LIMIT 1
+       )
+       WHERE ${whereClauses.join(' AND ')}
+       ORDER BY i.created_at DESC, i.id DESC`,
+      params,
+    )
+
+    if (rows.length > 0) {
+      const inqIds = rows.map((r) => r.id)
+      const placeholders = inqIds.map(() => '?').join(', ')
+      const [imageRows] = await pool.execute(
+        `SELECT id, inquiry_id, uploaded_by, kind, parent_image_id, mime_type, file_size, ai_description, created_at
+         FROM request_images
+         WHERE inquiry_id IN (${placeholders})
+         ORDER BY created_at ASC, id ASC`,
+        inqIds,
+      )
+      const imagesByInquiry = new Map()
+      for (const img of imageRows) {
+        if (!imagesByInquiry.has(img.inquiry_id)) imagesByInquiry.set(img.inquiry_id, [])
+        imagesByInquiry.get(img.inquiry_id).push(serializeRequestImage(img))
+      }
+      for (const row of rows) {
+        row.images = imagesByInquiry.get(row.id) || []
+      }
+    }
+
+    return res.json({ requests: rows })
   } catch (error) {
     return next(error)
   }
@@ -139,11 +291,13 @@ async function getInquiry(req, res, next) {
               s.title AS service_title,
               sc.name AS category_name,
               u.first_name AS client_first_name, u.last_name AS client_last_name,
-              gp.business_name
+              gp.business_name,
+              COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name
        FROM inquiries i
        LEFT JOIN services s ON s.id = i.service_id
        LEFT JOIN service_categories sc ON sc.id = COALESCE(i.category_id, s.category_id)
        JOIN users u ON u.id = i.client_id
+       LEFT JOIN users gu ON gu.id = i.gardener_id
        LEFT JOIN gardener_profiles gp ON gp.user_id = i.gardener_id
        WHERE i.id = ?
        LIMIT 1`,
@@ -154,13 +308,6 @@ async function getInquiry(req, res, next) {
       return res.status(404).json({ message: 'Inquiry was not found.' })
     }
 
-    const isOwnerOrTargeted = inquiry.client_id === req.user.id || inquiry.gardener_id === req.user.id
-    const isAdmin = req.user.role === 'administrator'
-
-    if (!isOwnerOrTargeted && !isAdmin) {
-      return res.status(404).json({ message: 'Inquiry was not found.' })
-    }
-
     if (
       (inquiry.status === 'open' || inquiry.status === 'responded')
       && Number(inquiry.is_expired) === 1
@@ -168,18 +315,78 @@ async function getInquiry(req, res, next) {
       await checkAndPersistLazyExpiry(pool, inquiry, req.user.id)
     }
 
+    const isOwner = inquiry.client_id === req.user.id
+    const isTargetedGardener = inquiry.gardener_id === req.user.id
+    const isAdmin = req.user.role === 'administrator'
+
+    if (!isOwner && !isTargetedGardener && !isAdmin) {
+      if (inquiry.request_type === 'general' && req.user.role === 'gardener') {
+        const [gpRows] = await pool.execute(
+          'SELECT is_approved FROM gardener_profiles WHERE user_id = ? LIMIT 1',
+          [req.user.id],
+        )
+        const isApprovedGardener = Boolean(gpRows[0]?.is_approved)
+        const [myOffers] = await pool.execute(
+          'SELECT id FROM quotations WHERE inquiry_id = ? AND gardener_id = ? LIMIT 1',
+          [inquiry.id, req.user.id],
+        )
+        const hasSubmittedOffer = Boolean(myOffers[0])
+        const isOpenBoardVisible = ['open', 'responded'].includes(inquiry.status)
+
+        if (!isApprovedGardener && !hasSubmittedOffer) {
+          return res.status(403).json({
+            message: 'Your gardener profile must be approved before viewing open service requests.',
+          })
+        }
+        if (!hasSubmittedOffer && !isOpenBoardVisible) {
+          return res.status(404).json({ message: 'Inquiry was not found.' })
+        }
+      } else {
+        return res.status(404).json({ message: 'Inquiry was not found.' })
+      }
+    }
+
+    // Privacy on Case 1 general requests: hide client last name from non-selected providers
+    if (inquiry.request_type === 'general' && req.user.role === 'gardener' && !isTargetedGardener) {
+      inquiry.client_last_name = null
+    }
+
+    const filterToOwnOffersOnly = inquiry.request_type === 'general' && req.user.role === 'gardener'
+    const quotationWhere = filterToOwnOffersOnly
+      ? 'WHERE q.inquiry_id = ? AND q.gardener_id = ?'
+      : 'WHERE q.inquiry_id = ?'
+    const quotationParams = filterToOwnOffersOnly
+      ? [inquiry.id, req.user.id]
+      : [inquiry.id]
+
     const [quotations] = await pool.execute(
       `SELECT q.id, q.inquiry_id, q.gardener_id, q.amount, q.details,
               q.availability_start, q.availability_end, q.status, q.valid_until,
               q.response_type, q.proposed_changes, q.revision_number, q.locked_at,
               q.created_at, q.updated_at,
-              COALESCE(gp.business_name, CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name
+              COALESCE(gp.business_name, CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name,
+              gp.business_name,
+              gp.service_area AS gardener_service_area,
+              gp.years_of_experience AS gardener_experience_years,
+              gp.description AS gardener_bio,
+              (SELECT ROUND(AVG(r.rating), 1)
+               FROM reviews r
+               WHERE r.gardener_id = q.gardener_id AND r.is_visible = TRUE) AS gardener_rating,
+              (SELECT COUNT(*)
+               FROM reviews r
+               WHERE r.gardener_id = q.gardener_id AND r.is_visible = TRUE) AS gardener_review_count,
+              (SELECT COUNT(*)
+               FROM bookings b
+               WHERE b.gardener_id = q.gardener_id AND b.status = 'completed') AS gardener_completed_bookings,
+              (SELECT COUNT(*)
+               FROM portfolios p
+               WHERE p.gardener_id = q.gardener_id) AS gardener_portfolio_count
        FROM quotations q
        JOIN users gu ON gu.id = q.gardener_id
        LEFT JOIN gardener_profiles gp ON gp.user_id = q.gardener_id
-       WHERE q.inquiry_id = ?
+       ${quotationWhere}
        ORDER BY q.created_at DESC, q.id DESC`,
-      [inquiry.id],
+      quotationParams,
     )
 
     if (quotations.length > 0) {
@@ -198,8 +405,28 @@ async function getInquiry(req, res, next) {
         if (!byQuotation.has(rev.quotation_id)) byQuotation.set(rev.quotation_id, [])
         byQuotation.get(rev.quotation_id).push(rev)
       }
+
+      // Attach portfolio preview items per gardener for client offer comparison
+      const gardenerIds = [...new Set(quotations.map((q) => q.gardener_id))]
+      const gPlaceholders = gardenerIds.map(() => '?').join(', ')
+      const [portfolioRows] = await pool.execute(
+        `SELECT id, gardener_id, title, description, created_at
+         FROM portfolios
+         WHERE gardener_id IN (${gPlaceholders})
+         ORDER BY created_at DESC, id DESC`,
+        gardenerIds,
+      )
+      const portfoliosByGardener = new Map()
+      for (const p of portfolioRows) {
+        if (!portfoliosByGardener.has(p.gardener_id)) portfoliosByGardener.set(p.gardener_id, [])
+        if (portfoliosByGardener.get(p.gardener_id).length < 4) {
+          portfoliosByGardener.get(p.gardener_id).push(p)
+        }
+      }
+
       for (const q of quotations) {
         q.revisions = byQuotation.get(q.id) || []
+        q.gardener_portfolios = portfoliosByGardener.get(q.gardener_id) || []
       }
     }
 
@@ -246,6 +473,12 @@ async function getInquiry(req, res, next) {
 }
 
 async function createInquiry(req, res, next) {
+  const rawRequestType = text(req.body?.requestType ?? req.body?.request_type)
+  const requestType = rawRequestType || 'direct'
+  if (!['direct', 'general'].includes(requestType)) {
+    return res.status(400).json({ message: 'Request type must be direct or general.' })
+  }
+
   const rawServiceId = req.body?.serviceId ?? req.body?.service_id
   const rawGardenerId = req.body?.gardenerId ?? req.body?.gardener_id
   const rawCategoryId = req.body?.categoryId ?? req.body?.category_id
@@ -268,14 +501,28 @@ async function createInquiry(req, res, next) {
   const rawImageIds = req.body?.imageIds ?? req.body?.image_ids ?? []
   const rawExpiresInDays = req.body?.expiresInDays ?? req.body?.expires_in_days
 
-  if (!serviceId && !gardenerIdParam) {
-    return res.status(400).json({ message: 'A valid service or gardener is required for a direct inquiry.' })
+  if (requestType === 'general') {
+    if (
+      (rawServiceId !== undefined && rawServiceId !== null && String(rawServiceId).trim() !== '')
+      || (rawGardenerId !== undefined && rawGardenerId !== null && String(rawGardenerId).trim() !== '')
+    ) {
+      return res.status(400).json({
+        message: 'General service requests are open to all approved providers and must not target a specific service or gardener.',
+      })
+    }
+  } else {
+    if (!serviceId && !gardenerIdParam) {
+      return res.status(400).json({ message: 'A valid service or gardener is required for a direct inquiry.' })
+    }
+    if (rawServiceId !== undefined && rawServiceId !== null && String(rawServiceId).trim() !== '' && !serviceId) {
+      return res.status(400).json({ message: 'A valid service is required.' })
+    }
+    if (rawGardenerId !== undefined && rawGardenerId !== null && String(rawGardenerId).trim() !== '' && !gardenerIdParam) {
+      return res.status(400).json({ message: 'A valid gardener ID is required.' })
+    }
   }
-  if (rawServiceId !== undefined && rawServiceId !== null && String(rawServiceId).trim() !== '' && !serviceId) {
-    return res.status(400).json({ message: 'A valid service is required.' })
-  }
-  if (rawGardenerId !== undefined && rawGardenerId !== null && String(rawGardenerId).trim() !== '' && !gardenerIdParam) {
-    return res.status(400).json({ message: 'A valid gardener ID is required.' })
+  if (rawCategoryId !== undefined && rawCategoryId !== null && String(rawCategoryId).trim() !== '' && !categoryIdParam) {
+    return res.status(400).json({ message: 'A valid service category ID is required.' })
   }
   if (!subject || subject.length > 200) {
     return res.status(400).json({ message: 'A subject between 1 and 200 characters is required.' })
@@ -296,7 +543,7 @@ async function createInquiry(req, res, next) {
     return res.status(400).json({ message: 'imageIds must be an array of uploaded photo IDs.' })
   }
 
-  let expiresInDays = null
+  let expiresInDays = requestType === 'general' ? 14 : null
   if (rawExpiresInDays !== undefined && rawExpiresInDays !== null && String(rawExpiresInDays).trim() !== '') {
     expiresInDays = parsePositiveInt(rawExpiresInDays)
     if (!expiresInDays || expiresInDays > 90) {
@@ -308,43 +555,45 @@ async function createInquiry(req, res, next) {
   try {
     await connection.beginTransaction()
 
-    let resolvedGardenerId = gardenerIdParam
+    let resolvedGardenerId = requestType === 'general' ? null : gardenerIdParam
     let resolvedCategoryId = categoryIdParam
 
-    if (serviceId) {
-      const [services] = await connection.execute(
-        `SELECT s.id, s.gardener_id, s.category_id
-         FROM services s
-         JOIN users u ON u.id = s.gardener_id AND u.is_active = TRUE
-         JOIN gardener_profiles gp ON gp.user_id = s.gardener_id AND gp.is_approved = TRUE
-         WHERE s.id = ? AND s.is_active = TRUE
-         LIMIT 1
-         FOR UPDATE`,
-        [serviceId],
-      )
-      if (!services[0]) {
-        await connection.rollback()
-        return res.status(404).json({ message: 'Service is unavailable.' })
-      }
-      if (gardenerIdParam && services[0].gardener_id !== gardenerIdParam) {
-        await connection.rollback()
-        return res.status(400).json({ message: 'The selected service does not belong to the specified gardener.' })
-      }
-      resolvedGardenerId = services[0].gardener_id
-      resolvedCategoryId = resolvedCategoryId || services[0].category_id
-    } else {
-      const [gardeners] = await connection.execute(
-        `SELECT u.id
-         FROM users u
-         JOIN gardener_profiles gp ON gp.user_id = u.id AND gp.is_approved = TRUE
-         WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE
-         LIMIT 1
-         FOR UPDATE`,
-        [resolvedGardenerId],
-      )
-      if (!gardeners[0]) {
-        await connection.rollback()
-        return res.status(404).json({ message: 'Selected gardener is unavailable or not approved.' })
+    if (requestType === 'direct') {
+      if (serviceId) {
+        const [services] = await connection.execute(
+          `SELECT s.id, s.gardener_id, s.category_id
+           FROM services s
+           JOIN users u ON u.id = s.gardener_id AND u.is_active = TRUE
+           JOIN gardener_profiles gp ON gp.user_id = s.gardener_id AND gp.is_approved = TRUE
+           WHERE s.id = ? AND s.is_active = TRUE
+           LIMIT 1
+           FOR UPDATE`,
+          [serviceId],
+        )
+        if (!services[0]) {
+          await connection.rollback()
+          return res.status(404).json({ message: 'Service is unavailable.' })
+        }
+        if (gardenerIdParam && services[0].gardener_id !== gardenerIdParam) {
+          await connection.rollback()
+          return res.status(400).json({ message: 'The selected service does not belong to the specified gardener.' })
+        }
+        resolvedGardenerId = services[0].gardener_id
+        resolvedCategoryId = resolvedCategoryId || services[0].category_id
+      } else {
+        const [gardeners] = await connection.execute(
+          `SELECT u.id
+           FROM users u
+           JOIN gardener_profiles gp ON gp.user_id = u.id AND gp.is_approved = TRUE
+           WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE
+           LIMIT 1
+           FOR UPDATE`,
+          [resolvedGardenerId],
+        )
+        if (!gardeners[0]) {
+          await connection.rollback()
+          return res.status(404).json({ message: 'Selected gardener is unavailable or not approved.' })
+        }
       }
     }
 
@@ -361,9 +610,10 @@ async function createInquiry(req, res, next) {
 
     const expiresSql = expiresInDays ? 'DATE_ADD(NOW(), INTERVAL ? DAY)' : 'NULL'
     const insertParams = [
+      requestType,
       req.user.id,
       resolvedGardenerId,
-      serviceId,
+      requestType === 'direct' ? serviceId : null,
       resolvedCategoryId,
       subject,
       description,
@@ -376,7 +626,7 @@ async function createInquiry(req, res, next) {
     const [result] = await connection.execute(
       `INSERT INTO inquiries
         (request_type, client_id, gardener_id, service_id, category_id, subject, description, ai_summary, requested_date, location, expires_at)
-       VALUES ('direct', ?, ?, ?, ?, ?, ?, ?, ?, ?, ${expiresSql})`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${expiresSql})`,
       insertParams,
     )
     const inquiryId = result.insertId
@@ -396,18 +646,20 @@ async function createInquiry(req, res, next) {
       eventType: 'inquiry_created',
       fromStatus: null,
       toStatus: 'open',
-      note: `Direct inquiry created${attachedImageIds.length ? ` with ${attachedImageIds.length} photo(s)` : ''}`,
+      note: `${requestType === 'general' ? 'General service request' : 'Direct inquiry'} created${attachedImageIds.length ? ` with ${attachedImageIds.length} photo(s)` : ''}`,
     })
 
-    await createNotification({
-      userId: resolvedGardenerId,
-      type: 'new_inquiry',
-      title: 'New service inquiry',
-      message: `A client sent a direct inquiry: ${subject}`,
-      entityType: 'inquiry',
-      entityId: inquiryId,
-      connection,
-    })
+    if (resolvedGardenerId) {
+      await createNotification({
+        userId: resolvedGardenerId,
+        type: 'new_inquiry',
+        title: 'New service inquiry',
+        message: `A client sent a direct inquiry: ${subject}`,
+        entityType: 'inquiry',
+        entityId: inquiryId,
+        connection,
+      })
+    }
 
     const [createdInquiryRows] = await connection.execute(
       'SELECT * FROM inquiries WHERE id = ? LIMIT 1',
@@ -426,7 +678,7 @@ async function createInquiry(req, res, next) {
     await connection.commit()
     return res.status(201).json({
       id: inquiryId,
-      request_type: 'direct',
+      request_type: requestType,
       gardener_id: resolvedGardenerId,
       status: 'open',
       attachedImageIds,
@@ -935,7 +1187,7 @@ async function updateQuotationStatus(req, res, next) {
 
     // Lock parent inquiry first
     const [inquiries] = await connection.execute(
-      `SELECT id, client_id, gardener_id, status, subject,
+      `SELECT id, request_type, client_id, gardener_id, status, subject,
               CASE WHEN expires_at IS NOT NULL AND expires_at <= NOW() THEN 1 ELSE 0 END AS is_expired
        FROM inquiries
        WHERE id = ?
@@ -966,14 +1218,16 @@ async function updateQuotationStatus(req, res, next) {
     )
     const quotation = quotations[0]
 
-    if (quotation.status !== 'sent') {
-      await connection.rollback()
-      return res.status(409).json({
-        message: `Quotation is already ${quotation.status} and cannot be ${status}.`,
-      })
-    }
+    let nextInquiryStatus = inquiry.status
 
     if (status === 'accepted') {
+      if (quotation.status !== 'sent') {
+        await connection.rollback()
+        return res.status(409).json({
+          message: `Quotation is already ${quotation.status} and cannot be accepted.`,
+        })
+      }
+
       if (quotation.response_type === 'cannot_do') {
         await connection.rollback()
         return res.status(409).json({
@@ -999,9 +1253,9 @@ async function updateQuotationStatus(req, res, next) {
       )
 
       const prevInquiryStatus = inquiry.status
-      const nextInquiryStatus = inquiry.status === 'in_agreement' ? 'in_agreement' : 'provider_selected'
+      nextInquiryStatus = inquiry.status === 'in_agreement' ? 'in_agreement' : 'provider_selected'
       await connection.execute(
-        'UPDATE inquiries SET status = ?, gardener_id = COALESCE(gardener_id, ?) WHERE id = ?',
+        'UPDATE inquiries SET status = ?, gardener_id = ? WHERE id = ?',
         [nextInquiryStatus, quotation.gardener_id, inquiry.id],
       )
 
@@ -1015,19 +1269,56 @@ async function updateQuotationStatus(req, res, next) {
         note: `Client accepted quotation #${quotation.id} (v${quotation.revision_number}); quotation locked`,
       })
     } else {
+      // status === 'declined'
+      if (!['sent', 'accepted'].includes(quotation.status)) {
+        await connection.rollback()
+        return res.status(409).json({
+          message: `Quotation is already ${quotation.status} and cannot be declined.`,
+        })
+      }
+
+      const wasAccepted = quotation.status === 'accepted'
+      if (wasAccepted) {
+        const [activeAgreements] = await connection.execute(
+          "SELECT id, status FROM agreements WHERE inquiry_id = ? AND status IN ('proposed', 'agreed') LIMIT 1 FOR UPDATE",
+          [inquiry.id],
+        )
+        if (activeAgreements[0]) {
+          await connection.rollback()
+          return res.status(409).json({
+            message: 'Cancel the active agreement before declining an accepted offer.',
+          })
+        }
+      }
+
       await connection.execute(
         "UPDATE quotations SET status = 'declined' WHERE id = ?",
         [quotation.id],
       )
+
+      if (wasAccepted) {
+        const [remainingSent] = await connection.execute(
+          "SELECT id FROM quotations WHERE inquiry_id = ? AND status = 'sent' LIMIT 1",
+          [inquiry.id],
+        )
+        nextInquiryStatus = remainingSent[0] ? 'responded' : 'open'
+        const nextGardenerId = inquiry.request_type === 'general' ? null : inquiry.gardener_id
+        await connection.execute(
+          'UPDATE inquiries SET status = ?, gardener_id = ? WHERE id = ?',
+          [nextInquiryStatus, nextGardenerId, inquiry.id],
+        )
+      }
 
       await recordInquiryEvent(connection, {
         inquiryId: inquiry.id,
         quotationId: quotation.id,
         actorId: req.user.id,
         eventType: 'quotation_declined',
-        fromStatus: 'sent',
+        fromStatus: quotation.status,
         toStatus: 'declined',
-        note: `Client declined quotation #${quotation.id}`,
+        note: wasAccepted
+          ? `Client declined previously accepted quotation #${quotation.id}; inquiry returned to ${nextInquiryStatus}`
+          : `Client declined quotation #${quotation.id}`,
       })
     }
 
@@ -1049,7 +1340,7 @@ async function updateQuotationStatus(req, res, next) {
     await connection.commit()
     return res.json({
       status,
-      inquiryStatus: status === 'accepted' ? 'provider_selected' : inquiry.status,
+      inquiryStatus: nextInquiryStatus,
       quotation: updatedQuotationRows[0],
       booking: null,
     })
@@ -1151,11 +1442,93 @@ async function updateInquiryStatus(req, res, next) {
   }
 }
 
+async function renewInquiry(req, res, next) {
+  const inquiryId = parsePositiveInt(req.params.inquiryId)
+  if (!inquiryId) {
+    return res.status(400).json({ message: 'A valid inquiry ID is required.' })
+  }
+
+  let expiresInDays = 14
+  if (req.body?.expiresInDays !== undefined && req.body?.expiresInDays !== null && req.body?.expiresInDays !== '') {
+    const parsedDays = Number(req.body.expiresInDays)
+    if (!Number.isInteger(parsedDays) || parsedDays < 1 || parsedDays > 90) {
+      return res.status(400).json({
+        message: 'expiresInDays must be an integer between 1 and 90 days.',
+      })
+    }
+    expiresInDays = parsedDays
+  }
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [inquiries] = await connection.execute(
+      'SELECT * FROM inquiries WHERE id = ? LIMIT 1 FOR UPDATE',
+      [inquiryId],
+    )
+    const inquiry = inquiries[0]
+    if (!inquiry) {
+      await connection.rollback()
+      return res.status(404).json({ message: 'Inquiry was not found.' })
+    }
+    if (inquiry.client_id !== req.user.id) {
+      await connection.rollback()
+      return res.status(403).json({ message: 'Only the owning client can renew this inquiry.' })
+    }
+
+    if (['provider_selected', 'in_agreement', 'confirmed', 'closed', 'cancelled'].includes(inquiry.status)) {
+      await connection.rollback()
+      return res.status(409).json({
+        message: `Cannot renew an inquiry in status '${inquiry.status}'.`,
+      })
+    }
+
+    const [sentQuotations] = await connection.execute(
+      "SELECT id FROM quotations WHERE inquiry_id = ? AND status = 'sent' LIMIT 1",
+      [inquiry.id],
+    )
+    const nextStatus = sentQuotations[0] ? 'responded' : 'open'
+    const prevStatus = inquiry.status
+
+    await connection.execute(
+      'UPDATE inquiries SET status = ?, expires_at = DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id = ?',
+      [nextStatus, expiresInDays, inquiry.id],
+    )
+
+    await recordInquiryEvent(connection, {
+      inquiryId: inquiry.id,
+      actorId: req.user.id,
+      eventType: 'request_renewed',
+      fromStatus: prevStatus,
+      toStatus: nextStatus,
+      note: `Inquiry renewed for ${expiresInDays} days`,
+    })
+
+    const [updatedRows] = await connection.execute(
+      'SELECT * FROM inquiries WHERE id = ? LIMIT 1',
+      [inquiry.id],
+    )
+
+    await connection.commit()
+    return res.json({
+      status: nextStatus,
+      inquiry: updatedRows[0],
+    })
+  } catch (error) {
+    await connection.rollback().catch(() => {})
+    return next(error)
+  } finally {
+    connection.release()
+  }
+}
+
 module.exports = {
   createInquiry,
   createQuotation,
   getInquiry,
   listInquiries,
+  listOpenRequests,
+  renewInquiry,
   reviseQuotation,
   updateInquiryStatus,
   updateQuotationStatus,

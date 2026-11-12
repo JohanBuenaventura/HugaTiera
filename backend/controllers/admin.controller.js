@@ -148,10 +148,10 @@ async function listServices(req, res, next) {
     const [services] = await pool.execute(`
       SELECT s.id, s.title, s.is_active, s.created_at, s.service_area,
              c.name AS category_name, gp.business_name,
-             CONCAT(u.first_name, ' ', u.last_name) AS gardener_name
+             COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(u.first_name, ' ', u.last_name)) AS gardener_name
       FROM services s
       JOIN users u ON u.id = s.gardener_id
-      JOIN gardener_profiles gp ON gp.user_id = s.gardener_id
+      LEFT JOIN gardener_profiles gp ON gp.user_id = s.gardener_id
       JOIN service_categories c ON c.id = s.category_id
       ORDER BY s.created_at DESC LIMIT 100
     `)
@@ -173,20 +173,28 @@ async function updateServiceStatus(req, res, next) {
 async function listActivity(req, res, next) {
   try {
     const [inquiries] = await pool.execute(`
-      SELECT i.id, i.subject, i.status, i.created_at,
+      SELECT i.id, i.request_type, i.subject, i.status, i.created_at,
              CONCAT(c.first_name, ' ', c.last_name) AS client_name,
-             gp.business_name AS gardener_name
-      FROM inquiries i JOIN users c ON c.id = i.client_id
-      JOIN gardener_profiles gp ON gp.user_id = i.gardener_id
+             COALESCE(
+               NULLIF(TRIM(gp.business_name), ''),
+               CONCAT(gu.first_name, ' ', gu.last_name),
+               CASE WHEN i.request_type = 'general' THEN 'Open Board' ELSE 'Unassigned' END
+             ) AS gardener_name
+      FROM inquiries i
+      JOIN users c ON c.id = i.client_id
+      LEFT JOIN users gu ON gu.id = i.gardener_id
+      LEFT JOIN gardener_profiles gp ON gp.user_id = i.gardener_id
       ORDER BY i.created_at DESC LIMIT 100
     `)
     const [bookings] = await pool.execute(`
       SELECT b.id, b.status, b.scheduled_start, b.scheduled_end,
              s.title AS service_title,
              CONCAT(c.first_name, ' ', c.last_name) AS client_name,
-             gp.business_name AS gardener_name
-      FROM bookings b JOIN users c ON c.id = b.client_id
-      JOIN gardener_profiles gp ON gp.user_id = b.gardener_id
+             COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name
+      FROM bookings b
+      JOIN users c ON c.id = b.client_id
+      JOIN users gu ON gu.id = b.gardener_id
+      LEFT JOIN gardener_profiles gp ON gp.user_id = b.gardener_id
       LEFT JOIN services s ON s.id = b.service_id
       ORDER BY b.requested_at DESC LIMIT 100
     `)

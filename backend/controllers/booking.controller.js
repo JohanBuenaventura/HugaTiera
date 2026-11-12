@@ -10,6 +10,9 @@ function validDateTime(value) {
 }
 
 async function listBookings(req, res, next) {
+  if (!['client', 'gardener'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'You do not have permission to access this resource.' })
+  }
   const field = req.user.role === 'client' ? 'b.client_id' : 'b.gardener_id'
   try {
     const [bookings] = await pool.execute(
@@ -21,12 +24,13 @@ async function listBookings(req, res, next) {
               a.amount AS agreed_amount,
               a.scope_of_work AS agreed_scope,
               CONCAT(client.first_name, ' ', client.last_name) AS client_name,
-              gp.business_name AS gardener_name
+              COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gardener.first_name, ' ', gardener.last_name)) AS gardener_name
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id
        LEFT JOIN agreements a ON a.id = b.agreement_id
        JOIN users client ON client.id = b.client_id
-       JOIN gardener_profiles gp ON gp.user_id = b.gardener_id
+       JOIN users gardener ON gardener.id = b.gardener_id
+       LEFT JOIN gardener_profiles gp ON gp.user_id = b.gardener_id
        WHERE ${field} = ?
        ORDER BY b.updated_at DESC`,
       [req.user.id],
@@ -38,6 +42,9 @@ async function listBookings(req, res, next) {
 }
 
 async function getBooking(req, res, next) {
+  if (!['client', 'gardener'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'You do not have permission to access this resource.' })
+  }
   try {
     const [bookings] = await pool.execute(
       `SELECT b.id, b.inquiry_id, b.quotation_id, b.agreement_id, b.client_id, b.gardener_id,
@@ -52,12 +59,13 @@ async function getBooking(req, res, next) {
               a.client_approved_at,
               a.gardener_approved_at,
               CONCAT(client.first_name, ' ', client.last_name) AS client_name,
-              gp.business_name AS gardener_name
+              COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gardener.first_name, ' ', gardener.last_name)) AS gardener_name
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id
        LEFT JOIN agreements a ON a.id = b.agreement_id
        JOIN users client ON client.id = b.client_id
-       JOIN gardener_profiles gp ON gp.user_id = b.gardener_id
+       JOIN users gardener ON gardener.id = b.gardener_id
+       LEFT JOIN gardener_profiles gp ON gp.user_id = b.gardener_id
        WHERE b.id = ? AND (b.client_id = ? OR b.gardener_id = ?)
        LIMIT 1`,
       [Number(req.params.bookingId), req.user.id, req.user.id],
@@ -90,6 +98,9 @@ const transitions = {
 }
 
 async function updateBookingStatus(req, res, next) {
+  if (!['client', 'gardener'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'You do not have permission to access this resource.' })
+  }
   const status = text(req.body.status)
   const role = req.user.role
   if (!transitions[role] || !transitions[role][status]) return res.status(400).json({ message: 'This booking status transition is not allowed.' })

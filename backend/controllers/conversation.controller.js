@@ -20,15 +20,18 @@ async function listConversations(req, res, next) {
   try {
     const [conversations] = await pool.execute(
       `SELECT c.id, c.client_id, c.gardener_id, c.inquiry_id, c.created_at,
-              CASE WHEN c.client_id = ? THEN gp.business_name
+              CASE WHEN c.client_id = ?
+                   THEN COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gardener.first_name, ' ', gardener.last_name))
                    ELSE CONCAT(client.first_name, ' ', client.last_name) END AS other_party_name,
               i.subject AS inquiry_subject,
+              i.request_type AS inquiry_request_type,
               latest.message_text AS latest_message,
               latest.sent_at AS latest_message_at,
               COALESCE(unread.unread_count, 0) AS unread_count
        FROM conversations c
        JOIN users client ON client.id = c.client_id
-       JOIN gardener_profiles gp ON gp.user_id = c.gardener_id
+       JOIN users gardener ON gardener.id = c.gardener_id
+       LEFT JOIN gardener_profiles gp ON gp.user_id = c.gardener_id
        LEFT JOIN inquiries i ON i.id = c.inquiry_id
        LEFT JOIN (
          SELECT m1.conversation_id, m1.message_text, m1.sent_at
@@ -71,16 +74,64 @@ async function createConversation(req, res, next) {
 
     if (hasInquiry) {
       const [inquiries] = await pool.execute(
-        `SELECT id, client_id, gardener_id
+        `SELECT id, request_type, client_id, gardener_id
          FROM inquiries
-         WHERE id = ? AND (client_id = ? OR gardener_id = ?)
+         WHERE id = ?
          LIMIT 1`,
-        [inquiryId, req.user.id, req.user.id],
+        [inquiryId],
       )
-      if (!inquiries[0]) return res.status(404).json({ message: 'Inquiry was not found.' })
-      clientId = inquiries[0].client_id
-      gardenerId = inquiries[0].gardener_id
-      linkedInquiryId = inquiries[0].id
+      const inquiry = inquiries[0]
+      if (!inquiry) return res.status(404).json({ message: 'Inquiry was not found.' })
+
+      if (inquiry.request_type === 'general') {
+        if (req.user.role === 'gardener') {
+          const [offers] = await pool.execute(
+            `SELECT id FROM quotations
+             WHERE inquiry_id = ? AND gardener_id = ? AND status IN ('sent', 'accepted')
+             LIMIT 1`,
+            [inquiry.id, req.user.id],
+          )
+          if (!offers[0]) {
+            return res.status(403).json({
+              message: 'You can only message the client on a general service request after submitting an offer.',
+            })
+          }
+          clientId = inquiry.client_id
+          gardenerId = req.user.id
+          linkedInquiryId = inquiry.id
+        } else if (req.user.id === inquiry.client_id) {
+          const rawGardenerId = req.body?.gardenerId ?? req.body?.gardener_id ?? inquiry.gardener_id
+          const targetGardenerId = Number(rawGardenerId)
+          if (!Number.isInteger(targetGardenerId) || targetGardenerId <= 0) {
+            return res.status(400).json({
+              message: 'Please select a gardener who has submitted an offer to start a conversation.',
+            })
+          }
+          const [offers] = await pool.execute(
+            `SELECT id FROM quotations
+             WHERE inquiry_id = ? AND gardener_id = ? AND status IN ('sent', 'accepted')
+             LIMIT 1`,
+            [inquiry.id, targetGardenerId],
+          )
+          if (!offers[0] && inquiry.gardener_id !== targetGardenerId) {
+            return res.status(403).json({
+              message: 'A conversation on a general service request requires an active offer from that gardener.',
+            })
+          }
+          clientId = inquiry.client_id
+          gardenerId = targetGardenerId
+          linkedInquiryId = inquiry.id
+        } else {
+          return res.status(404).json({ message: 'Inquiry was not found.' })
+        }
+      } else {
+        if (req.user.id !== inquiry.client_id && req.user.id !== inquiry.gardener_id) {
+          return res.status(404).json({ message: 'Inquiry was not found.' })
+        }
+        clientId = inquiry.client_id
+        gardenerId = inquiry.gardener_id
+        linkedInquiryId = inquiry.id
+      }
     } else {
       const [bookings] = await pool.execute(
         `SELECT id, client_id, gardener_id, inquiry_id
@@ -158,6 +209,27 @@ async function sendMessage(req, res, next) {
   try {
     const conversation = await getConversationAccess(conversationId, req.user.id)
     if (!conversation) return res.status(404).json({ message: 'Conversation was not found.' })
+
+    if (conversation.inquiry_id && req.user.id === conversation.gardener_id) {
+      const [inquiries] = await pool.execute(
+        'SELECT request_type FROM inquiries WHERE id = ? LIMIT 1',
+        [conversation.inquiry_id],
+      )
+      if (inquiries[0]?.request_type === 'general') {
+        const [offers] = await pool.execute(
+          `SELECT id FROM quotations
+           WHERE inquiry_id = ? AND gardener_id = ? AND status IN ('sent', 'accepted')
+           LIMIT 1`,
+          [conversation.inquiry_id, req.user.id],
+        )
+        if (!offers[0]) {
+          return res.status(403).json({
+            message: 'You can only send messages on a general service request while you have an active offer.',
+          })
+        }
+      }
+    }
+
     const recipientId = conversation.client_id === req.user.id ? conversation.gardener_id : conversation.client_id
     const [result] = await pool.execute(
       'INSERT INTO messages (conversation_id, sender_id, message_text) VALUES (?, ?, ?)',

@@ -437,6 +437,62 @@ async function deleteRequestImage(req, res, next) {
   return res.status(204).send()
 }
 
+async function updateRequestImageDescription(req, res, next) {
+  const imageId = parsePositiveInt(req.params.imageId)
+  if (!imageId) {
+    return res.status(400).json({ message: 'A valid image ID is required.' })
+  }
+
+  const rawDescription = req.body?.aiDescription ?? req.body?.ai_description ?? ''
+  if (rawDescription !== null && typeof rawDescription !== 'string') {
+    return res.status(400).json({ message: 'Photo description must be a string.' })
+  }
+  const trimmedDescription = typeof rawDescription === 'string' ? rawDescription.trim() : ''
+  if (trimmedDescription.length > 2000) {
+    return res.status(400).json({ message: 'Photo description must be 2,000 characters or fewer.' })
+  }
+  const finalDescription = trimmedDescription || null
+
+  try {
+    const [rows] = await pool.execute(
+      `SELECT ri.id, ri.inquiry_id, ri.uploaded_by, i.status AS inquiry_status
+       FROM request_images ri
+       LEFT JOIN inquiries i ON i.id = ri.inquiry_id
+       WHERE ri.id = ?
+       LIMIT 1`,
+      [imageId],
+    )
+    const imageRow = rows[0]
+    if (!imageRow) {
+      return res.status(404).json({ message: 'Garden photo was not found.' })
+    }
+    if (imageRow.uploaded_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the uploading client can edit this photo description.' })
+    }
+    if (imageRow.inquiry_id && !['open', 'responded'].includes(imageRow.inquiry_status)) {
+      return res.status(409).json({
+        message: 'Photo descriptions can only be edited while the request is open.',
+      })
+    }
+
+    await pool.execute(
+      'UPDATE request_images SET ai_description = ? WHERE id = ? AND uploaded_by = ?',
+      [finalDescription, imageId, req.user.id],
+    )
+
+    const [updated] = await pool.execute(
+      `SELECT id, inquiry_id, uploaded_by, kind, parent_image_id, mime_type, file_size, ai_description, created_at
+       FROM request_images WHERE id = ? LIMIT 1`,
+      [imageId],
+    )
+    return res.json({
+      image: serializeRequestImage(updated[0]),
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 async function attachImagesToInquiry(connection, { inquiryId, clientId, imageIds }) {
   if (!Array.isArray(imageIds) || imageIds.length === 0) return []
   const uniqueIds = [...new Set(imageIds.map(parsePositiveInt).filter(Boolean))]
@@ -494,5 +550,6 @@ module.exports = {
   serializeRequestImage,
   startOrphanCleanupSchedule,
   stopOrphanCleanupSchedule,
+  updateRequestImageDescription,
   uploadRequestImage,
 }
