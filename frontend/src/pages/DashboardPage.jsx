@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ImagePlus, Leaf, LogOut, Pencil, Save, Trash2 } from 'lucide-react'
+import { ImagePlus, Pencil, Save, Trash2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import {
   buildProfileForm,
-  getDashboardNavLinks,
   initialProfile,
   profileApi,
   resolveDashboardTab,
@@ -16,34 +15,7 @@ import {
   formatStatusLabel,
   getStatusBadgeClass,
 } from '../services/bookings'
-import { communicationApi } from '../services/communication'
-
-function Header({ role, onLogout, unreadCounts = {} }) {
-  const links = getDashboardNavLinks(role, unreadCounts)
-  const badge = (count) => count > 0 && <b className="notification-badge">{count}</b>
-  return (
-    <header className="dashboard-header container">
-      <Link className="brand" to="/">
-        <span className="brand-mark"><Leaf size={19} /></span>
-        <span>Huga<span>Tiera</span></span>
-      </Link>
-      <nav className="dashboard-nav" aria-label="Dashboard navigation">
-        {links.map((item) => (
-          item.type === 'anchor' ? (
-            <a href={item.href} key={item.label}>{item.label}</a>
-          ) : (
-            <Link to={item.to} key={item.label}>
-              {item.label} {badge(item.badge)}
-            </Link>
-          )
-        ))}
-      </nav>
-      <button className="logout-button" type="button" onClick={onLogout}>
-        <LogOut size={16} /> Log out
-      </button>
-    </header>
-  )
-}
+import AppSidebar from '../components/AppSidebar'
 
 function ProfileForm({ role, profile, onSaved }) {
   const [form, setForm] = useState(profile)
@@ -250,7 +222,7 @@ function DashboardActivity({ role }) {
   )
 }
 
-function UserDashboard({ user, profileData, onSaved, onLogout, unreadCounts, activeTab }) {
+function UserDashboard({ user, profileData, onSaved, activeTab }) {
   const role = user.role
   const roleLabel = role === 'gardener' ? 'Gardener' : 'Client'
   const counts = profileData.counts || {}
@@ -262,7 +234,7 @@ function UserDashboard({ user, profileData, onSaved, onLogout, unreadCounts, act
 
   return (
     <main className="dashboard-page">
-      <Header role={role} onLogout={onLogout} unreadCounts={unreadCounts} />
+      <AppSidebar />
       <section className="container dashboard-content">
         <p className="eyebrow">{roleLabel} dashboard</p>
         <h1>{isProfileView ? 'Profile & settings.' : `Welcome, ${user.firstName}.`}</h1>
@@ -381,7 +353,7 @@ function UserDashboard({ user, profileData, onSaved, onLogout, unreadCounts, act
   )
 }
 
-function AdminDashboard({ summary, onStatusChange, onLogout, unreadCounts }) {
+function AdminDashboard({ summary, onStatusChange }) {
   const counts = summary.counts || {}
   const [categories, setCategories] = useState([])
   const [services, setServices] = useState([])
@@ -409,37 +381,18 @@ function AdminDashboard({ summary, onStatusChange, onLogout, unreadCounts }) {
       setAdminMessage(isApproved ? 'Gardener approved successfully.' : 'Feedback sent. The gardener remains pending.')
     } catch (error) { setAdminError(error.message) } finally { setApprovalInProgress(null) }
   }
-  return <main className="dashboard-page"><Header role="administrator" onLogout={onLogout} unreadCounts={unreadCounts} /><section className="container dashboard-content"><p className="eyebrow">Administrator dashboard</p><h1>Platform overview.</h1><p className="dashboard-lead">Monitor accounts, marketplace content, reports, and platform activity.</p><div className="stat-grid admin-stats">{[['Clients', counts.clients], ['Gardeners', counts.gardeners], ['Pending gardeners', counts.pending_gardeners], ['Services', counts.services], ['Bookings', counts.bookings], ['Open reports', counts.open_reports]].map(([label, value]) => <div className="stat-card" key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div>{adminError && <div className="form-error" role="alert">{adminError}</div>}{adminMessage && <div className="form-success" role="status">{adminMessage}</div>}  <section className="admin-management-grid" id="admin-approvals"><section className="dashboard-panel"><p className="eyebrow">Gardener approval</p><h2>Review pending gardeners</h2>{pendingGardeners.length === 0 && <p className="form-note">No gardener profiles are waiting for approval.</p>}<div className="admin-item-list">{pendingGardeners.map((gardener) => <div className="admin-item" key={gardener.id}><span><strong>{gardener.business_name || `${gardener.first_name} ${gardener.last_name}`}</strong><small>{gardener.first_name} {gardener.last_name} · {gardener.service_area}</small></span><div className="inline-actions"><button className="button" type="button" disabled={approvalInProgress === gardener.id} onClick={() => updateGardenerApproval(gardener.id, true)}>{approvalInProgress === gardener.id ? 'Saving...' : 'Approve'}</button><button className="table-action" type="button" disabled={approvalInProgress === gardener.id} onClick={() => updateGardenerApproval(gardener.id, false)}>Request changes</button></div></div>)}</div></section><section className="dashboard-panel"><p className="eyebrow">Categories</p><h2>Manage service categories</h2><form className="profile-form admin-category-form" onSubmit={addCategory}><input required placeholder="Category name" value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} /><input placeholder="Description" value={categoryForm.description} onChange={(event) => setCategoryForm({ ...categoryForm, description: event.target.value })} /><button className="button" type="submit">Add category</button></form><div className="admin-item-list">{categories.map((category) => <div className="admin-item" key={category.id}><span><strong>{category.name}</strong><small>{category.is_active ? 'Active' : 'Inactive'}</small></span><button className="table-action" type="button" onClick={() => toggleCategory(category)}>{category.is_active ? 'Deactivate' : 'Activate'}</button></div>)}</div></section><section className="dashboard-panel"><p className="eyebrow">Service listings</p><h2>Monitor marketplace content</h2><div className="admin-item-list">{services.map((service) => <div className="admin-item" key={service.id}><span><strong>{service.title}</strong><small>{service.gardener_name} · {service.is_active ? 'Active' : 'Inactive'}</small></span><button className="table-action" type="button" onClick={() => toggleService(service)}>{service.is_active ? 'Deactivate' : 'Activate'}</button></div>)}</div></section></section><section className="dashboard-panel user-management" id="admin-activity"><p className="eyebrow">Activity</p><h2>Inquiries and bookings</h2><div className="admin-activity-grid"><div><h3>Recent inquiries</h3>{activity.inquiries.slice(0, 8).map((item) => <p className="admin-activity-row" key={item.id}><strong>{item.subject}</strong><span>{item.client_name} → {item.gardener_name} · {formatStatusLabel(item.status)}</span></p>)}</div><div><h3>Recent bookings</h3>{activity.bookings.slice(0, 8).map((item) => <p className="admin-activity-row" key={item.id}><strong>{item.service_title || 'Service booking'}</strong><span>{item.client_name} → {item.gardener_name} · {formatStatusLabel(item.status)}</span></p>)}</div></div></section><section className="dashboard-panel user-management" id="admin-reports"><p className="eyebrow">Reports</p><h2>Review reported content</h2><div className="admin-item-list">{reports.length === 0 && <p className="form-note">No reports have been submitted.</p>}{reports.map((report) => <div className="admin-item admin-report" key={report.id}><span><strong>{report.reason}</strong><small>{report.reporter_name} · {report.status}</small>{report.details && <em>{report.details}</em>}</span><select value={report.status} onChange={(event) => updateReport(report.id, event.target.value)}><option value="open" disabled>Open</option><option value="reviewing">Reviewing</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></div>)}</div></section><section className="dashboard-panel user-management" id="admin-accounts"><p className="eyebrow">Account management</p><h2>Recent accounts</h2><div className="user-table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>{summary.users.map((account) => <tr key={account.id}><td>{account.first_name} {account.last_name}<small>{account.email}</small></td><td>{account.role}</td><td><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td><td><button className="table-action" type="button" onClick={() => onStatusChange(account.id, !account.is_active)}>{account.is_active ? 'Deactivate' : 'Activate'}</button></td></tr>)}</tbody></table></div></section></section></main>
+  return <main className="dashboard-page"><AppSidebar /><section className="container dashboard-content"><p className="eyebrow">Administrator dashboard</p><h1>Platform overview.</h1><p className="dashboard-lead">Monitor accounts, marketplace content, reports, and platform activity.</p><div className="stat-grid admin-stats">{[['Clients', counts.clients], ['Gardeners', counts.gardeners], ['Pending gardeners', counts.pending_gardeners], ['Services', counts.services], ['Bookings', counts.bookings], ['Open reports', counts.open_reports]].map(([label, value]) => <div className="stat-card" key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div>{adminError && <div className="form-error" role="alert">{adminError}</div>}{adminMessage && <div className="form-success" role="status">{adminMessage}</div>}  <section className="admin-management-grid" id="admin-approvals"><section className="dashboard-panel"><p className="eyebrow">Gardener approval</p><h2>Review pending gardeners</h2>{pendingGardeners.length === 0 && <p className="form-note">No gardener profiles are waiting for approval.</p>}<div className="admin-item-list">{pendingGardeners.map((gardener) => <div className="admin-item" key={gardener.id}><span><strong>{gardener.business_name || `${gardener.first_name} ${gardener.last_name}`}</strong><small>{gardener.first_name} {gardener.last_name} · {gardener.service_area}</small></span><div className="inline-actions"><button className="button" type="button" disabled={approvalInProgress === gardener.id} onClick={() => updateGardenerApproval(gardener.id, true)}>{approvalInProgress === gardener.id ? 'Saving...' : 'Approve'}</button><button className="table-action" type="button" disabled={approvalInProgress === gardener.id} onClick={() => updateGardenerApproval(gardener.id, false)}>Request changes</button></div></div>)}</div></section><section className="dashboard-panel"><p className="eyebrow">Categories</p><h2>Manage service categories</h2><form className="profile-form admin-category-form" onSubmit={addCategory}><input required placeholder="Category name" value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} /><input placeholder="Description" value={categoryForm.description} onChange={(event) => setCategoryForm({ ...categoryForm, description: event.target.value })} /><button className="button" type="submit">Add category</button></form><div className="admin-item-list">{categories.map((category) => <div className="admin-item" key={category.id}><span><strong>{category.name}</strong><small>{category.is_active ? 'Active' : 'Inactive'}</small></span><button className="table-action" type="button" onClick={() => toggleCategory(category)}>{category.is_active ? 'Deactivate' : 'Activate'}</button></div>)}</div></section><section className="dashboard-panel"><p className="eyebrow">Service listings</p><h2>Monitor marketplace content</h2><div className="admin-item-list">{services.map((service) => <div className="admin-item" key={service.id}><span><strong>{service.title}</strong><small>{service.gardener_name} · {service.is_active ? 'Active' : 'Inactive'}</small></span><button className="table-action" type="button" onClick={() => toggleService(service)}>{service.is_active ? 'Deactivate' : 'Activate'}</button></div>)}</div></section></section><section className="dashboard-panel user-management" id="admin-activity"><p className="eyebrow">Activity</p><h2>Inquiries and bookings</h2><div className="admin-activity-grid"><div><h3>Recent inquiries</h3>{activity.inquiries.slice(0, 8).map((item) => <p className="admin-activity-row" key={item.id}><strong>{item.subject}</strong><span>{item.client_name} → {item.gardener_name} · {formatStatusLabel(item.status)}</span></p>)}</div><div><h3>Recent bookings</h3>{activity.bookings.slice(0, 8).map((item) => <p className="admin-activity-row" key={item.id}><strong>{item.service_title || 'Service booking'}</strong><span>{item.client_name} → {item.gardener_name} · {formatStatusLabel(item.status)}</span></p>)}</div></div></section><section className="dashboard-panel user-management" id="admin-reports"><p className="eyebrow">Reports</p><h2>Review reported content</h2><div className="admin-item-list">{reports.length === 0 && <p className="form-note">No reports have been submitted.</p>}{reports.map((report) => <div className="admin-item admin-report" key={report.id}><span><strong>{report.reason}</strong><small>{report.reporter_name} · {report.status}</small>{report.details && <em>{report.details}</em>}</span><select value={report.status} onChange={(event) => updateReport(report.id, event.target.value)}><option value="open" disabled>Open</option><option value="reviewing">Reviewing</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></div>)}</div></section><section className="dashboard-panel user-management" id="admin-accounts"><p className="eyebrow">Account management</p><h2>Recent accounts</h2><div className="user-table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>{summary.users.map((account) => <tr key={account.id}><td>{account.first_name} {account.last_name}<small>{account.email}</small></td><td>{account.role}</td><td><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td><td><button className="table-action" type="button" onClick={() => onStatusChange(account.id, !account.is_active)}>{account.is_active ? 'Deactivate' : 'Activate'}</button></td></tr>)}</tbody></table></div></section></section></main>
 }
 
 export default function DashboardPage({ profileView = false }) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const activeTab = resolveDashboardTab(searchParams.get('tab'), profileView)
   const [profileData, setProfileData] = useState({ form: initialProfile, counts: {} })
   const [summary, setSummary] = useState({ counts: {}, users: [] })
   const [error, setError] = useState('')
-  const [unreadCounts, setUnreadCounts] = useState({})
 
   useEffect(() => {
-    if (user.role === 'client' || user.role === 'gardener') {
-      communicationApi.notifications().then((result) => {
-        const unread = result.notifications.filter((notification) => !notification.read_at)
-        const uniqueCount = (items, entityType) => new Set(
-          items
-            .filter((notification) => notification.related_entity_type === entityType && notification.related_entity_id)
-            .map((notification) => notification.related_entity_id),
-        ).size
-        const generalUnreadCount = unread.filter(
-          (notification) => !['inquiry', 'booking', 'conversation'].includes(notification.related_entity_type),
-        ).length
-        setUnreadCounts({
-          inquiries: uniqueCount(unread, 'inquiry'),
-          bookings: uniqueCount(unread, 'booking'),
-          messages: uniqueCount(unread, 'conversation') + generalUnreadCount,
-        })
-      }).catch(() => {})
-    }
     if (user.role === 'administrator') {
       profileApi.adminSummary().then(setSummary).catch((loadError) => setError(loadError.message))
     } else {
@@ -459,7 +412,7 @@ export default function DashboardPage({ profileView = false }) {
     } catch (statusError) { setError(statusError.message) }
   }
 
-  if (error) return <main className="dashboard-page"><Header role={user.role} onLogout={logout} unreadCounts={unreadCounts} /><section className="container dashboard-content"><div className="form-error" role="alert">{error}</div></section></main>
-  if (user.role === 'administrator') return <AdminDashboard summary={summary} onStatusChange={changeStatus} onLogout={logout} unreadCounts={unreadCounts} />
-  return <UserDashboard user={user} profileData={profileData} activeTab={activeTab} onSaved={(result) => setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))} onLogout={logout} unreadCounts={unreadCounts} />
+  if (error) return <main className="dashboard-page"><AppSidebar /><section className="container dashboard-content"><div className="form-error" role="alert">{error}</div></section></main>
+  if (user.role === 'administrator') return <AdminDashboard summary={summary} onStatusChange={changeStatus} />
+  return <UserDashboard user={user} profileData={profileData} activeTab={activeTab} onSaved={(result) => setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))} />
 }

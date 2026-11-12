@@ -2,16 +2,25 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Leaf } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import editorialAbout from '../assets/editorial-about.jpg'
 
 function AuthLayout({ title, children, footer }) {
   return (
-    <main className="auth-page">
-      <div className="auth-panel">
-        <Link className="brand auth-brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
-        <p className="eyebrow">A better way to grow</p>
-        <h1>{title}</h1>
-        {children}
-        <p className="auth-footer">{footer}</p>
+    <main className="auth-page editorial-auth-page">
+      <div className="auth-layout">
+        <aside className="auth-visual">
+          <Link className="brand auth-visual-brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
+          <img src={editorialAbout} alt="Lush garden plants in natural light" />
+          <div className="auth-visual-copy"><p className="editorial-kicker editorial-kicker-light">A better way to grow</p><h2>Make room for<br /><em>something green.</em></h2><p>Find the right people and ideas to help your outdoor space flourish.</p></div>
+          <span className="auth-visual-caption">Local gardens · thoughtful conversations</span>
+        </aside>
+        <div className="auth-panel">
+          <Link className="auth-mobile-brand brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
+          <p className="eyebrow">Welcome to HugaTiera</p>
+          <h1>{title}</h1>
+          {children}
+          <p className="auth-footer">{footer}</p>
+        </div>
       </div>
     </main>
   )

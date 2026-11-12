@@ -3,14 +3,29 @@
 :root {
   font-family: 'DM Sans', sans-serif;
   color: #23352a;
-  background: #f7f8f3;
+  background: #f5f7f2;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  --ink: #183326;
+  --muted: #64766a;
+  --muted-light: #8a9a8e;
+  --line: #dfe8de;
+  --surface: #ffffff;
+  --surface-soft: #f5f8f3;
+  --brand: #2f7a4d;
+  --brand-dark: #205d39;
+  --accent: #c58a43;
+  --shadow-sm: 0 8px 24px rgba(30, 70, 43, .06);
+  --shadow-md: 0 18px 48px rgba(30, 70, 43, .1);
 }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; min-width: 320px; }
+body { margin: 0; min-width: 320px; background: #f5f7f2; }
 a { color: inherit; }
 button, a { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 3px solid rgba(47, 122, 77, .25);
+  outline-offset: 3px;
+}

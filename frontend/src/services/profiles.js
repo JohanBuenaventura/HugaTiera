@@ -1,4 +1,4 @@
-const apiBaseUrl = import.meta.env?.VITE_API_URL || 'http://localhost:5000/api'
+const apiBaseUrl = import.meta.env?.VITE_API_URL || '/api'
 
 export const initialProfile = {
   firstName: '',

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Leaf, Sparkles } from 'lucide-react'
+import { ArrowLeft, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { fetchAiUsage, requestGardenPlan } from '../services/ai'
+import AppSidebar from '../components/AppSidebar'
 
 const promptExamples = [
   'I have a small sunny balcony in Zamboanga City. What low-maintenance plants could work?',
@@ -43,14 +44,8 @@ export default function AssistantPage() {
   }
 
   return (
-    <main className="marketplace-page">
-      <header className="dashboard-header container">
-        <Link className="brand" to="/">
-          <span className="brand-mark"><Leaf size={19} /></span>
-          <span>Huga<span>Tiera</span></span>
-        </Link>
-        <Link className="button button-outline" to="/dashboard">Dashboard</Link>
-      </header>
+    <main className="marketplace-page protected-page">
+      <AppSidebar />
       <section className="container assistant-page-content">
         <Link className="back-link" to="/"><ArrowLeft size={15} /> Back home</Link>
         <div className="assistant-page-heading">

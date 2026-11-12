@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Leaf } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -13,10 +13,7 @@ import { inquiriesApi } from '../services/inquiries'
 import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
-
-function Header() {
-  return <header className="dashboard-header container"><Link className="brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link><Link className="button button-outline" to="/dashboard">Dashboard</Link></header>
-}
+import AppSidebar from '../components/AppSidebar'
 
 function BookingForm() {
   const [params] = useSearchParams()
@@ -337,5 +334,5 @@ function BookingList() {
 
 export default function BookingPage({ detail = false, create = false }) {
   const { bookingId } = useParams()
-  return <main className="marketplace-page"><Header />{detail ? <BookingDetails id={bookingId} /> : create ? <BookingForm /> : <BookingList />}</main>
+  return <main className="marketplace-page protected-page"><AppSidebar />{detail ? <BookingDetails id={bookingId} /> : create ? <BookingForm /> : <BookingList />}</main>
 }

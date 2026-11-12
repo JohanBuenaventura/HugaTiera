@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Leaf, Sparkles } from 'lucide-react'
+import { ArrowLeft, Sparkles } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -14,16 +14,13 @@ import {
 } from '../services/requestImages'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
+import AppSidebar from '../components/AppSidebar'
 
 function formatDate(value) {
   if (!value) return null
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return String(value)
   return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
-
-function Header() {
-  return <header className="dashboard-header container"><Link className="brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link><Link className="button button-outline" to="/dashboard">Dashboard</Link></header>
 }
 
 function InquiryForm() {
@@ -913,7 +910,7 @@ function InquiryDetails({ id }) {
 
 export default function InquiryPage({ detail = false, create = false }) {
   const { inquiryId } = useParams()
-  return <main className="marketplace-page"><Header />{detail ? <InquiryDetails id={inquiryId} /> : create ? <InquiryForm /> : <InquiryList />}</main>
+  return <main className="marketplace-page protected-page"><AppSidebar />{detail ? <InquiryDetails id={inquiryId} /> : create ? <InquiryForm /> : <InquiryList />}</main>
 }
 
 function InquiryList() {
