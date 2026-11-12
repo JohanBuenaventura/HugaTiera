@@ -9,7 +9,9 @@
     "test": "node --test tests/integration.test.js",
     "test:r2": "node --test tests/r2.requestImages.test.js",
     "test:r3": "node --test tests/r3.agreements.test.js",
-    "test:r4": "node --test tests/r4.directInquiry.test.js"
+    "test:r4": "node --test tests/r4.directInquiry.test.js",
+    "test:r5": "node --test tests/r5.generalRequest.test.js",
+    "test:r6": "node --test tests/r6.aiAssistance.test.js"
   },
   "keywords": [],
   "author": "",
