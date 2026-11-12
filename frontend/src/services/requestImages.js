@@ -1,4 +1,4 @@
-import { apiRequest } from './api'
+import { apiBaseUrl, apiRequest } from './api'
 
 export function uploadRequestImage(file, inquiryId = null) {
   const formData = new FormData()
@@ -22,6 +22,13 @@ export function deleteRequestImage(imageId) {
   })
 }
 
+export function updateRequestImageDescription(imageId, aiDescription) {
+  return apiRequest(`/request-images/${imageId}`, {
+    method: 'PATCH',
+    body: { aiDescription },
+  })
+}
+
 export function getRequestImageUrl(imageId) {
-  return `/api/request-images/${imageId}`
+  return `${apiBaseUrl}/request-images/${imageId}`
 }

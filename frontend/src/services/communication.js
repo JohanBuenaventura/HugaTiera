@@ -13,7 +13,10 @@ async function request(path, options = {}) {
 
 export const communicationApi = {
   conversations: () => request('/conversations'),
-  createConversation: (inquiryId) => request('/conversations', { method: 'POST', body: JSON.stringify({ inquiryId }) }),
+  createConversation: (inquiryId, gardenerId = null) => request('/conversations', {
+    method: 'POST',
+    body: JSON.stringify({ inquiryId, ...(gardenerId ? { gardenerId } : {}) }),
+  }),
   createBookingConversation: (bookingId) => request('/conversations', { method: 'POST', body: JSON.stringify({ bookingId }) }),
   messages: (id) => request(`/conversations/${id}/messages`),
   sendMessage: (id, message) => request(`/conversations/${id}/messages`, { method: 'POST', body: JSON.stringify({ message }) }),

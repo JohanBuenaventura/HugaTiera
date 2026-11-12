@@ -13,8 +13,16 @@ async function request(path, options = {}) {
 
 export const inquiriesApi = {
   list: () => request('/inquiries'),
+  listOpen: (params = {}) => {
+    const query = new URLSearchParams()
+    if (params.categoryId) query.set('categoryId', params.categoryId)
+    if (params.area) query.set('area', params.area)
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return request(`/inquiries/open${suffix}`)
+  },
   get: (id) => request(`/inquiries/${id}`),
   create: (details) => request('/inquiries', { method: 'POST', body: JSON.stringify(details) }),
+  renew: (id, expiresInDays = 14) => request(`/inquiries/${id}/renew`, { method: 'POST', body: JSON.stringify({ expiresInDays }) }),
   close: (id, status) => request(`/inquiries/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   quote: (id, details) => request(`/inquiries/${id}/quotations`, { method: 'POST', body: JSON.stringify(details) }),
   reviseQuote: (quotationId, details) => request(`/inquiries/quotations/${quotationId}`, { method: 'PUT', body: JSON.stringify(details) }),
