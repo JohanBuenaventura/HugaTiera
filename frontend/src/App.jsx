@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
+import './design-system.css'
 import editorialAbout from './assets/editorial-about.jpg'
 import editorialCta from './assets/editorial-cta.jpg'
 import editorialFeature from './assets/editorial-feature.jpg'

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Leaf } from 'lucide-react'
+import { Eye, EyeOff, Leaf } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import editorialAbout from '../assets/editorial-about.jpg'
 
@@ -11,12 +11,10 @@ function AuthLayout({ title, children, footer }) {
         <aside className="auth-visual">
           <Link className="brand auth-visual-brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
           <img src={editorialAbout} alt="Lush garden plants in natural light" />
-          <div className="auth-visual-copy"><p className="editorial-kicker editorial-kicker-light">A better way to grow</p><h2>Make room for<br /><em>something green.</em></h2><p>Find the right people and ideas to help your outdoor space flourish.</p></div>
-          <span className="auth-visual-caption">Local gardens · thoughtful conversations</span>
+          <div className="auth-visual-copy"><h2>Make room for<br />something green.</h2><p>Find the right people and ideas to help your outdoor space flourish.</p></div>
         </aside>
         <div className="auth-panel">
           <Link className="auth-mobile-brand brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
-          <p className="eyebrow">Welcome to HugaTiera</p>
           <h1>{title}</h1>
           {children}
           <p className="auth-footer">{footer}</p>
@@ -32,6 +30,7 @@ export function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -40,11 +39,19 @@ export function LoginPage() {
     try { await login(form); navigate('/dashboard') } catch (submitError) { setError(submitError.message) } finally { setSubmitting(false) }
   }
 
-  return <AuthLayout title="Welcome back." footer={<>New to HugaTiera? <Link to="/register">Create an account</Link></>}>
+  return <AuthLayout title="Welcome back" footer={<>New to HugaTiera? <Link to="/register">Create an account</Link></>}>
     <form className="auth-form" onSubmit={handleSubmit}>
       {error && <div className="form-error" role="alert">{error}</div>}
       <label>Email address<input type="email" required autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-      <label>Password<input type="password" required autoComplete="current-password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
+      <label>Password
+        <div className="auth-password-field">
+          <input type={showPassword ? 'text' : 'password'} required autoComplete="current-password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+          <button className="auth-password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)}>
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+        <span className="auth-forgot-link" aria-hidden="true">Forgot password?</span>
+      </label>
       <button className="button" type="submit" disabled={submitting}>{submitting ? 'Signing in...' : 'Sign in'}</button>
     </form>
   </AuthLayout>
@@ -67,7 +74,7 @@ export function RegisterPage() {
     try { await register(form); navigate('/dashboard') } catch (submitError) { setError(submitError.message) } finally { setSubmitting(false) }
   }
 
-  return <AuthLayout title="Create your account." footer={<>Already have an account? <Link to="/login">Sign in</Link></>}>
+  return <AuthLayout title="Create your account" footer={<>Already have an account? <Link to="/login">Sign in</Link></>}>
     <form className="auth-form" onSubmit={handleSubmit}>
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-row"><label>First name<input required value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></label><label>Last name<input required value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></label></div>

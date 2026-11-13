@@ -300,17 +300,52 @@ function BookingDetails({ id }) {
 }
 
 function BookingList() {
+  const { user } = useAuth()
   const [bookings, setBookings] = useState([])
   const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState('Upcoming')
   useEffect(() => { bookingsApi.list().then((result) => setBookings(result.bookings)).catch((loadError) => setError(loadError.message)) }, [])
+  const filteredBookings = bookings.filter((booking) => {
+    if (activeTab === 'Completed') return booking.status === 'completed'
+    if (activeTab === 'Cancelled') return ['cancelled', 'declined'].includes(booking.status)
+    return !['completed', 'cancelled', 'declined'].includes(booking.status)
+  })
+  const emptyMessage = activeTab === 'Upcoming'
+    ? 'No upcoming bookings.'
+    : activeTab === 'Completed'
+      ? 'No completed bookings yet.'
+      : 'No cancelled bookings.'
+
   return (
     <section className="container booking-content">
-      <p className="eyebrow">Service schedule</p>
-      <h1>Bookings.</h1>
+      <h1>Bookings</h1>
+      <div className="list-tabs booking-status-tabs" role="tablist" aria-label="Filter bookings">
+        {['Upcoming', 'Completed', 'Cancelled'].map((tab) => (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            className={activeTab === tab ? 'is-active' : ''}
+            onClick={() => setActiveTab(tab)}
+            key={tab}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
       {error && <div className="form-error">{error}</div>}
-      {!error && bookings.length === 0 && <div className="empty-state">You do not have any bookings yet.</div>}
+      {!error && filteredBookings.length === 0 && (
+        <div className="empty-state">
+          <h2>{emptyMessage}</h2>
+          {activeTab === 'Upcoming' && (
+            <Link className="button button-outline" to={user?.role === 'gardener' ? '/inquiries?tab=open' : '/services'}>
+              {user?.role === 'gardener' ? 'View open requests' : 'Explore services'}
+            </Link>
+          )}
+        </div>
+      )}
       <div className="booking-list">
-        {bookings.map((booking) => (
+        {filteredBookings.map((booking) => (
           <Link className="booking-list-item" to={`/bookings/${booking.id}`} key={booking.id}>
             <div>
               <strong>{booking.service_title || 'Gardening service'}</strong>
