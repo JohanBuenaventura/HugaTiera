@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Sparkles } from 'lucide-react'
+import { ArrowLeft, Plus, Sparkles } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -955,28 +955,29 @@ function InquiryList() {
 
   return (
     <section className="container inquiry-content">
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-        <div>
-          <p className="eyebrow">{activeTab === 'open' ? 'Open service requests board' : 'Your conversations'}</p>
-          <h1>{activeTab === 'open' ? 'Browse open client requests.' : 'Inquiries and quotations.'}</h1>
-        </div>
+      <div className="inquiry-list-heading">
+        <h1>Inquiries and quotations</h1>
         {user?.role === 'client' && (
           <div className="inline-actions">
-            <Link className="button" to="/inquiries/new?type=general">Post general service request</Link>
+            <Link className="button" to="/inquiries/new?type=general"><Plus size={16} /> Post general service request</Link>
             <Link className="button button-outline" to="/services">Browse services</Link>
           </div>
         )}
         {user?.role === 'gardener' && (
-          <div className="inline-actions">
+          <div className="list-tabs" role="tablist" aria-label="Filter inquiries">
             <button
-              className={activeTab === 'mine' ? 'button' : 'button button-outline'}
+              className={activeTab === 'mine' ? 'is-active' : ''}
+              role="tab"
+              aria-selected={activeTab === 'mine'}
               type="button"
               onClick={() => setParams({})}
             >
               My inquiries & offers
             </button>
             <button
-              className={activeTab === 'open' ? 'button' : 'button button-outline'}
+              className={activeTab === 'open' ? 'is-active' : ''}
+              role="tab"
+              aria-selected={activeTab === 'open'}
               type="button"
               onClick={() => setParams({ tab: 'open' })}
             >
@@ -1012,7 +1013,17 @@ function InquiryList() {
       {error && <div className="form-error" role="alert">{error}</div>}
 
       {!loading && !error && activeTab === 'mine' && inquiries.length === 0 && (
-        <div className="empty-state">You do not have any inquiries yet.</div>
+        <div className="empty-state">
+          <h2>You have no inquiries yet.</h2>
+          <p>
+            {user?.role === 'gardener'
+              ? 'Open the requests board to find a job and send your first offer.'
+              : 'Send a direct inquiry to a gardener, or post a general request to compare offers.'}
+          </p>
+          {user?.role === 'gardener' && (
+            <button className="button" type="button" onClick={() => setParams({ tab: 'open' })}>Browse open requests</button>
+          )}
+        </div>
       )}
 
       {!loading && !error && activeTab === 'mine' && (
@@ -1036,7 +1047,10 @@ function InquiryList() {
       )}
 
       {!loading && !error && activeTab === 'open' && openRequests.length === 0 && (
-        <div className="empty-state">No open general service requests match your filters right now.</div>
+        <div className="empty-state">
+          <h2>No open requests right now.</h2>
+          <p>Try adjusting your filters or check back later.</p>
+        </div>
       )}
 
       {!loading && !error && activeTab === 'open' && (

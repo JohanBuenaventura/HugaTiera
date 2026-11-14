@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ImagePlus, Pencil, Save, Trash2 } from 'lucide-react'
+import { Clock, ImagePlus, Pencil, Plus, Save, Trash2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import Drawer from '../components/Drawer'
 import {
   buildProfileForm,
   initialProfile,
@@ -37,18 +38,33 @@ function ProfileForm({ role, profile, onSaved }) {
   return <form className="profile-form" onSubmit={submit}>
     {message && <div className="form-success" role="status">{message}</div>}
     {error && <div className="form-error" role="alert">{error}</div>}
-    <div className="form-row"><label>First name<input required value={form.firstName} onChange={change('firstName')} /></label><label>Last name<input required value={form.lastName} onChange={change('lastName')} /></label></div>
-    <div className="form-row"><label>Phone<input value={form.phone || ''} onChange={change('phone')} /><span className="field-note">Optional</span></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
-    {role === 'client' ? <><div className="form-row"><label>Address<input value={form.address || ''} onChange={change('address')} /></label><label>City<input required value={form.city || ''} onChange={change('city')} /></label></div><label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label></> : <><div className="form-row"><label>Business or display name<input value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div><label>Service area<input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label><label>Professional description<textarea value={form.description || ''} onChange={change('description')} rows="4" /></label></>}
-    <button className="button" type="submit" disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save profile'}</button>
+    <div className="form-row">
+      <label>First name<input required value={form.firstName} onChange={change('firstName')} /></label>
+      <label>Last name<input required value={form.lastName} onChange={change('lastName')} /></label>
+    </div>
+    <div className="form-row">
+      <label>Phone<input value={form.phone || ''} onChange={change('phone')} /><span className="field-note">Optional</span></label>
+      <label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label>
+    </div>
+    {role === 'client' ? <>
+      <div className="form-row">
+        <label>Address<input value={form.address || ''} onChange={change('address')} /></label>
+        <label>City<input required value={form.city || ''} onChange={change('city')} /></label>
+      </div>
+      <label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label>
+    </> : <>
+      <div className="form-row">
+        <label>Business or display name<input value={form.businessName || ''} onChange={change('businessName')} /></label>
+        <label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label>
+      </div>
+      <label>Service area<input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label>
+      <label>Professional description<textarea value={form.description || ''} onChange={change('description')} rows="4" /></label>
+    </>}
+    <div className="profile-actions">
+      <button className="button" type="submit" disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save profile'}</button>
+      <button className="button button-outline" type="button" onClick={() => setForm(profile)}>Cancel</button>
+    </div>
   </form>
-}
-
-function Stats({ role, counts }) {
-  const values = role === 'client'
-    ? [['Inquiries', counts.inquiries], ['Bookings', counts.bookings], ['Notifications', counts.notifications]]
-    : [['Services', counts.services], ['Inquiries', counts.inquiries], ['Bookings', counts.bookings]]
-  return <div className="stat-grid">{values.map(([label, value]) => <div className="stat-card" key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div>
 }
 
 function GardenerTools({ isApproved }) {
@@ -62,6 +78,8 @@ function GardenerTools({ isApproved }) {
   const [imageForm, setImageForm] = useState({ title: '', description: '', image: null })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [drawer, setDrawer] = useState(null)
+  const imageInputRef = useRef(null)
 
   useEffect(() => {
     Promise.all([servicesApi.categories(), servicesApi.mine(), servicesApi.portfolios()])
@@ -74,6 +92,55 @@ function GardenerTools({ isApproved }) {
   }, [])
 
   const serviceChange = (field) => (event) => setServiceForm({ ...serviceForm, [field]: event.target.value })
+  function openServiceDrawer(service = null) {
+    setError('')
+    if (service) {
+      setEditId(service.id)
+      setServiceForm({
+        title: service.title,
+        description: service.description,
+        categoryId: service.category_id,
+        indicativePrice: service.indicative_price || '',
+        priceUnit: service.price_unit || '',
+        serviceArea: service.service_area,
+      })
+    } else {
+      setEditId(null)
+      setServiceForm(emptyService)
+    }
+    setDrawer('service')
+  }
+  function openPortfolioDrawer(portfolio = null) {
+    setError('')
+    if (imageInputRef.current) imageInputRef.current.value = ''
+    if (portfolio) {
+      setPortfolioEditId(portfolio.id)
+      setImageForm({ title: portfolio.title, description: portfolio.description || '', image: null })
+    } else {
+      setPortfolioEditId(null)
+      setImageForm({ title: '', description: '', image: null })
+    }
+    setDrawer('portfolio')
+  }
+  function closeDrawer() {
+    setDrawer(null)
+    setEditId(null)
+    setPortfolioEditId(null)
+    setServiceForm(emptyService)
+    setImageForm({ title: '', description: '', image: null })
+    if (imageInputRef.current) imageInputRef.current.value = ''
+    setError('')
+  }
+  function handleImageDrop(event) {
+    event.preventDefault()
+    const file = event.dataTransfer.files[0]
+    if (!file) return
+    const transfer = new DataTransfer()
+    transfer.items.add(file)
+    if (imageInputRef.current) imageInputRef.current.files = transfer.files
+    setImageForm((current) => ({ ...current, image: file }))
+  }
+
   async function saveService(event) {
     event.preventDefault(); setMessage(''); setError('')
     try {
@@ -81,6 +148,7 @@ function GardenerTools({ isApproved }) {
       else await servicesApi.create(serviceForm)
       setServices((await servicesApi.mine()).services)
       setServiceForm(emptyService); setEditId(null); setMessage('Service listing saved.')
+      setDrawer(null)
     } catch (saveError) { setError(saveError.message) }
   }
   async function removeService(id) {
@@ -95,6 +163,7 @@ function GardenerTools({ isApproved }) {
         setPortfolioEditId(null)
         setImageForm({ title: '', description: '', image: null })
         setMessage('Portfolio entry updated.')
+        setDrawer(null)
       } else {
         const data = new FormData()
         data.append('title', imageForm.title); data.append('description', imageForm.description); data.append('image', imageForm.image)
@@ -103,6 +172,7 @@ function GardenerTools({ isApproved }) {
         setImageForm({ title: '', description: '', image: null })
         event.target.reset()
         setMessage('Portfolio image uploaded.')
+        setDrawer(null)
       }
     } catch (uploadError) { setError(uploadError.message) }
   }
@@ -110,7 +180,143 @@ function GardenerTools({ isApproved }) {
     try { await servicesApi.removePortfolio(id); setPortfolios((current) => current.filter((portfolio) => portfolio.id !== id)); setMessage('Portfolio entry removed.') } catch (removeError) { setError(removeError.message) }
   }
 
-  return <section className="gardener-tools"><div className="dashboard-panel"><p className="eyebrow">Service listings</p><h2>{editId ? 'Edit a service.' : 'Add a service.'}</h2><p className="field-note">{isApproved ? 'Your active services are visible in the public marketplace.' : 'Your services are saved, but they will remain hidden until an administrator approves your gardener profile.'}</p>{message && <div className="form-success" role="status">{message}</div>}{error && <div className="form-error" role="alert">{error}</div>}<form className="profile-form" onSubmit={saveService}><div className="form-row"><label>Title<input required value={serviceForm.title} onChange={serviceChange('title')} /></label><label>Category<select required value={serviceForm.categoryId} onChange={serviceChange('categoryId')}><option value="">Choose a category</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label></div><label>Description<textarea required rows="3" value={serviceForm.description} onChange={serviceChange('description')} /></label><div className="form-row"><label>Indicative price<input type="number" min="0" step="0.01" value={serviceForm.indicativePrice} onChange={serviceChange('indicativePrice')} /><span className="field-note">Optional</span></label><label>Price unit<input placeholder="per visit, per sqm..." value={serviceForm.priceUnit} onChange={serviceChange('priceUnit')} /></label></div><label>Service area<input required value={serviceForm.serviceArea} onChange={serviceChange('serviceArea')} /></label><div className="inline-actions"><button className="button" type="submit"><Save size={16} />{editId ? 'Update service' : 'Publish service'}</button>{editId && <button className="table-action" type="button" onClick={() => { setEditId(null); setServiceForm(emptyService) }}>Cancel edit</button>}</div></form><div className="managed-list">{services.map((service) => <div className={`managed-item ${service.is_active ? '' : 'is-inactive'}`} key={service.id}><div><strong>{service.title}</strong><span>{service.category_name} · {service.is_active ? 'Active' : 'Inactive'}{service.is_active && !isApproved ? ' · Pending approval' : ''}</span></div>{service.is_active && <div className="item-actions"><button type="button" aria-label={`Edit ${service.title}`} onClick={() => { setEditId(service.id); setServiceForm({ title: service.title, description: service.description, categoryId: service.category_id, indicativePrice: service.indicative_price || '', priceUnit: service.price_unit || '', serviceArea: service.service_area }) }}><Pencil size={15} /></button><button type="button" aria-label={`Deactivate ${service.title}`} onClick={() => removeService(service.id)}><Trash2 size={15} /></button></div>}</div>)}</div></div><div className="dashboard-panel"><p className="eyebrow">Portfolio</p><h2>{portfolioEditId ? 'Edit portfolio details.' : 'Show your previous work.'}</h2><form className="profile-form" onSubmit={savePortfolio}><label>Title<input required value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} /></label><label>Description<textarea rows="2" value={imageForm.description} onChange={(event) => setImageForm({ ...imageForm, description: event.target.value })} /></label>{!portfolioEditId && <label>Image<input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageForm({ ...imageForm, image: event.target.files[0] })} /><span className="field-note">JPEG, PNG, or WebP up to 5 MB</span></label>}<div className="inline-actions"><button className="button" type="submit">{portfolioEditId ? <><Save size={16} />Update portfolio</> : <><ImagePlus size={16} />Upload portfolio image</>}</button>{portfolioEditId && <button className="table-action" type="button" onClick={() => { setPortfolioEditId(null); setImageForm({ title: '', description: '', image: null }) }}>Cancel edit</button>}</div></form><div className="portfolio-list">{portfolios.map((portfolio) => <div className="portfolio-item" key={portfolio.id}><img src={servicesApi.imageUrl(portfolio.id)} alt="" /><div><strong>{portfolio.title}</strong><span>{portfolio.description || 'No description'}</span></div><div className="item-actions" style={{ marginLeft: 'auto' }}><button type="button" aria-label={`Edit ${portfolio.title}`} onClick={() => { setPortfolioEditId(portfolio.id); setImageForm({ title: portfolio.title, description: portfolio.description || '', image: null }) }}><Pencil size={15} /></button><button type="button" aria-label={`Remove ${portfolio.title}`} onClick={() => removePortfolio(portfolio.id)}><Trash2 size={15} /></button></div></div>)}</div></div></section>
+  return (
+    <>
+      {message && <div className="form-success" role="status">{message}</div>}
+      {error && !drawer && <div className="form-error" role="alert">{error}</div>}
+      <section className="gardener-tools" id="gardener-tools">
+        <section className="dashboard-panel service-management-card">
+          <div className="dashboard-card-heading">
+            <h2>Your services</h2>
+            <button className="button button-outline button-small" type="button" onClick={() => openServiceDrawer()}>
+              <Plus size={16} /> Add a service
+            </button>
+          </div>
+          <p className="form-note">
+            {isApproved
+              ? 'Your active services are visible in the public marketplace.'
+              : 'Your services remain hidden until an administrator approves your profile.'}
+          </p>
+          {services.length === 0 && <p className="form-note">You have not added any services yet.</p>}
+          <div className="managed-list">
+            {services.map((service) => (
+              <div className={`managed-item ${service.is_active ? '' : 'is-inactive'}`} key={service.id}>
+                <div>
+                  <strong>{service.title}</strong>
+                  <span>{service.category_name} · {service.is_active ? 'Active' : 'Inactive'}{service.is_active && !isApproved ? ' · Pending approval' : ''}</span>
+                </div>
+                {service.is_active && (
+                  <div className="item-actions">
+                    <button className="edit-action" type="button" aria-label={`Edit ${service.title}`} onClick={() => openServiceDrawer(service)}>
+                      <Pencil size={16} />
+                    </button>
+                    <button type="button" aria-label={`Deactivate ${service.title}`} onClick={() => removeService(service.id)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="dashboard-panel portfolio-management-card">
+          <div className="dashboard-card-heading">
+            <h2>Portfolio</h2>
+            <button className="button button-outline button-small" type="button" onClick={() => openPortfolioDrawer()}>
+              <Plus size={16} /> Add project
+            </button>
+          </div>
+          {portfolios.length === 0 ? (
+            <button className="portfolio-add-tile" type="button" onClick={() => openPortfolioDrawer()}>
+              <ImagePlus size={20} />
+              <span>Add your first project photo</span>
+              <small>JPEG, PNG or WebP, up to 5 MB</small>
+            </button>
+          ) : (
+            <div className="portfolio-list">
+              {portfolios.map((portfolio) => (
+                <div className="portfolio-item" key={portfolio.id}>
+                  <img src={servicesApi.imageUrl(portfolio.id)} alt="" />
+                  <div>
+                    <strong>{portfolio.title}</strong>
+                    <span>{portfolio.description || 'No description'}</span>
+                  </div>
+                  <div className="item-actions">
+                    <button className="edit-action" type="button" aria-label={`Edit ${portfolio.title}`} onClick={() => openPortfolioDrawer(portfolio)}>
+                      <Pencil size={16} />
+                    </button>
+                    <button type="button" aria-label={`Remove ${portfolio.title}`} onClick={() => removePortfolio(portfolio.id)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+
+      <Drawer
+        open={drawer === 'service'}
+        title={editId ? 'Edit service' : 'Add a service'}
+        description="Describe the service you offer to local clients."
+        onClose={closeDrawer}
+      >
+        {error && <div className="drawer-error form-error" role="alert">{error}</div>}
+        <form className="profile-form drawer-form" onSubmit={saveService}>
+          <div className="drawer-body">
+            <label>Title<input required value={serviceForm.title} onChange={serviceChange('title')} /></label>
+            <label>Category
+              <select required value={serviceForm.categoryId} onChange={serviceChange('categoryId')}>
+                <option value="">Choose a category</option>
+                {categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}
+              </select>
+            </label>
+            <label>Description<textarea required rows="4" value={serviceForm.description} onChange={serviceChange('description')} /></label>
+            <div className="form-row">
+              <label>Indicative price<input type="number" min="0" step="0.01" value={serviceForm.indicativePrice} onChange={serviceChange('indicativePrice')} /><span className="field-note">Optional</span></label>
+              <label>Price unit<input placeholder="per visit, per sqm..." value={serviceForm.priceUnit} onChange={serviceChange('priceUnit')} /></label>
+            </div>
+            <label>Service area<input required value={serviceForm.serviceArea} onChange={serviceChange('serviceArea')} /></label>
+          </div>
+          <footer className="drawer-footer">
+            <button className="button" type="submit">{editId ? 'Save service' : 'Publish service'}</button>
+            <button className="button button-outline" type="button" onClick={closeDrawer}>Cancel</button>
+          </footer>
+        </form>
+      </Drawer>
+
+      <Drawer
+        open={drawer === 'portfolio'}
+        title={portfolioEditId ? 'Edit project' : 'Add a project'}
+        description="Share a photo and details about your previous gardening work."
+        onClose={closeDrawer}
+      >
+        {error && <div className="drawer-error form-error" role="alert">{error}</div>}
+        <form className="profile-form drawer-form" onSubmit={savePortfolio}>
+          <div className="drawer-body">
+            <label>Title<input required value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} /></label>
+            <label>Description<textarea rows="4" value={imageForm.description} onChange={(event) => setImageForm({ ...imageForm, description: event.target.value })} /></label>
+            {!portfolioEditId && (
+              <label>Image
+                <span className="drawer-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={handleImageDrop}>
+                  <ImagePlus size={22} />
+                  <span>Choose a file or drag it here</span>
+                  <small>JPEG, PNG or WebP, up to 5 MB</small>
+                  <input ref={imageInputRef} required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageForm({ ...imageForm, image: event.target.files[0] })} />
+                </span>
+              </label>
+            )}
+          </div>
+          <footer className="drawer-footer">
+            <button className="button" type="submit">{portfolioEditId ? 'Save project' : 'Add to portfolio'}</button>
+            <button className="button button-outline" type="button" onClick={closeDrawer}>Cancel</button>
+          </footer>
+        </form>
+      </Drawer>
+    </>
+  )
 }
 
 function formatInquirySubtitle(inquiry, role) {
@@ -155,25 +361,19 @@ function DashboardActivity({ role }) {
 
   return (
     <section className="dashboard-activity">
-      <div className="dashboard-panel">
+      <div className="activity-column">
         <div className="activity-heading">
-          <div>
-            <p className="eyebrow">{role === 'gardener' ? 'Requests & offers' : 'Requests, offers & agreements'}</p>
-            <h2>{role === 'gardener' ? 'Client inquiries & offers.' : 'Your service requests.'}</h2>
-          </div>
-          <div className="inline-actions">
-            {role === 'gardener' && (
-              <Link className="text-link" to="/inquiries?tab=open">Open board</Link>
-            )}
-            <Link className="text-link" to="/inquiries">View all</Link>
-          </div>
+          <h2>{role === 'gardener' ? 'Inquiries & offers' : 'Your service requests'}</h2>
+          <Link className="text-link" to={role === 'gardener' ? '/inquiries?tab=open' : '/inquiries'}>
+            {role === 'gardener' ? 'Open requests board' : 'View inquiries'}
+          </Link>
         </div>
         {error && <div className="form-error" role="alert">{error}</div>}
         {!error && inquiries.length === 0 && (
           <p className="form-note">
             {role === 'gardener'
-              ? 'No inquiries or submitted offers yet. Browse the open requests board to submit offers.'
-              : 'No service requests yet. Start by exploring local services or posting a general request.'}
+              ? 'No inquiries or offers yet. Browse open requests to find your next project.'
+              : 'You have no service requests yet.'}
           </p>
         )}
         {inquiries.map((inquiry) => (
@@ -182,23 +382,18 @@ function DashboardActivity({ role }) {
               <strong>{inquiry.subject}</strong>
               <small>{formatInquirySubtitle(inquiry, role)}</small>
             </span>
-            <span className={getStatusBadgeClass(inquiry.status)}>
-              {formatStatusLabel(inquiry.status)}
-            </span>
+            <span className={getStatusBadgeClass(inquiry.status)}>{formatStatusLabel(inquiry.status)}</span>
           </Link>
         ))}
       </div>
-      <div className="dashboard-panel">
+      <div className="activity-column">
         <div className="activity-heading">
-          <div>
-            <p className="eyebrow">Schedule</p>
-            <h2>{role === 'gardener' ? 'Booking requests.' : 'Upcoming bookings.'}</h2>
-          </div>
-          <Link className="text-link" to="/bookings">View all</Link>
+          <h2>{role === 'gardener' ? 'Bookings' : 'Upcoming bookings'}</h2>
+          <Link className="text-link" to="/bookings">View bookings</Link>
         </div>
         {!error && bookings.length === 0 && (
           <p className="form-note">
-            No confirmed bookings yet. Bookings are created when both parties approve a mutual service agreement.
+            {role === 'gardener' ? 'No booking requests yet.' : 'No upcoming bookings.'}
           </p>
         )}
         {bookings.map((booking) => (
@@ -212,9 +407,7 @@ function DashboardActivity({ role }) {
                 ].filter(Boolean).join(' · ')}
               </small>
             </span>
-            <span className={getStatusBadgeClass(booking.status)}>
-              {formatStatusLabel(booking.status)}
-            </span>
+            <span className={getStatusBadgeClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
           </Link>
         ))}
       </div>
@@ -224,128 +417,56 @@ function DashboardActivity({ role }) {
 
 function UserDashboard({ user, profileData, onSaved, activeTab }) {
   const role = user.role
-  const roleLabel = role === 'gardener' ? 'Gardener' : 'Client'
-  const counts = profileData.counts || {}
   const form = profileData.form || initialProfile
   const isProfileView = activeTab === 'profile'
-  const displayName = role === 'gardener'
-    ? (form.businessName || `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim())
-    : `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim()
+  const displayName = `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim()
 
   return (
     <main className="dashboard-page">
       <AppSidebar />
       <section className="container dashboard-content">
-        <p className="eyebrow">{roleLabel} dashboard</p>
-        <h1>{isProfileView ? 'Profile & settings.' : `Welcome, ${user.firstName}.`}</h1>
-        <p className="dashboard-lead">
-          {isProfileView
-            ? 'Review and update your contact details and public profile information.'
-            : role === 'gardener'
-              ? 'Manage open client requests, submitted offers, mutual agreements, bookings, services, and your portfolio.'
-              : 'Track your service requests, compare provider offers, review mutual agreements, and manage upcoming bookings.'}
-        </p>
-        {role === 'gardener' && (
-          <div className={`form-note ${form.is_approved ? 'form-success' : 'form-error'}`}>
-            {form.is_approved
-              ? 'Your gardener profile is approved and active services are visible publicly.'
-              : 'Your gardener profile is waiting for administrator approval. Your active services are not public yet.'}
-          </div>
-        )}
-        <div className="dashboard-tabs" role="tablist" aria-label="Dashboard sections">
-          <Link
-            className={`dashboard-tab${!isProfileView ? ' is-active' : ''}`}
-            role="tab"
-            aria-selected={!isProfileView}
-            to="/dashboard"
-          >
-            Overview & activity
-          </Link>
-          <Link
-            className={`dashboard-tab${isProfileView ? ' is-active' : ''}`}
-            role="tab"
-            aria-selected={isProfileView}
-            to="/dashboard?tab=profile"
-          >
-            Profile & settings
-          </Link>
-        </div>
-
+        <h1>{isProfileView ? 'Profile & settings' : role === 'gardener' ? `Welcome back, ${user.firstName}` : `Welcome, ${displayName || user.firstName}`}</h1>
         {isProfileView ? (
-          <section className="dashboard-panel profile-settings-panel">
-            <div className="activity-heading">
-              <div>
-                <p className="eyebrow">Your profile</p>
-                <h2>Update your {roleLabel.toLowerCase()} information.</h2>
+          <div className="profile-page-content">
+            {role === 'gardener' && !form.is_approved && (
+              <div className="gardener-approval-notice">
+                <Clock size={18} aria-hidden="true" />
+                <span>Your profile is waiting for approval.</span>
               </div>
-              <Link className="text-link" to="/dashboard">Back to overview</Link>
-            </div>
+            )}
+            <section className="dashboard-panel profile-settings-panel">
+              <h2>Your details</h2>
             <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} onSaved={onSaved} />
-          </section>
+            </section>
+          </div>
         ) : (
           <>
-            <Stats role={role} counts={counts} />
-            <DashboardActivity role={role} />
-            <div className="dashboard-grid dashboard-overview-grid">
-              <section className="dashboard-panel dashboard-next">
-                <p className="eyebrow">{role === 'gardener' ? 'Provider workspace' : 'Your next step'}</p>
-                <h2>{role === 'gardener' ? 'Respond to requests and build trust locally.' : 'Start or manage a garden project.'}</h2>
-                <p>
-                  {role === 'gardener'
-                    ? 'Browse open client requests in Zamboanga City to submit offers, review direct inquiries and mutual agreements, and keep your services and portfolio updated below.'
-                    : 'Browse local gardening services for a direct inquiry, post an open general request with garden photos to compare offers, or plan ideas with the AI assistant.'}
-                </p>
-                {role === 'client' && (
-                  <div className="inline-actions dashboard-action-wrap">
-                    <Link className="button" to="/services">Explore services</Link>
-                    <Link className="button button-outline" to="/inquiries/new?type=general">Post general request</Link>
-                    <Link className="text-link" to="/assistant">AI Garden Assistant</Link>
-                  </div>
-                )}
-                {role === 'gardener' && (
-                  <div className="inline-actions dashboard-action-wrap">
-                    <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
-                    <Link className="button button-outline" to="/inquiries">My inquiries & offers</Link>
-                    <Link className="text-link" to={`/gardeners/${user.id}`}>View public profile</Link>
-                  </div>
-                )}
+            {role === 'client' ? (
+              <section className="next-action-band">
+                <div className="next-action-copy">
+                  <h2>Start a garden project</h2>
+                  <p>Browse local services, or post a request with photos to compare offers from gardeners.</p>
+                </div>
+                <div className="next-action-actions">
+                  <Link className="button" to="/inquiries/new?type=general">Post general request</Link>
+                  <Link className="button button-outline" to="/services">Explore services</Link>
+                </div>
               </section>
-              <aside className="dashboard-panel profile-summary-card">
-                <p className="eyebrow">Account & profile</p>
-                <h2>{displayName || 'Your profile'}</h2>
-                <dl className="profile-summary-list">
-                  <div>
-                    <dt>Email</dt>
-                    <dd>{form.email || user.email}</dd>
-                  </div>
-                  <div>
-                    <dt>Phone</dt>
-                    <dd>{form.phone || 'Not set'}</dd>
-                  </div>
-                  {role === 'client' ? (
-                    <div>
-                      <dt>Location</dt>
-                      <dd>{[form.address, form.city].filter(Boolean).join(', ') || 'Zamboanga City'}</dd>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <dt>Service area</dt>
-                        <dd>{form.serviceArea || 'Zamboanga City'}</dd>
-                      </div>
-                      <div>
-                        <dt>Experience</dt>
-                        <dd>{form.yearsOfExperience !== '' && form.yearsOfExperience !== null ? `${form.yearsOfExperience} yr(s)` : 'Not set'}</dd>
-                      </div>
-                    </>
-                  )}
-                </dl>
-                <Link className="button button-outline" to="/dashboard?tab=profile">
-                  <Pencil size={15} /> Edit profile & settings
-                </Link>
-              </aside>
-            </div>
-            {role === 'gardener' && <GardenerTools isApproved={form.is_approved} />}
+            ) : !form.is_approved ? (
+              <section className="next-action-band gardener-pending-band">
+                <div className="next-action-copy">
+                  <h2>Your profile is waiting for approval</h2>
+                  <p>Your service stays hidden from clients until an admin approves it. Add a professional description to finish your profile.</p>
+                </div>
+                <div className="next-action-actions">
+                  <Link className="button" to="/dashboard?tab=profile">Finish profile</Link>
+                </div>
+              </section>
+            ) : null}
+            <DashboardActivity role={role} />
+            {role === 'gardener' && (
+              <GardenerTools isApproved={form.is_approved} />
+            )}
           </>
         )}
       </section>
@@ -388,7 +509,7 @@ export default function DashboardPage({ profileView = false }) {
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const activeTab = resolveDashboardTab(searchParams.get('tab'), profileView)
-  const [profileData, setProfileData] = useState({ form: initialProfile, counts: {} })
+  const [profileData, setProfileData] = useState({ form: initialProfile })
   const [summary, setSummary] = useState({ counts: {}, users: [] })
   const [error, setError] = useState('')
 
@@ -399,7 +520,6 @@ export default function DashboardPage({ profileView = false }) {
       profileApi.get().then((result) => {
         setProfileData({
           form: buildProfileForm(result, initialProfile),
-          counts: result.counts || {},
         })
       }).catch((loadError) => setError(loadError.message))
     }
