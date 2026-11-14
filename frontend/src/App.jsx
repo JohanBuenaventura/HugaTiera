@@ -1,30 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import {
   ArrowRight,
-  ArrowUpRight,
-  Check,
-  ChevronLeft,
-  ChevronRight,
+  Layers,
   Leaf,
+  MapPin,
   Menu,
   MessageCircle,
   ShieldCheck,
   Sparkles,
   Sprout,
-  Star,
   X,
 } from 'lucide-react'
 import './App.css'
 import './design-system.css'
 import editorialAbout from './assets/editorial-about.jpg'
-import editorialCta from './assets/editorial-cta.jpg'
-import editorialFeature from './assets/editorial-feature.jpg'
 import editorialProcess1 from './assets/editorial-process-1.jpg'
-import editorialProcess2 from './assets/editorial-process-2.jpg'
-import editorialProcess3 from './assets/editorial-process-3.jpg'
-import editorialProcess4 from './assets/editorial-process-4.jpg'
-import editorialWhy from './assets/editorial-why.jpg'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import { useAuth } from './hooks/useAuth'
@@ -47,52 +38,87 @@ const categories = [
   {
     title: 'Garden maintenance',
     description: 'Keep outdoor spaces healthy, tidy, and ready to enjoy.',
-    icon: Leaf,
-    tone: 'olive',
+    link: 'Browse maintenance',
+    icon: Sprout,
   },
   {
     title: 'Landscaping',
     description: 'Find help shaping a garden that fits your home and lifestyle.',
-    icon: Sparkles,
-    tone: 'orange',
+    link: 'Browse landscaping',
+    icon: Layers,
   },
   {
     title: 'Garden improvement',
     description: 'Discuss practical ideas for making your space feel better.',
+    link: 'Browse improvements',
     icon: ShieldCheck,
-    tone: 'sage',
   },
   {
     title: 'Potted and terrace gardens',
     description: 'Make small outdoor spaces feel lush, useful, and personal.',
-    icon: Sprout,
-    tone: 'forest',
+    link: 'Browse small spaces',
+    icon: Leaf,
   },
 ]
 
 const steps = [
-  ['01', 'Discover', 'Browse local services and explore provider portfolios.'],
-  ['02', 'Ask and compare', 'Send an inquiry, discuss your needs, and review a quotation.'],
-  ['03', 'Agree together', 'Shape the scope, schedule, and price with your chosen provider.'],
-  ['04', 'Book with confidence', 'Confirm the service only when both sides approve.'],
+  ['Discover', 'Browse local services and explore provider portfolios.'],
+  ['Ask and compare', 'Send an inquiry, discuss your needs, and review a quotation.'],
+  ['Agree together', 'Shape the scope, schedule, and price with your chosen provider.'],
+  ['Book with confidence', 'Confirm the service only when both sides approve.'],
+]
+
+const benefits = [
+  {
+    title: 'Local knowledge',
+    description: 'Connect with people who understand the rhythm of gardens in our community.',
+    icon: MapPin,
+  },
+  {
+    title: 'Clear by design',
+    description: 'Inquiries, offers, agreements, and bookings stay separate and easy to follow.',
+    icon: ShieldCheck,
+  },
+  {
+    title: 'Ideas that grow',
+    description: 'Use the Garden Planning Assistant to explore possibilities before you begin.',
+    icon: Sparkles,
+  },
+  {
+    title: 'Human conversation',
+    description: 'Ask questions, compare options, and choose with confidence.',
+    icon: MessageCircle,
+  },
 ]
 
 function Logo() {
   return (
-    <a className="brand" href="#top" aria-label="HugaTiera home">
-      <span className="brand-mark" aria-hidden="true">
-        <Leaf size={19} strokeWidth={2.5} />
+    <a className="landing-brand" href="#top" aria-label="HugaTiera home">
+      <span className="landing-brand-mark" aria-hidden="true">
+        <Leaf size={21} strokeWidth={2.5} />
       </span>
-      <span>Huga<span>Tiera</span></span>
+      <span className="landing-wordmark">Huga<span>Tiera</span></span>
     </a>
   )
 }
 
-function Button({ children, variant = 'primary', href = '/services', onClick }) {
+function Button({ children, variant = 'primary', href = '/services', onClick, className = '' }) {
   return (
-    <Link className={`button button-${variant}`} to={href} onClick={onClick}>
+    <Link className={`button button-${variant} landing-button landing-button-${variant} ${className}`.trim()} to={href} onClick={onClick}>
       {children}
     </Link>
+  )
+}
+
+function Container({ children, className = '' }) {
+  return <div className={`landing-container ${className}`.trim()}>{children}</div>
+}
+
+function Section({ children, className = '', id, labelledBy }) {
+  return (
+    <section className={`landing-section ${className}`.trim()} id={id} aria-labelledby={labelledBy}>
+      {children}
+    </section>
   )
 }
 
@@ -102,6 +128,7 @@ function HomePage() {
   const [categoryMap, setCategoryMap] = useState({})
   const [featuredError, setFeaturedError] = useState('')
   const { user } = useAuth()
+  const menuButtonRef = useRef(null)
 
   const closeMenu = () => setMenuOpen(false)
 
@@ -120,107 +147,206 @@ function HomePage() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (!menuOpen) return undefined
+
+    function handleKeyDown(event) {
+      if (event.key !== 'Escape') return
+      setMenuOpen(false)
+      menuButtonRef.current?.focus()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [menuOpen])
+
   return (
-    <div className="editorial-home" id="top">
-      <header className="editorial-header">
-        <div className="editorial-nav container">
-          <Logo />
-          <button className="menu-toggle editorial-menu-toggle" type="button" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
-            {menuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
-          <nav className={menuOpen ? 'editorial-links is-open' : 'editorial-links'} aria-label="Main navigation">
-            <a href="#about" onClick={closeMenu}>About</a>
-            <a href="#services" onClick={closeMenu}>Services</a>
-            <a href="#how-it-works" onClick={closeMenu}>Process</a>
-            <Link to="/assistant" onClick={closeMenu}>Garden assistant</Link>
-          </nav>
-          <Button href={user ? '/dashboard' : '/login'} onClick={closeMenu}>{user ? 'Dashboard' : 'Get started'} <ArrowUpRight size={16} /></Button>
-        </div>
-      </header>
+    <div className="landing-page" id="top">
+      <main className="landing-main">
+        <Section className="landing-hero" labelledBy="landing-hero-title">
+          <header className="landing-header">
+            <Container className="landing-nav">
+              <Logo />
+              <button
+                ref={menuButtonRef}
+                className="landing-menu-button"
+                type="button"
+                aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
+                aria-expanded={menuOpen}
+                aria-controls="landing-navigation"
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                {menuOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
+              </button>
+              <nav
+                id="landing-navigation"
+                className={`landing-nav-links${menuOpen ? ' is-open' : ''}`}
+                aria-label="Main navigation"
+              >
+                <a href="#services" onClick={closeMenu}>Services</a>
+                <a href="#how-it-works" onClick={closeMenu}>How it works</a>
+                <Link to="/assistant" onClick={closeMenu}>Garden assistant</Link>
+                {user ? (
+                  <Link className="landing-mobile-dashboard-link" to="/dashboard" onClick={closeMenu}>Dashboard</Link>
+                ) : (
+                  <>
+                    <Link className="landing-login-link" to="/login" onClick={closeMenu}>Log in</Link>
+                    <Button href="/register" onClick={closeMenu}>Get started <ArrowRight size={16} aria-hidden="true" /></Button>
+                  </>
+                )}
+              </nav>
+              {user && (
+                <Button className="landing-desktop-dashboard" href="/dashboard">Dashboard <ArrowRight size={16} aria-hidden="true" /></Button>
+              )}
+            </Container>
+          </header>
 
-      <main>
-        <section className="editorial-hero">
-          <div className="container editorial-hero-grid">
-            <div className="editorial-hero-copy">
-              <p className="editorial-kicker"><span /> Gardening, thoughtfully connected</p>
-              <h1>Let your garden<br /><em>come alive.</em></h1>
-              <p className="editorial-hero-text">A considered way to discover local gardening expertise, shape your ideas, and create an outdoor space that feels like yours.</p>
-              <div className="editorial-hero-actions">
-                <Button href="/services">Find your gardener <ArrowUpRight size={17} /></Button>
-                <a className="editorial-text-link" href="#about">Our approach <ArrowRight size={16} /></a>
+          <Container className="landing-hero-body">
+            <div className="landing-hero-copy">
+              <h1 className="landing-hero-title" id="landing-hero-title">
+                <span>Let your garden</span>
+                <span>come alive.</span>
+              </h1>
+              <p className="landing-hero-lead">
+                Find local gardeners in Zamboanga City, send an inquiry, and agree on the work together.
+              </p>
+              <div className="landing-hero-actions">
+                <Button href="/services">Find your gardener <ArrowRight size={18} aria-hidden="true" /></Button>
+                <a className="landing-button landing-button-secondary" href="#how-it-works">
+                  See how it works <ArrowRight size={18} aria-hidden="true" />
+                </a>
               </div>
-              <div className="editorial-hero-note"><span className="editorial-note-icon"><Check size={14} /></span><span><strong>Made for Zamboanga City</strong><small>Local people. Real garden conversations.</small></span></div>
+              <p className="landing-local-note">
+                <MapPin size={18} aria-hidden="true" />
+                <span>Made for Zamboanga City. Local people, real garden conversations.</span>
+              </p>
             </div>
-            <div className="editorial-hero-visual">
-              <img src={editorialProcess1} alt="Lush green garden with a stone path" />
-              <div className="editorial-image-label"><span>01</span><span>A garden is<br />always growing.</span></div>
-              <div className="editorial-overlap-card">
-                <img src={editorialProcess2} alt="Hands caring for a young plant" />
-                <div><span className="editorial-mini-label">Start here</span><strong>Tell us about your space.</strong><Link to="/services">Explore services <ArrowUpRight size={14} /></Link></div>
-              </div>
+            <img
+              className="landing-hero-image"
+              src={editorialProcess1}
+              alt="A trowel in potting soil beside garden tools"
+              width="600"
+              height="400"
+              loading="eager"
+              fetchPriority="high"
+            />
+          </Container>
+        </Section>
+
+        <Section className="landing-services" id="services" labelledBy="landing-services-title">
+          <Container>
+            <div className="landing-section-heading">
+              <h2 id="landing-services-title">Services for the way you live outside.</h2>
+              <p>Whether you need a gentle refresh or a complete transformation, start with the kind of help your garden is asking for.</p>
             </div>
-          </div>
-          <div className="editorial-scroll-mark"><span>Scroll to explore</span><span className="editorial-scroll-line" /></div>
-        </section>
-
-        <section className="editorial-about editorial-section" id="about">
-          <div className="container editorial-about-grid">
-            <div className="editorial-about-image editorial-tall-image"><img src={editorialAbout} alt="Peaceful landscaped garden surrounded by greenery" /><span className="editorial-image-caption">Cultivating better<br />everyday spaces</span></div>
-            <div className="editorial-about-copy"><p className="editorial-kicker">A more personal marketplace</p><h2>Good gardens begin with <em>good questions.</em></h2><p>HugaTiera brings clients and gardeners together in a space built around conversation. Browse real services, explore previous work, and take the time to find the right fit for your home.</p><p>From the first idea to a mutual agreement, every step stays clear, human, and considered.</p><Link className="editorial-text-link" to="/services">Meet the local marketplace <ArrowUpRight size={16} /></Link><div className="editorial-stats"><div><strong>01</strong><span>Local-first<br />community</span></div><div><strong>04</strong><span>Clear steps<br />to booking</span></div><div><strong>∞</strong><span>Ways to<br />grow</span></div></div></div>
-          </div>
-        </section>
-
-        <section className="editorial-services editorial-section" id="services">
-          <div className="container">
-            <div className="editorial-section-heading"><div><p className="editorial-kicker">Find your fit</p><h2>Services for the way<br /><em>you live outside.</em></h2></div><p>Whether you need a gentle refresh or a complete transformation, start with the kind of help your garden is asking for.</p></div>
-            <div className="editorial-feature-grid">
-              {categories.map(({ title, description, icon: Icon, tone }, index) => {
+            <div className="landing-service-grid">
+              {categories.map(({ title, description, link, icon: Icon }) => {
                 const matchedId = categoryMap[title.toLowerCase()]
                 const targetUrl = matchedId ? `/services?categoryId=${matchedId}` : '/services'
-                return <Link className={`editorial-feature-card feature-${tone}`} to={targetUrl} key={title}><span className="editorial-feature-index">0{index + 1}</span><span className="editorial-feature-icon"><Icon size={21} /></span><h3>{title}</h3><p>{description}</p><span className="editorial-card-arrow"><ArrowUpRight size={17} /></span></Link>
+                return (
+                  <Link className="landing-service-card" to={targetUrl} key={title}>
+                    <Icon className="landing-service-icon" size={32} aria-hidden="true" />
+                    <h3>{title}</h3>
+                    <p>{description}</p>
+                    <span className="landing-service-link">{link} <ArrowRight size={17} aria-hidden="true" /></span>
+                  </Link>
+                )
               })}
-              <Link className="editorial-feature-card feature-image" to="/services"><img src={editorialFeature} alt="Close-up of bright garden foliage" /><span>See all services <ArrowUpRight size={16} /></span></Link>
             </div>
-            {featuredError && <div className="form-error" role="alert">{featuredError}</div>}
-            {!featuredError && featuredServices.length > 0 && <div className="editorial-live-row"><span><span className="editorial-live-dot" /> Recently added in the marketplace</span>{featuredServices.slice(0, 2).map((service) => <Link to={`/services/${service.id}`} key={service.id}>{service.title} <ArrowUpRight size={13} /></Link>)}</div>}
-          </div>
-        </section>
+            {featuredError && <p className="landing-featured-error" role="alert">{featuredError}</p>}
+            {!featuredError && featuredServices.length > 0 && (
+              <div className="landing-live-row" role="region" aria-label="Recently added services">
+                <span>Recently added in the marketplace</span>
+                {featuredServices.slice(0, 2).map((service) => (
+                  <Link to={`/services/${service.id}`} key={service.id}>{service.title} <ArrowRight size={14} aria-hidden="true" /></Link>
+                ))}
+              </div>
+            )}
+          </Container>
+        </Section>
 
-        <section className="editorial-why editorial-section">
-          <div className="container">
-            <div className="editorial-section-heading editorial-centered-heading"><div><p className="editorial-kicker">Why HugaTiera</p><h2>Rooted in care.<br /><em>Designed for trust.</em></h2></div></div>
-            <div className="editorial-why-grid">
-              <div className="editorial-benefit benefit-one"><span><Leaf size={18} /></span><strong>Local knowledge</strong><p>Connect with people who understand the rhythm of gardens in our community.</p></div>
-              <div className="editorial-benefit benefit-two"><span><ShieldCheck size={18} /></span><strong>Clear by design</strong><p>Inquiries, offers, agreements, and bookings stay separate and easy to follow.</p></div>
-              <div className="editorial-why-image"><img src={editorialWhy} alt="Person tending plants in a bright garden" /><span>Care makes<br />the difference.</span></div>
-              <div className="editorial-benefit benefit-three"><span><Sparkles size={18} /></span><strong>Ideas that grow</strong><p>Use the Garden Planning Assistant to explore possibilities before you begin.</p></div>
-              <div className="editorial-benefit benefit-four"><span><MessageCircle size={18} /></span><strong>Human conversation</strong><p>Ask questions, compare options, and choose with confidence.</p></div>
+        <Section className="landing-process" id="how-it-works" labelledBy="landing-process-title">
+          <Container>
+            <div className="landing-section-heading">
+              <h2 id="landing-process-title">From first thought to flourishing.</h2>
+              <p>Take your time. HugaTiera gives every garden conversation room to become something real.</p>
             </div>
-          </div>
-        </section>
+            <ol className="landing-step-list">
+              {steps.map(([title, description], index) => (
+                <li className="landing-step" key={title}>
+                  <div className="landing-step-indicator">
+                    <span className="landing-step-number">{index + 1}</span>
+                    {index < steps.length - 1 && <span className="landing-step-connector" aria-hidden="true" />}
+                  </div>
+                  <h3>{title}</h3>
+                  <p>{description}</p>
+                </li>
+              ))}
+            </ol>
+          </Container>
+        </Section>
 
-        <section className="editorial-testimonials editorial-section">
-          <div className="container editorial-testimonial-grid">
-            <div><p className="editorial-kicker editorial-kicker-light">A little inspiration</p><h2>“The best gardens<br /><em>feel like you.”</em></h2><div className="editorial-testimonial-controls"><button type="button" aria-label="Previous testimonial"><ChevronLeft size={18} /></button><button type="button" aria-label="Next testimonial"><ChevronRight size={18} /></button></div></div>
-            <article className="editorial-quote-card"><div className="editorial-stars" aria-label="5 out of 5 stars"><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /></div><blockquote>“I finally knew where to start. Seeing local work and being able to ask questions made the whole process feel much less overwhelming.”</blockquote><div className="editorial-quote-person"><span>AM</span><div><strong>Anna Marie</strong><small>Home gardener · Zamboanga City</small></div></div></article>
-          </div>
-        </section>
+        <Section className="landing-why" id="about" labelledBy="landing-why-title">
+          <Container className="landing-why-layout">
+            <img
+              className="landing-why-image"
+              src={editorialAbout}
+              alt="Camellia-lined garden path leading to a gazebo"
+              width="1000"
+              height="600"
+              loading="lazy"
+            />
+            <div className="landing-why-copy">
+              <h2 id="landing-why-title">Good gardens begin with good questions.</h2>
+              <p className="landing-why-lead">
+                HugaTiera brings clients and gardeners together in a space built around conversation. Browse real services, explore previous work, and take the time to find the right fit for your home.
+              </p>
+              <div className="landing-benefits">
+                {benefits.map(({ title, description, icon: Icon }) => (
+                  <article className="landing-benefit" key={title}>
+                    <Icon size={26} aria-hidden="true" />
+                    <h3>{title}</h3>
+                    <p>{description}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </Container>
+        </Section>
 
-        <section className="editorial-process editorial-section" id="how-it-works">
-          <div className="container"><div className="editorial-section-heading"><div><p className="editorial-kicker">The simple way forward</p><h2>From first thought<br /><em>to flourishing.</em></h2></div><p>Take your time. HugaTiera gives every garden conversation room to become something real.</p></div><div className="editorial-process-grid">{steps.map(([number, title, description], index) => <div className="editorial-process-step" key={title}><span className="editorial-process-number">{number}</span><div className="editorial-process-image"><img src={[editorialProcess1, editorialProcess2, editorialProcess3, editorialProcess4][index]} alt="" /></div><h3>{title}</h3><p>{description}</p></div>)}</div></div>
-        </section>
+        {/* Add real testimonials here when verified customer quotes are available. */}
 
-        <section className="editorial-cta-section">
-          <div className="container editorial-cta"><div><p className="editorial-kicker editorial-kicker-light">Ready when you are</p><h2>Make room for<br /><em>something green.</em></h2><p>Find a gardener, share your idea, and take the first small step toward a space you will love coming home to.</p><Button variant="light" href="/services">Explore local services <ArrowUpRight size={17} /></Button></div><div className="editorial-cta-image"><img src={editorialCta} alt="Sunlit garden path surrounded by plants" /></div></div>
-        </section>
+        <Section className="landing-cta" labelledBy="landing-cta-title">
+          <Container>
+            <h2 id="landing-cta-title">Take the first small step.</h2>
+            <p>Find a gardener, share your idea, and take the first small step toward a space you will love coming home to.</p>
+            <div className="landing-cta-actions">
+              <Button href="/services">Explore local services <ArrowRight size={18} aria-hidden="true" /></Button>
+              <Link to="/register?role=gardener">Are you a gardener? Join HugaTiera</Link>
+            </div>
+          </Container>
+        </Section>
       </main>
 
-      <footer className="editorial-footer">
-        <div className="container editorial-footer-grid"><div><Logo /><p>Making space for better gardens<br />in Zamboanga City.</p></div><div className="editorial-footer-links"><span>Explore</span><Link to="/services">Services</Link><a href="#about">Our approach</a><a href="#how-it-works">Process</a></div><div className="editorial-footer-links"><span>Connect</span><Link to="/assistant">Garden assistant</Link><Link to="/register?role=gardener">Join as a gardener</Link><a href="mailto:hello@hugatiera.local">hello@hugatiera.local</a></div></div><div className="container editorial-footer-bottom"><span>© 2026 HugaTiera</span><span>Built with care for local gardens <Leaf size={13} /></span></div>
+      <footer className="landing-footer">
+        <Container className="landing-footer-content">
+          <div className="landing-footer-brand">
+            <Logo />
+            <span>· Zamboanga City</span>
+          </div>
+          <nav aria-label="Footer navigation">
+            <Link to="/services">Services</Link>
+            <a href="#how-it-works">How it works</a>
+            <a href="#about">Our approach</a>
+            <Link to="/login">Log in</Link>
+            <Link to="/register">Create an account</Link>
+            <a href="mailto:hello@hugatiera.local">Contact</a>
+          </nav>
+        </Container>
       </footer>
       {shouldShowFloatingMessageIcon(user) && (
         <Link
-          className="floating-help"
+          className="floating-help landing-floating-help"
           to="/messages"
           aria-label={FLOATING_MESSAGE_ICON_LABEL}
           title={FLOATING_MESSAGE_ICON_LABEL}

@@ -17,6 +17,9 @@
   --input-border: #86938a;
   --placeholder: #6b786f;
   --divider: #e1e6de;
+  --line: #e1e6de;
+  --deep: #12311f;
+  --nav-idle: #c3d0c6;
   --tint: #e9ece6;
   --danger: #b3261e;
   --danger-tint: #fbe9e7;
@@ -32,4 +35,8 @@ button, a { font: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }
