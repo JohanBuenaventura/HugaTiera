@@ -36,6 +36,7 @@ import InquiryPage from './pages/InquiryPage'
 import CommunicationPage from './pages/CommunicationPage'
 import BookingPage from './pages/BookingPage'
 import AssistantPage from './pages/AssistantPage'
+import GardenProjectsPage from './pages/GardenProjectsPage'
 import {
   FLOATING_MESSAGE_ICON_LABEL,
   shouldShowFloatingMessageIcon,
@@ -249,6 +250,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/assistant" element={<AssistantPage />} />
+            <Route path="/garden-projects" element={<GardenProjectsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/inquiries/:inquiryId" element={<InquiryPage detail />} />
             <Route element={<ProtectedRoute roles={['client', 'gardener']} />}>

@@ -92,6 +92,18 @@ h1 { max-width: 580px; margin-bottom: 21px; font-size: clamp(42px, 5vw, 66px); l
   backdrop-filter: blur(18px);
 }
 
+.garden-project-list { display: grid; gap: .55rem; margin: 1rem 0; }
+.garden-project-item { display: flex; justify-content: space-between; gap: 1rem; text-align: left; border: 1px solid var(--border); border-radius: 14px; padding: .8rem 1rem; background: var(--surface); color: var(--text); cursor: pointer; }
+.garden-project-item.is-selected { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255, 169, 40, .15); }
+.garden-project-item span, .garden-project-matches span { color: var(--olive); font-size: .78rem; text-transform: capitalize; }
+.upload-dropzone { display: grid; gap: .4rem; border: 1px dashed var(--olive); border-radius: 14px; padding: 1rem; background: var(--sage); }
+.upload-dropzone input { width: 100%; }
+.garden-project-workspace { border-top: 1px solid var(--border); padding-top: 1rem; }
+.garden-project-preview { width: 100%; max-height: 300px; object-fit: cover; border-radius: 16px; margin: .5rem 0 1rem; }
+.garden-project-matches { display: grid; gap: .7rem; margin-top: 1rem; }
+.garden-project-matches article { border-left: 3px solid var(--orange); padding: .7rem .8rem; background: var(--sage); border-radius: 0 12px 12px 0; }
+.garden-project-matches p { margin: .3rem 0 0; font-size: .88rem; }
+
 .site-header { padding: 17px 0; }
 .dashboard-header { min-height: 76px; }
 .brand { letter-spacing: -.7px; }

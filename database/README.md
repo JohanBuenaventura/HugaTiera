@@ -12,15 +12,20 @@ This directory contains the authoritative relational schema, migration scripts, 
 | **Automated Test Database** | `hugatiera_db_migration_test` |
 | **Database Engine** | MySQL 8.0.16+ / MariaDB 10.4.32 (XAMPP) — `InnoDB` |
 | **Character Set & Collation** | `utf8mb4` / `utf8mb4_unicode_ci` |
-| **Total Tables** | `19` |
-| **Total Foreign Key Constraints** | `46` |
+| **Total Tables (fresh R8 schema)** | `21` |
+| **Total Foreign Key Constraints (fresh R8 schema)** | `52` |
 | **Fresh-Install Schema** | `database/schema/hugatiera_schema.sql` |
 | **Migration 001 Forward Script** | `database/migrations/001_unified_requests_and_agreements.sql` |
 | **Migration 001 Structural Rollback** | `database/migrations/001_unified_requests_and_agreements_rollback.sql` |
+| **Migration 002 Forward Script** | `database/migrations/002_ai_garden_projects.sql` |
+| **Migration 002 Structural Rollback** | `database/migrations/002_ai_garden_projects_rollback.sql` |
 | **Local Backups Directory** | `database/backups/` (git-ignored) |
 
 > [!CAUTION]
 > **Production Migration 001 Status:** Migration 001 (`001_unified_requests_and_agreements.sql`) was **executed and verified on `hugatiera_db` on November 12, 2026**. Both `hugatiera_db` and `hugatiera_db_migration_test` are at the complete 19-table schema (`46` foreign key constraints). **Do NOT rerun `001_unified_requests_and_agreements.sql` on `hugatiera_db`.**
+
+> [!IMPORTANT]
+> Migration 002 adds client-owned AI garden projects, project-linked images, AI usage linkage, and provider-match snapshots. It is prepared and must be backed up and rehearsed before applying to `hugatiera_db`; it has not been applied to production by this change.
 
 ---
 

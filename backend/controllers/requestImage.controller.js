@@ -25,6 +25,7 @@ function serializeRequestImage(row) {
   return {
     id: row.id,
     inquiry_id: row.inquiry_id ?? null,
+    project_id: row.project_id ?? null,
     uploaded_by: row.uploaded_by,
     kind: row.kind,
     parent_image_id: row.parent_image_id ?? null,
@@ -46,14 +47,14 @@ async function cleanupOrphanedRequestImages(maxAgeHours = ORPHAN_MAX_AGE_HOURS, 
   // 1. Delete expired unattached DB rows FIRST (guarded by inquiry_id IS NULL),
   //    then unlink their files only if the DB row was actually removed.
   const [orphans] = await pool.execute(
-    'SELECT id, file_path FROM request_images WHERE inquiry_id IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL ? HOUR)',
+    'SELECT id, file_path FROM request_images WHERE inquiry_id IS NULL AND project_id IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL ? HOUR)',
     [hours],
   )
   let deletedCount = 0
   for (const orphan of orphans) {
     try {
       const [del] = await pool.execute(
-        'DELETE FROM request_images WHERE id = ? AND inquiry_id IS NULL',
+        'DELETE FROM request_images WHERE id = ? AND inquiry_id IS NULL AND project_id IS NULL',
         [orphan.id],
       )
       if (del.affectedRows > 0) {
@@ -180,13 +181,20 @@ async function uploadRequestImage(req, res, next) {
   }
 
   const rawInquiryId = req.body?.inquiryId ?? req.body?.inquiry_id
+  const rawProjectId = req.body?.projectId ?? req.body?.project_id
   let inquiryId = null
+  let projectId = null
 
   if (rawInquiryId !== undefined && rawInquiryId !== null && String(rawInquiryId).trim() !== '') {
     inquiryId = parsePositiveInt(rawInquiryId)
     if (!inquiryId) {
       return res.status(400).json({ message: 'A valid request ID is required when attaching a photo.' })
     }
+    if (rawProjectId !== undefined && rawProjectId !== null && String(rawProjectId).trim() !== '') {
+      projectId = parsePositiveInt(rawProjectId)
+      if (!projectId) return res.status(400).json({ message: 'A valid garden project ID is required.' })
+    }
+    if (inquiryId && projectId) return res.status(400).json({ message: 'A photo cannot target both a request and project.' })
   }
 
   try {
@@ -216,6 +224,11 @@ async function uploadRequestImage(req, res, next) {
           message: `You can attach up to ${MAX_IMAGES_PER_INQUIRY} garden photos per request.`,
         })
       }
+    } else if (projectId) {
+      const [projects] = await pool.execute('SELECT id, client_id FROM garden_projects WHERE id = ? LIMIT 1', [projectId])
+      if (!projects[0] || projects[0].client_id !== req.user.id) {
+        return res.status(404).json({ message: 'Garden project was not found or is not owned by you.' })
+      }
     } else {
       const [[draftCountRow]] = await pool.execute(
         'SELECT COUNT(*) AS total FROM request_images WHERE uploaded_by = ? AND inquiry_id IS NULL',
@@ -240,12 +253,12 @@ async function uploadRequestImage(req, res, next) {
 
     try {
       const [result] = await pool.execute(
-        `INSERT INTO request_images (inquiry_id, uploaded_by, kind, file_path, mime_type, file_size)
-         VALUES (?, ?, 'original', ?, ?, ?)`,
-        [inquiryId, req.user.id, processed.relativePath, processed.mimeType, processed.fileSize],
+        `INSERT INTO request_images (inquiry_id, project_id, uploaded_by, kind, file_path, mime_type, file_size)
+         VALUES (?, ?, ?, 'original', ?, ?, ?)`,
+        [inquiryId, projectId, req.user.id, processed.relativePath, processed.mimeType, processed.fileSize],
       )
       const [rows] = await pool.execute(
-        `SELECT id, inquiry_id, uploaded_by, kind, parent_image_id, mime_type, file_size, ai_description, created_at
+        `SELECT id, inquiry_id, project_id, uploaded_by, kind, parent_image_id, mime_type, file_size, ai_description, created_at
          FROM request_images WHERE id = ? LIMIT 1`,
         [result.insertId],
       )

@@ -1,3 +1,5 @@
+const { generateImage: generateComfyUiImage } = require('./comfyui.service')
+
 const DEFAULT_MODEL = 'gemini-3.8-flash'
 const MAX_INPUT_LENGTH = 3000
 const MAX_OUTPUT_TOKENS = 2048
@@ -41,6 +43,10 @@ function normalizeModelName(configuredModel) {
 
 function getModelName() {
   return normalizeModelName(process.env.GEMINI_MODEL)
+}
+
+function getImageModelName() {
+  return String(process.env.GEMINI_IMAGE_MODEL || 'gemini-nano-banana-2.1').trim()
 }
 
 function getFallbackModelName(primaryModel = getModelName()) {
@@ -164,6 +170,38 @@ function getConfig(requestedModel = null) {
   }
 }
 
+async function callGeminiImageInteraction({ prompt, imageBuffer, mimeType }) {
+  const apiKey = String(process.env.GEMINI_API_KEY || '').trim()
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured.')
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.AI_IMAGE_GENERATION_TIMEOUT_MS) || 90000)
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Api-Revision': '2026-05-20', 'x-goog-api-key': apiKey },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: getImageModelName(),
+        input: [
+          { type: 'text', text: prompt },
+          { type: 'image', mime_type: mimeType || 'image/jpeg', data: imageBuffer.toString('base64') },
+        ],
+      }),
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      const error = new Error(data?.error?.message || 'The AI image provider rejected the request.')
+      error.providerStatus = response.status
+      throw error
+    }
+    const image = data?.output_image || data?.output?.find?.((item) => item?.type === 'image' && item?.data)
+    if (!image?.data) throw new Error('The AI image provider returned no generated image.')
+    return { imageBuffer: Buffer.from(image.data, 'base64'), mimeType: image.mime_type || 'image/png', model: getImageModelName() }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function callGeminiGenerateContent({
   model: requestedModel = null,
   parts,
@@ -206,6 +244,7 @@ async function callGeminiGenerateContent({
       if (fetchErr && fetchErr.name !== 'AbortError') {
         fetchErr.isNetworkError = true
       }
+
       throw fetchErr
     }
 
@@ -395,13 +434,17 @@ function createGeminiProvider() {
       })
       return text.slice(0, 2000)
     },
-    async generateGardenImage() {
-      const error = new Error(
-        'AI image generation and editing are postponed and disabled. Only text and uploaded-photo understanding are enabled.',
-      )
-      error.statusCode = 501
-      error.code = 'IMAGE_GENERATION_POSTPONED'
-      throw error
+    async generateGardenImage({ imageBuffer, mimeType, prompt }) {
+      if (String(process.env.AI_IMAGE_GENERATION_ENABLED).toLowerCase() !== 'true') {
+        const error = new Error('AI image generation is disabled. Set AI_IMAGE_GENERATION_ENABLED=true on the backend.')
+        error.statusCode = 501
+        error.code = 'IMAGE_GENERATION_DISABLED'
+        throw error
+      }
+      if (String(process.env.AI_IMAGE_PROVIDER || '').toLowerCase() === 'comfyui') {
+        return generateComfyUiImage({ imageBuffer, mimeType, prompt })
+      }
+      return callGeminiImageInteraction({ imageBuffer, mimeType, prompt })
     },
   }
 }
@@ -520,6 +563,7 @@ module.exports = {
   generateRequirementAssistance,
   getAiProvider,
   getFallbackModelName,
+  getImageModelName,
   getModelName,
   getProviderFailureCode,
   isEligibleForFallback,

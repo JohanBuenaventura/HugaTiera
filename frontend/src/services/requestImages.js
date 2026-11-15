@@ -1,10 +1,13 @@
 import { apiBaseUrl, apiRequest } from './api'
 
-export function uploadRequestImage(file, inquiryId = null) {
+export function uploadRequestImage(file, inquiryId = null, projectId = null) {
   const formData = new FormData()
   formData.append('image', file)
   if (inquiryId !== null && inquiryId !== undefined && String(inquiryId).trim() !== '') {
     formData.append('inquiryId', String(inquiryId))
+  }
+  if (projectId !== null && projectId !== undefined && String(projectId).trim() !== '') {
+    formData.append('projectId', String(projectId))
   }
   return apiRequest('/request-images', {
     method: 'POST',

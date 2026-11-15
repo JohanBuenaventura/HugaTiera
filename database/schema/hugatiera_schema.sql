@@ -74,10 +74,32 @@ CREATE TABLE portfolios (
   INDEX idx_portfolios_gardener (gardener_id, created_at)
 ) ENGINE=InnoDB;
 
+CREATE TABLE garden_projects (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  client_id INT UNSIGNED NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  description TEXT NOT NULL,
+  preferred_style VARCHAR(100) NULL,
+  budget_min DECIMAL(10, 2) NULL,
+  budget_max DECIMAL(10, 2) NULL,
+  garden_size VARCHAR(100) NULL,
+  location VARCHAR(255) NULL,
+  status ENUM('draft', 'generating', 'ready', 'failed', 'archived') NOT NULL DEFAULT 'draft',
+  analysis_json JSON NULL,
+  generation_error VARCHAR(255) NULL,
+  ai_disclaimer TEXT NULL,
+  generated_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_garden_projects_client_status (client_id, status, updated_at)
+) ENGINE=InnoDB;
+
 CREATE TABLE inquiries (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   request_type ENUM('direct', 'general') NOT NULL DEFAULT 'direct',
   client_id INT UNSIGNED NOT NULL,
+  garden_project_id INT UNSIGNED NULL,
   gardener_id INT UNSIGNED NULL,
   service_id INT UNSIGNED NULL,
   subject VARCHAR(200) NOT NULL,
@@ -91,11 +113,13 @@ CREATE TABLE inquiries (
   ai_summary TEXT NULL,
   expires_at DATETIME NULL,
   FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (garden_project_id) REFERENCES garden_projects(id) ON DELETE SET NULL,
   FOREIGN KEY (gardener_id) REFERENCES users(id) ON DELETE RESTRICT,
   FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL,
   CONSTRAINT fk_inquiries_category FOREIGN KEY (category_id) REFERENCES service_categories(id) ON DELETE SET NULL,
   CONSTRAINT chk_inquiries_direct_has_provider CHECK (request_type = 'general' OR gardener_id IS NOT NULL),
   INDEX idx_inquiries_client_status (client_id, status, created_at),
+  INDEX idx_inquiries_garden_project (garden_project_id),
   INDEX idx_inquiries_gardener_status (gardener_id, status, created_at),
   INDEX idx_inquiries_open_board (request_type, status, category_id, expires_at),
   INDEX idx_inquiries_expiry (status, expires_at)
@@ -284,6 +308,7 @@ CREATE TABLE reports (
 CREATE TABLE request_images (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   inquiry_id INT UNSIGNED NULL,
+  project_id INT UNSIGNED NULL,
   uploaded_by INT UNSIGNED NOT NULL,
   kind ENUM('original', 'ai_generated') NOT NULL DEFAULT 'original',
   parent_image_id INT UNSIGNED NULL,
@@ -293,9 +318,11 @@ CREATE TABLE request_images (
   ai_description TEXT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE CASCADE,
+  FOREIGN KEY (project_id) REFERENCES garden_projects(id) ON DELETE CASCADE,
   FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT,
   FOREIGN KEY (parent_image_id) REFERENCES request_images(id) ON DELETE SET NULL,
   INDEX idx_request_images_inquiry (inquiry_id, kind),
+  INDEX idx_request_images_project (project_id, kind),
   INDEX idx_request_images_unattached (inquiry_id, created_at)
 ) ENGINE=InnoDB;
 
@@ -320,14 +347,16 @@ CREATE TABLE request_events (
 CREATE TABLE ai_usage_log (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id INT UNSIGNED NOT NULL,
-  feature ENUM('requirements', 'photo_analysis', 'garden_plan') NOT NULL,
+  feature ENUM('requirements', 'photo_analysis', 'garden_plan', 'image_generation') NOT NULL,
   inquiry_id INT UNSIGNED NULL,
+  project_id INT UNSIGNED NULL,
   request_image_id INT UNSIGNED NULL,
   model VARCHAR(100) NOT NULL,
   outcome ENUM('success', 'error', 'rate_limited') NOT NULL,
   error_code VARCHAR(50) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (project_id) REFERENCES garden_projects(id) ON DELETE SET NULL,
   INDEX idx_ai_usage_user (user_id, created_at)
 ) ENGINE=InnoDB;
 

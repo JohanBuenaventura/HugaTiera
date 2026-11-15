@@ -44,6 +44,7 @@ async function reserveAiUsageSlot({
   userId,
   feature,
   inquiryId = null,
+  projectId = null,
   requestImageId = null,
   model = null,
 }) {
@@ -59,9 +60,9 @@ async function reserveAiUsageSlot({
     if (used >= limit) {
       await conn.execute(
         `INSERT INTO ai_usage_log
-          (user_id, feature, inquiry_id, request_image_id, model, outcome, error_code)
-         VALUES (?, ?, ?, ?, ?, 'rate_limited', 'RATE_LIMIT_EXCEEDED')`,
-        [userId, feature, inquiryId, requestImageId, resolvedModel],
+          (user_id, feature, inquiry_id, project_id, request_image_id, model, outcome, error_code)
+         VALUES (?, ?, ?, ?, ?, ?, 'rate_limited', 'RATE_LIMIT_EXCEEDED')`,
+        [userId, feature, inquiryId, projectId, requestImageId, resolvedModel],
       )
       await conn.commit()
       return { allowed: false, usageId: null, used, limit }
@@ -71,9 +72,9 @@ async function reserveAiUsageSlot({
     // so concurrent requests count it and interrupted/crashed requests never leave uncounted usage.
     const [insertRes] = await conn.execute(
       `INSERT INTO ai_usage_log
-        (user_id, feature, inquiry_id, request_image_id, model, outcome, error_code)
-       VALUES (?, ?, ?, ?, ?, 'error', 'RESERVED_IN_FLIGHT')`,
-      [userId, feature, inquiryId, requestImageId, resolvedModel],
+        (user_id, feature, inquiry_id, project_id, request_image_id, model, outcome, error_code)
+       VALUES (?, ?, ?, ?, ?, ?, 'error', 'RESERVED_IN_FLIGHT')`,
+      [userId, feature, inquiryId, projectId, requestImageId, resolvedModel],
     )
     await conn.commit()
     return {
@@ -500,5 +501,7 @@ module.exports = {
   analyzeUploadedPhoto,
   createGardenPlan,
   createRequirementAssistance,
+  finalizeAiUsageSlot,
   getAiUsageStatus,
+  reserveAiUsageSlot,
 }

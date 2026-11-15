@@ -10,7 +10,7 @@ The Node.js + Express 5 REST API backend for **HugaTiera**, providing authentica
 - **MySQL2 (`^3.24.6`):** `mysql2/promise` connection pool, parameterized SQL, and ACID transactions
 - **Authentication:** `jsonwebtoken` (`^9.0.2`), `bcryptjs` (`^3.0.2`), `cookie-parser` (`^1.4.7`)
 - **Image Processing:** `multer` (`^2.5.0`) + `sharp` (`^0.35.5`) for image decoding, `1920×1920` resizing, and complete EXIF/GPS metadata removal
-- **AI Integration:** Google Gemini REST API (`gemini-3.8-flash` primary, `gemini-3.5-flash-lite` automatic fallback)
+- **AI Integration:** Google Gemini REST API for text/photo understanding plus an optional backend-only ComfyUI HTTP adapter for local image-to-image generation
 
 ---
 
@@ -32,7 +32,14 @@ GEMINI_MODEL=gemini-3.8-flash
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
 GEMINI_THINKING_LEVEL=low
 AI_HOURLY_LIMIT=10
+AI_IMAGE_GENERATION_ENABLED=false
+AI_IMAGE_PROVIDER=comfyui
+COMFYUI_BASE_URL=http://127.0.0.1:8188
+COMFYUI_WORKFLOW_JSON=
+AI_IMAGE_COOLDOWN_SECONDS=60
 ```
+
+ComfyUI is never exposed to the frontend. The backend calls its HTTP API, submits the uploaded garden image and prompt, polls for the result, and stores the returned image as an AI-generated project image. Configure an API-format workflow using `{{INPUT_IMAGE}}` and `{{PROMPT}}` placeholders; the application returns a configuration error instead of using a placeholder or stock image when it is missing.
 
 ---
 

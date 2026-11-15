@@ -299,6 +299,7 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                   <div className="inline-actions dashboard-action-wrap">
                     <Link className="button" to="/services">Explore services</Link>
                     <Link className="button button-outline" to="/inquiries/new?type=general">Post general request</Link>
+                    <Link className="button button-outline" to="/garden-projects">Create AI garden project</Link>
                     <Link className="text-link" to="/assistant">AI Garden Assistant</Link>
                   </div>
                 )}

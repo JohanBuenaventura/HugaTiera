@@ -32,6 +32,7 @@ export function getDashboardNavLinks(role, unreadCounts = {}) {
   }
   return [
     { to: '/dashboard', label: 'Overview', type: 'route' },
+    ...(role === 'client' ? [{ to: '/garden-projects', label: 'Garden Projects', type: 'route' }] : []),
     { to: '/inquiries', label: 'Inquiries', badge: unreadCounts.inquiries || 0, type: 'route' },
     { to: '/messages', label: 'Messages', badge: unreadCounts.messages || 0, type: 'route' },
     { to: '/bookings', label: 'Bookings', badge: unreadCounts.bookings || 0, type: 'route' },
