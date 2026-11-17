@@ -1,4 +1,10 @@
 const { pool } = require('../config/database')
+const {
+  avatarsDirectory,
+  processAndSaveAvatar,
+  removeFileIfExists,
+  resolveContainedPath,
+} = require('../middleware/upload.middleware')
 
 function text(value) {
   return typeof value === 'string' ? value.trim() : ''
@@ -20,7 +26,7 @@ function validateCommonProfile(body) {
 async function getProfile(req, res, next) {
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, last_name, phone, created_at FROM users WHERE id = ? AND is_active = TRUE LIMIT 1',
+      'SELECT id, email, role, first_name, last_name, phone, avatar_path, created_at FROM users WHERE id = ? AND is_active = TRUE LIMIT 1',
       [req.user.id],
     )
     const user = users[0]
@@ -64,6 +70,7 @@ async function getProfile(req, res, next) {
         firstName: user.first_name,
         lastName: user.last_name,
         phone: user.phone,
+        avatarPath: user.avatar_path,
         createdAt: user.created_at,
       },
       profile,
@@ -201,8 +208,77 @@ async function createReport(req, res, next) {
   }
 }
 
+async function uploadAvatar(req, res, next) {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ message: 'A profile picture file is required.' })
+  }
+
+  let saved = null
+  try {
+    const [rows] = await pool.execute('SELECT avatar_path FROM users WHERE id = ? AND is_active = TRUE LIMIT 1', [req.user.id])
+    if (!rows.length) return res.status(404).json({ message: 'Profile was not found.' })
+    const previousPath = rows[0].avatar_path
+
+    saved = await processAndSaveAvatar(req.file.buffer, req.user.id)
+    await pool.execute('UPDATE users SET avatar_path = ? WHERE id = ?', [saved.relativePath, req.user.id])
+    if (previousPath && previousPath !== saved.relativePath) {
+      await removeFileIfExists(avatarsDirectory, previousPath)
+    }
+
+    return res.json({
+      avatarPath: saved.relativePath,
+      avatarUrl: `/api/profiles/${req.user.id}/avatar`,
+    })
+  } catch (error) {
+    if (saved) await removeFileIfExists(avatarsDirectory, saved.relativePath)
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message })
+    return next(error)
+  }
+}
+
+async function deleteAvatar(req, res, next) {
+  try {
+    const [rows] = await pool.execute('SELECT avatar_path FROM users WHERE id = ? AND is_active = TRUE LIMIT 1', [req.user.id])
+    if (!rows.length) return res.status(404).json({ message: 'Profile was not found.' })
+    const previousPath = rows[0].avatar_path
+
+    await pool.execute('UPDATE users SET avatar_path = NULL WHERE id = ?', [req.user.id])
+    await removeFileIfExists(avatarsDirectory, previousPath)
+    return res.json({ status: 'ok', avatarPath: null })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function sendAvatar(req, res, next) {
+  const userId = Number(req.params.userId)
+  if (!Number.isInteger(userId) || userId < 1) {
+    return res.status(400).json({ message: 'A valid user ID is required.' })
+  }
+  try {
+    const [rows] = await pool.execute('SELECT avatar_path FROM users WHERE id = ? AND is_active = TRUE LIMIT 1', [userId])
+    if (!rows.length || !rows[0].avatar_path) {
+      return res.status(404).json({ message: 'Profile picture was not found.' })
+    }
+    const absolutePath = resolveContainedPath(avatarsDirectory, rows[0].avatar_path)
+    res.set('Cache-Control', 'no-cache')
+    return res.sendFile(absolutePath, (err) => {
+      if (err && !res.headersSent) {
+        return res.status(404).json({ message: 'Profile picture file was not found.' })
+      }
+      return undefined
+    })
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message })
+    return next(error)
+  }
+}
+
 module.exports = {
   createReport,
+  deleteAvatar,
   getProfile,
+  sendAvatar,
   updateProfile,
+  uploadAvatar,
 }
