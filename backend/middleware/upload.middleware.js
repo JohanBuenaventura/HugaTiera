@@ -5,11 +5,15 @@ const multer = require('multer')
 const sharp = require('sharp')
 
 const uploadDirectory = path.join(__dirname, '..', 'uploads', 'portfolios')
+const avatarsDirectory = path.join(__dirname, '..', 'uploads', 'avatars')
+const servicesDirectory = path.join(__dirname, '..', 'uploads', 'services')
 const requestImageBaseDirectory = path.join(__dirname, '..', 'uploads', 'request-images')
 const requestImageOriginalsDirectory = path.join(requestImageBaseDirectory, 'originals')
 const requestImageGeneratedDirectory = path.join(requestImageBaseDirectory, 'generated')
 
 fs.mkdirSync(uploadDirectory, { recursive: true })
+fs.mkdirSync(avatarsDirectory, { recursive: true })
+fs.mkdirSync(servicesDirectory, { recursive: true })
 fs.mkdirSync(requestImageOriginalsDirectory, { recursive: true })
 fs.mkdirSync(requestImageGeneratedDirectory, { recursive: true })
 
@@ -158,13 +162,13 @@ async function processAndSaveRequestImage(buffer, userId, kind = 'original') {
   }
 }
 
-function resolveRequestImagePath(relativePath) {
+function resolveContainedPath(baseDirectory, relativePath) {
   if (typeof relativePath !== 'string' || !relativePath.trim() || relativePath.includes('\0')) {
     const err = new Error('Invalid image file path.')
     err.statusCode = 400
     throw err
   }
-  const baseResolved = path.resolve(requestImageBaseDirectory)
+  const baseResolved = path.resolve(baseDirectory)
   const targetResolved = path.resolve(baseResolved, relativePath)
   if (!targetResolved.startsWith(baseResolved + path.sep)) {
     const err = new Error('Invalid image file path.')
@@ -174,15 +178,130 @@ function resolveRequestImagePath(relativePath) {
   return targetResolved
 }
 
+function resolveRequestImagePath(relativePath) {
+  return resolveContainedPath(requestImageBaseDirectory, relativePath)
+}
+
+async function processAndSaveImageToDir({
+  buffer,
+  baseDirectory,
+  prefix,
+  ownerId,
+  maxDimension = 1600,
+  missingMessage = 'An image file is required.',
+  tooLargeMessage = 'Image file must be 5 MB or smaller.',
+}) {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    const err = new Error(missingMessage)
+    err.statusCode = 400
+    throw err
+  }
+  if (buffer.length > MAX_REQUEST_IMAGE_BYTES) {
+    const err = new Error(tooLargeMessage)
+    err.statusCode = 400
+    throw err
+  }
+  if (!hasValidImageMagicBytes(buffer)) {
+    const err = new Error('Invalid image file content. Only valid JPEG, PNG, and WebP images are allowed.')
+    err.statusCode = 400
+    throw err
+  }
+
+  let metadata
+  try {
+    metadata = await sharp(buffer, { failOn: 'error', limitInputPixels: MAX_INPUT_PIXELS }).metadata()
+  } catch {
+    const err = new Error('Invalid or corrupted image file. Only valid JPEG, PNG, and WebP images are allowed.')
+    err.statusCode = 400
+    throw err
+  }
+
+  const formatInfo = metadata && formatToMimeAndExt[metadata.format]
+  if (!formatInfo || !metadata.width || !metadata.height) {
+    const err = new Error('Unsupported image format. Only JPEG, PNG, and WebP images are allowed.')
+    err.statusCode = 400
+    throw err
+  }
+
+  let pipeline = sharp(buffer, { failOn: 'error', limitInputPixels: MAX_INPUT_PIXELS })
+    .rotate()
+    .resize({
+      width: maxDimension,
+      height: maxDimension,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+
+  if (metadata.format === 'jpeg') {
+    pipeline = pipeline.jpeg({ quality: 85, mozjpeg: true })
+  } else if (metadata.format === 'png') {
+    pipeline = pipeline.png({ compressionLevel: 8 })
+  } else {
+    pipeline = pipeline.webp({ quality: 85 })
+  }
+
+  const cleanedBuffer = await pipeline.toBuffer()
+  const filename = `${prefix}-${ownerId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${formatInfo.extension}`
+  const targetPath = resolveContainedPath(baseDirectory, filename)
+  await fsp.writeFile(targetPath, cleanedBuffer)
+
+  return {
+    relativePath: filename,
+    absolutePath: targetPath,
+    mimeType: formatInfo.mimeType,
+    fileSize: cleanedBuffer.length,
+  }
+}
+
+function processAndSaveAvatar(buffer, userId) {
+  return processAndSaveImageToDir({
+    buffer,
+    baseDirectory: avatarsDirectory,
+    prefix: 'avatar',
+    ownerId: userId,
+    maxDimension: 512,
+    missingMessage: 'A profile picture file is required.',
+    tooLargeMessage: 'Profile picture must be 5 MB or smaller.',
+  })
+}
+
+function processAndSaveServiceImage(buffer, userId) {
+  return processAndSaveImageToDir({
+    buffer,
+    baseDirectory: servicesDirectory,
+    prefix: 'service',
+    ownerId: userId,
+    maxDimension: 1600,
+    missingMessage: 'A service photo file is required.',
+    tooLargeMessage: 'Service photo must be 5 MB or smaller.',
+  })
+}
+
+async function removeFileIfExists(baseDirectory, relativePath) {
+  if (!relativePath) return
+  try {
+    const targetPath = resolveContainedPath(baseDirectory, relativePath)
+    await fsp.unlink(targetPath)
+  } catch {
+    // Ignore missing or already-deleted files
+  }
+}
+
 module.exports = {
+  avatarsDirectory,
   hasValidImageMagicBytes,
   portfolioUpload,
+  processAndSaveAvatar,
   processAndSaveRequestImage,
+  processAndSaveServiceImage,
+  removeFileIfExists,
   requestImageBaseDirectory,
   requestImageGeneratedDirectory,
   requestImageOriginalsDirectory,
   requestImageUpload,
+  resolveContainedPath,
   resolveRequestImagePath,
+  servicesDirectory,
   uploadDirectory,
 }
 
