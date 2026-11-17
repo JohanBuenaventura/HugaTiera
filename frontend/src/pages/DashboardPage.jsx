@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { ImagePlus, Pencil, Save, Trash2 } from 'lucide-react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { ImagePlus, Pencil, Save, Sparkles, Trash2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import {
   buildProfileForm,
@@ -17,8 +17,10 @@ import {
 } from '../services/bookings'
 import AppSidebar from '../components/AppSidebar'
 
-function ProfileForm({ role, profile, onSaved }) {
+function ProfileForm({ role, profile, userId, onSaved }) {
   const [form, setForm] = useState(profile)
+  const [avatarVersion, setAvatarVersion] = useState(0)
+  const [avatarBusy, setAvatarBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -34,9 +36,71 @@ function ProfileForm({ role, profile, onSaved }) {
     } catch (saveError) { setError(saveError.message) } finally { setSaving(false) }
   }
 
+  async function handleAvatarChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setAvatarBusy(true); setMessage(''); setError('')
+    try {
+      const result = await profileApi.uploadAvatar(file)
+      const nextForm = { ...form, avatarPath: result.avatarPath }
+      setForm(nextForm)
+      setAvatarVersion((v) => v + 1)
+      onSaved({ user: { ...nextForm, avatarPath: result.avatarPath } })
+      setMessage('Profile picture updated.')
+    } catch (uploadError) {
+      setError(uploadError.message)
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    setAvatarBusy(true); setMessage(''); setError('')
+    try {
+      await profileApi.deleteAvatar()
+      const nextForm = { ...form, avatarPath: null }
+      setForm(nextForm)
+      setAvatarVersion((v) => v + 1)
+      onSaved({ user: { ...nextForm, avatarPath: null } })
+      setMessage('Profile picture removed.')
+    } catch (deleteError) {
+      setError(deleteError.message)
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
+  const initials = `${(form.firstName || 'U')[0] || ''}${(form.lastName || '')[0] || ''}`.toUpperCase()
+
   return <form className="profile-form" onSubmit={submit}>
     {message && <div className="form-success" role="status">{message}</div>}
     {error && <div className="form-error" role="alert">{error}</div>}
+    <div className="avatar-upload-row">
+      <div className="avatar-preview">
+        {form.avatarPath ? (
+          <img src={`${profileApi.avatarUrl(userId)}?v=${avatarVersion}`} alt="Profile" />
+        ) : (
+          <span>{initials}</span>
+        )}
+      </div>
+      <div className="avatar-upload-controls">
+        <strong>Profile picture</strong>
+        <span className="field-note">JPEG, PNG, or WebP up to 5 MB</span>
+        <div className="inline-actions">
+          <label className="button button-outline avatar-file-label">
+            <ImagePlus size={15} />
+            {avatarBusy ? 'Uploading...' : (form.avatarPath ? 'Change photo' : 'Upload photo')}
+            <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={avatarBusy} onChange={handleAvatarChange} />
+          </label>
+          {form.avatarPath && (
+            <button className="table-action" type="button" disabled={avatarBusy} onClick={handleRemoveAvatar}>
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
     <div className="form-row"><label>First name<input required value={form.firstName} onChange={change('firstName')} /></label><label>Last name<input required value={form.lastName} onChange={change('lastName')} /></label></div>
     <div className="form-row"><label>Phone<input value={form.phone || ''} onChange={change('phone')} /><span className="field-note">Optional</span></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
     {role === 'client' ? <><div className="form-row"><label>Address<input value={form.address || ''} onChange={change('address')} /></label><label>City<input required value={form.city || ''} onChange={change('city')} /></label></div><label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label></> : <><div className="form-row"><label>Business or display name<input value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div><label>Service area<input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label><label>Professional description<textarea value={form.description || ''} onChange={change('description')} rows="4" /></label></>}
@@ -48,12 +112,14 @@ function Stats({ role, counts }) {
   const values = role === 'client'
     ? [['Inquiries', counts.inquiries], ['Bookings', counts.bookings], ['Notifications', counts.notifications]]
     : [['Services', counts.services], ['Inquiries', counts.inquiries], ['Bookings', counts.bookings]]
-  return <div className="stat-grid">{values.map(([label, value]) => <div className="stat-card" key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div>
+  return <div className="stat-grid">{values.map(([label, value], index) => <div className={`stat-card${index === 0 ? ' stat-card-primary' : ''}`} key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div>
 }
 
-function GardenerTools({ isApproved }) {
+function GardenerTools({ isApproved, section = 'services' }) {
   const emptyService = { title: '', description: '', categoryId: '', indicativePrice: '', priceUnit: '', serviceArea: 'Zamboanga City' }
   const [serviceForm, setServiceForm] = useState(emptyService)
+  const [serviceImageFile, setServiceImageFile] = useState(null)
+  const [serviceImageVersion, setServiceImageVersion] = useState(0)
   const [categories, setCategories] = useState([])
   const [services, setServices] = useState([])
   const [portfolios, setPortfolios] = useState([])
@@ -77,11 +143,31 @@ function GardenerTools({ isApproved }) {
   async function saveService(event) {
     event.preventDefault(); setMessage(''); setError('')
     try {
-      if (editId) await servicesApi.update(editId, serviceForm)
-      else await servicesApi.create(serviceForm)
+      let targetServiceId = editId
+      if (editId) {
+        await servicesApi.update(editId, serviceForm)
+      } else {
+        const created = await servicesApi.create(serviceForm)
+        targetServiceId = created.id
+      }
+      if (serviceImageFile && targetServiceId) {
+        await servicesApi.uploadServiceImage(targetServiceId, serviceImageFile)
+        setServiceImageVersion((v) => v + 1)
+      }
       setServices((await servicesApi.mine()).services)
-      setServiceForm(emptyService); setEditId(null); setMessage('Service listing saved.')
+      setServiceForm(emptyService); setServiceImageFile(null); setEditId(null)
+      event.target.reset()
+      setMessage('Service listing saved.')
     } catch (saveError) { setError(saveError.message) }
+  }
+  async function removeServiceImage(id) {
+    setMessage(''); setError('')
+    try {
+      await servicesApi.deleteServiceImage(id)
+      setServices((await servicesApi.mine()).services)
+      setServiceImageVersion((v) => v + 1)
+      setMessage('Service photo removed.')
+    } catch (removeError) { setError(removeError.message) }
   }
   async function removeService(id) {
     try { await servicesApi.remove(id); setServices((current) => current.map((service) => service.id === id ? { ...service, is_active: 0 } : service)); setMessage('Service listing deactivated.') } catch (removeError) { setError(removeError.message) }
@@ -110,7 +196,114 @@ function GardenerTools({ isApproved }) {
     try { await servicesApi.removePortfolio(id); setPortfolios((current) => current.filter((portfolio) => portfolio.id !== id)); setMessage('Portfolio entry removed.') } catch (removeError) { setError(removeError.message) }
   }
 
-  return <section className="gardener-tools"><div className="dashboard-panel"><p className="eyebrow">Service listings</p><h2>{editId ? 'Edit a service.' : 'Add a service.'}</h2><p className="field-note">{isApproved ? 'Your active services are visible in the public marketplace.' : 'Your services are saved, but they will remain hidden until an administrator approves your gardener profile.'}</p>{message && <div className="form-success" role="status">{message}</div>}{error && <div className="form-error" role="alert">{error}</div>}<form className="profile-form" onSubmit={saveService}><div className="form-row"><label>Title<input required value={serviceForm.title} onChange={serviceChange('title')} /></label><label>Category<select required value={serviceForm.categoryId} onChange={serviceChange('categoryId')}><option value="">Choose a category</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label></div><label>Description<textarea required rows="3" value={serviceForm.description} onChange={serviceChange('description')} /></label><div className="form-row"><label>Indicative price<input type="number" min="0" step="0.01" value={serviceForm.indicativePrice} onChange={serviceChange('indicativePrice')} /><span className="field-note">Optional</span></label><label>Price unit<input placeholder="per visit, per sqm..." value={serviceForm.priceUnit} onChange={serviceChange('priceUnit')} /></label></div><label>Service area<input required value={serviceForm.serviceArea} onChange={serviceChange('serviceArea')} /></label><div className="inline-actions"><button className="button" type="submit"><Save size={16} />{editId ? 'Update service' : 'Publish service'}</button>{editId && <button className="table-action" type="button" onClick={() => { setEditId(null); setServiceForm(emptyService) }}>Cancel edit</button>}</div></form><div className="managed-list">{services.map((service) => <div className={`managed-item ${service.is_active ? '' : 'is-inactive'}`} key={service.id}><div><strong>{service.title}</strong><span>{service.category_name} · {service.is_active ? 'Active' : 'Inactive'}{service.is_active && !isApproved ? ' · Pending approval' : ''}</span></div>{service.is_active && <div className="item-actions"><button type="button" aria-label={`Edit ${service.title}`} onClick={() => { setEditId(service.id); setServiceForm({ title: service.title, description: service.description, categoryId: service.category_id, indicativePrice: service.indicative_price || '', priceUnit: service.price_unit || '', serviceArea: service.service_area }) }}><Pencil size={15} /></button><button type="button" aria-label={`Deactivate ${service.title}`} onClick={() => removeService(service.id)}><Trash2 size={15} /></button></div>}</div>)}</div></div><div className="dashboard-panel"><p className="eyebrow">Portfolio</p><h2>{portfolioEditId ? 'Edit portfolio details.' : 'Show your previous work.'}</h2><form className="profile-form" onSubmit={savePortfolio}><label>Title<input required value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} /></label><label>Description<textarea rows="2" value={imageForm.description} onChange={(event) => setImageForm({ ...imageForm, description: event.target.value })} /></label>{!portfolioEditId && <label>Image<input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageForm({ ...imageForm, image: event.target.files[0] })} /><span className="field-note">JPEG, PNG, or WebP up to 5 MB</span></label>}<div className="inline-actions"><button className="button" type="submit">{portfolioEditId ? <><Save size={16} />Update portfolio</> : <><ImagePlus size={16} />Upload portfolio image</>}</button>{portfolioEditId && <button className="table-action" type="button" onClick={() => { setPortfolioEditId(null); setImageForm({ title: '', description: '', image: null }) }}>Cancel edit</button>}</div></form><div className="portfolio-list">{portfolios.map((portfolio) => <div className="portfolio-item" key={portfolio.id}><img src={servicesApi.imageUrl(portfolio.id)} alt="" /><div><strong>{portfolio.title}</strong><span>{portfolio.description || 'No description'}</span></div><div className="item-actions" style={{ marginLeft: 'auto' }}><button type="button" aria-label={`Edit ${portfolio.title}`} onClick={() => { setPortfolioEditId(portfolio.id); setImageForm({ title: portfolio.title, description: portfolio.description || '', image: null }) }}><Pencil size={15} /></button><button type="button" aria-label={`Remove ${portfolio.title}`} onClick={() => removePortfolio(portfolio.id)}><Trash2 size={15} /></button></div></div>)}</div></div></section>
+  if (section === 'portfolio') {
+    return (
+      <section className="profile-settings-panel">
+        <div className="dashboard-panel">
+          <div className="activity-heading">
+            <div>
+              <p className="eyebrow">Portfolio</p>
+              <h2>{portfolioEditId ? 'Edit portfolio details.' : 'Show your previous work.'}</h2>
+            </div>
+            <Link className="text-link" to="/dashboard">Back to overview</Link>
+          </div>
+          {message && <div className="form-success" role="status">{message}</div>}
+          {error && <div className="form-error" role="alert">{error}</div>}
+          <form className="profile-form" onSubmit={savePortfolio}>
+            <label>Title<input required placeholder="e.g. Tropical patio makeover" value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} /></label>
+            <label>Description<textarea rows="2" placeholder="Describe what you built or maintained" value={imageForm.description} onChange={(event) => setImageForm({ ...imageForm, description: event.target.value })} /></label>
+            {!portfolioEditId && <label>Image<input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageForm({ ...imageForm, image: event.target.files[0] })} /><span className="field-note">JPEG, PNG, or WebP up to 5 MB</span></label>}
+            <div className="inline-actions">
+              <button className="button" type="submit">{portfolioEditId ? <><Save size={16} />Update portfolio</> : <><ImagePlus size={16} />Upload portfolio image</>}</button>
+              {portfolioEditId && <button className="table-action" type="button" onClick={() => { setPortfolioEditId(null); setImageForm({ title: '', description: '', image: null }) }}>Cancel edit</button>}
+            </div>
+          </form>
+          <div className="portfolio-list">
+            {portfolios.length === 0 && <p className="form-note">No portfolio photos uploaded yet.</p>}
+            {portfolios.map((portfolio) => (
+              <div className="portfolio-item" key={portfolio.id}>
+                <img src={servicesApi.imageUrl(portfolio.id)} alt={portfolio.title} />
+                <div><strong>{portfolio.title}</strong><span>{portfolio.description || 'No description'}</span></div>
+                <div className="item-actions" style={{ marginLeft: 'auto' }}>
+                  <button type="button" aria-label={`Edit ${portfolio.title}`} onClick={() => { setPortfolioEditId(portfolio.id); setImageForm({ title: portfolio.title, description: portfolio.description || '', image: null }) }}><Pencil size={15} /></button>
+                  <button type="button" aria-label={`Remove ${portfolio.title}`} onClick={() => removePortfolio(portfolio.id)}><Trash2 size={15} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="profile-settings-panel">
+      <div className="dashboard-panel">
+        <div className="activity-heading">
+          <div>
+            <p className="eyebrow">Service listings</p>
+            <h2>{editId ? 'Edit a service.' : 'Manage your services.'}</h2>
+          </div>
+          <Link className="text-link" to="/dashboard">Back to overview</Link>
+        </div>
+        <p className="field-note" style={{ marginBottom: '16px' }}>
+          {isApproved ? 'Your active services are visible in the public marketplace.' : 'Your services are saved, but they will remain hidden until an administrator approves your gardener profile.'}
+        </p>
+        {message && <div className="form-success" role="status">{message}</div>}
+        {error && <div className="form-error" role="alert">{error}</div>}
+        <form className="profile-form" onSubmit={saveService}>
+          <div className="form-row">
+            <label>Title<input required placeholder="e.g. Weekly lawn & hedge care" value={serviceForm.title} onChange={serviceChange('title')} /></label>
+            <label>Category<select required value={serviceForm.categoryId} onChange={serviceChange('categoryId')}><option value="">Choose a category</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
+          </div>
+          <label>Description<textarea required rows="3" placeholder="Outline what is included in this service" value={serviceForm.description} onChange={serviceChange('description')} /></label>
+          <div className="form-row">
+            <label>Indicative price<input type="number" min="0" step="0.01" placeholder="Optional" value={serviceForm.indicativePrice} onChange={serviceChange('indicativePrice')} /><span className="field-note">Optional</span></label>
+            <label>Price unit<input placeholder="per visit, per sqm..." value={serviceForm.priceUnit} onChange={serviceChange('priceUnit')} /></label>
+          </div>
+          <label>Service area<input required value={serviceForm.serviceArea} onChange={serviceChange('serviceArea')} /></label>
+          <label>
+            Cover / business design photo
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setServiceImageFile(event.target.files?.[0] || null)} />
+            <span className="field-note">Optional. JPEG, PNG, or WebP up to 5 MB shown on marketplace cards.</span>
+          </label>
+          <div className="inline-actions">
+            <button className="button" type="submit"><Save size={16} />{editId ? 'Update service' : 'Publish service'}</button>
+            {editId && <button className="table-action" type="button" onClick={() => { setEditId(null); setServiceForm(emptyService); setServiceImageFile(null) }}>Cancel edit</button>}
+          </div>
+        </form>
+        <div className="managed-list">
+          {services.length === 0 && <p className="form-note">No service listings created yet.</p>}
+          {services.map((service) => (
+            <div className={`managed-item ${service.is_active ? '' : 'is-inactive'}`} key={service.id}>
+              <div className="managed-item-main">
+                {service.image_path && (
+                  <img
+                    className="managed-service-thumb"
+                    src={`${servicesApi.serviceImageUrl(service.id)}?v=${serviceImageVersion}`}
+                    alt={service.title}
+                  />
+                )}
+                <div>
+                  <strong>{service.title}</strong>
+                  <span>{service.category_name} · {service.is_active ? 'Active' : 'Inactive'}{service.is_active && !isApproved ? ' · Pending approval' : ''}</span>
+                </div>
+              </div>
+              {service.is_active && (
+                <div className="item-actions">
+                  {service.image_path && (
+                    <button type="button" className="table-action" onClick={() => removeServiceImage(service.id)}>Remove photo</button>
+                  )}
+                  <button type="button" aria-label={`Edit ${service.title}`} onClick={() => { setEditId(service.id); setServiceImageFile(null); setServiceForm({ title: service.title, description: service.description, categoryId: service.category_id, indicativePrice: service.indicative_price || '', priceUnit: service.price_unit || '', serviceArea: service.service_area }) }}><Pencil size={15} /></button>
+                  <button type="button" aria-label={`Deactivate ${service.title}`} onClick={() => removeService(service.id)}><Trash2 size={15} /></button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
 }
 
 function formatInquirySubtitle(inquiry, role) {
@@ -236,15 +429,80 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
     <main className="dashboard-page">
       <AppSidebar />
       <section className="container dashboard-content">
-        <p className="eyebrow">{roleLabel} dashboard</p>
-        <h1>{isProfileView ? 'Profile & settings.' : `Welcome, ${user.firstName}.`}</h1>
-        <p className="dashboard-lead">
-          {isProfileView
-            ? 'Review and update your contact details and public profile information.'
-            : role === 'gardener'
-              ? 'Manage open client requests, submitted offers, mutual agreements, bookings, services, and your portfolio.'
-              : 'Track your service requests, compare provider offers, review mutual agreements, and manage upcoming bookings.'}
-        </p>
+        <div className="dashboard-topbar">
+          <p className="eyebrow" style={{ margin: 0 }}>{roleLabel} dashboard</p>
+          <div className="dashboard-tabs dashboard-tabs-top" role="tablist" aria-label="Dashboard sections">
+            <Link
+              className={`dashboard-tab${activeTab === 'overview' ? ' is-active' : ''}`}
+              role="tab"
+              aria-selected={activeTab === 'overview'}
+              to="/dashboard"
+            >
+              Overview & activity
+            </Link>
+            {role === 'gardener' && (
+              <>
+                <Link
+                  className={`dashboard-tab${activeTab === 'services' ? ' is-active' : ''}`}
+                  role="tab"
+                  aria-selected={activeTab === 'services'}
+                  to="/dashboard?tab=services"
+                >
+                  My services
+                </Link>
+                <Link
+                  className={`dashboard-tab${activeTab === 'portfolio' ? ' is-active' : ''}`}
+                  role="tab"
+                  aria-selected={activeTab === 'portfolio'}
+                  to="/dashboard?tab=portfolio"
+                >
+                  Portfolio
+                </Link>
+              </>
+            )}
+            <Link
+              className={`dashboard-tab${isProfileView ? ' is-active' : ''}`}
+              role="tab"
+              aria-selected={isProfileView}
+              to="/dashboard?tab=profile"
+            >
+              Profile & settings
+            </Link>
+          </div>
+        </div>
+        <div className="dashboard-hero-row">
+          <div>
+            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : `Welcome, ${user.firstName}.`}</h1>
+            <p className="dashboard-lead" style={{ marginBottom: 0 }}>
+              {isProfileView
+                ? 'Review and update your contact details and public profile information.'
+                : activeTab === 'services'
+                  ? 'Create, edit, and manage the gardening services you offer.'
+                  : activeTab === 'portfolio'
+                    ? 'Showcase your completed garden projects to build client trust.'
+                    : role === 'gardener'
+                      ? 'Manage open client requests, submitted offers, mutual agreements, and bookings.'
+                      : 'Track your service requests, compare provider offers, review mutual agreements, and manage upcoming bookings.'}
+            </p>
+          </div>
+          {activeTab === 'overview' && (
+            <div className="inline-actions dashboard-hero-actions">
+              {role === 'client' ? (
+                <>
+                  <Link className="button" to="/services">Explore services</Link>
+                  <Link className="button button-outline" to="/inquiries/new?type=general">Post general request</Link>
+                  <Link className="button button-outline" to="/assistant"><Sparkles size={15} /> AI Garden Assistant</Link>
+                </>
+              ) : (
+                <>
+                  <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
+                  <Link className="button button-outline" to="/dashboard?tab=services">My services</Link>
+                  <Link className="button button-outline" to="/dashboard?tab=portfolio">Portfolio</Link>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         {role === 'gardener' && (
           <div className={`form-note ${form.is_approved ? 'form-success' : 'form-error'}`}>
             {form.is_approved
@@ -252,24 +510,6 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
               : 'Your gardener profile is waiting for administrator approval. Your active services are not public yet.'}
           </div>
         )}
-        <div className="dashboard-tabs" role="tablist" aria-label="Dashboard sections">
-          <Link
-            className={`dashboard-tab${!isProfileView ? ' is-active' : ''}`}
-            role="tab"
-            aria-selected={!isProfileView}
-            to="/dashboard"
-          >
-            Overview & activity
-          </Link>
-          <Link
-            className={`dashboard-tab${isProfileView ? ' is-active' : ''}`}
-            role="tab"
-            aria-selected={isProfileView}
-            to="/dashboard?tab=profile"
-          >
-            Profile & settings
-          </Link>
-        </div>
 
         {isProfileView ? (
           <section className="dashboard-panel profile-settings-panel">
@@ -280,32 +520,34 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
               </div>
               <Link className="text-link" to="/dashboard">Back to overview</Link>
             </div>
-            <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} onSaved={onSaved} />
+            <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
           </section>
+        ) : role === 'gardener' && (activeTab === 'services' || activeTab === 'portfolio') ? (
+          <GardenerTools isApproved={form.is_approved} section={activeTab} />
         ) : (
           <>
             <Stats role={role} counts={counts} />
-            <DashboardActivity role={role} />
-            <div className="dashboard-grid dashboard-overview-grid">
+            <div className="dashboard-grid dashboard-overview-grid" style={{ marginBottom: '20px' }}>
               <section className="dashboard-panel dashboard-next">
-                <p className="eyebrow">{role === 'gardener' ? 'Provider workspace' : 'Your next step'}</p>
-                <h2>{role === 'gardener' ? 'Respond to requests and build trust locally.' : 'Start or manage a garden project.'}</h2>
+                <p className="eyebrow">{role === 'gardener' ? 'Provider workspace' : 'Quick actions'}</p>
+                <h2>{role === 'gardener' ? 'Respond to requests and grow your profile.' : 'Start or manage a garden project.'}</h2>
                 <p>
                   {role === 'gardener'
-                    ? 'Browse open client requests in Zamboanga City to submit offers, review direct inquiries and mutual agreements, and keep your services and portfolio updated below.'
-                    : 'Browse local gardening services for a direct inquiry, post an open general request with garden photos to compare offers, or plan ideas with the AI assistant.'}
+                    ? 'Browse open client requests in Zamboanga City to submit offers, manage your services and portfolio in dedicated tabs, and coordinate confirmed bookings.'
+                    : 'Browse local gardening services for a direct inquiry, post an open general request with garden photos to compare offers, or chat with the AI Garden Assistant on the bottom right.'}
                 </p>
                 {role === 'client' && (
                   <div className="inline-actions dashboard-action-wrap">
                     <Link className="button" to="/services">Explore services</Link>
                     <Link className="button button-outline" to="/inquiries/new?type=general">Post general request</Link>
-                    <Link className="text-link" to="/assistant">AI Garden Assistant</Link>
+                    <Link className="button button-outline" to="/assistant"><Sparkles size={15} /> AI Garden Assistant</Link>
                   </div>
                 )}
                 {role === 'gardener' && (
                   <div className="inline-actions dashboard-action-wrap">
                     <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
-                    <Link className="button button-outline" to="/inquiries">My inquiries & offers</Link>
+                    <Link className="button button-outline" to="/dashboard?tab=services">Manage services</Link>
+                    <Link className="button button-outline" to="/dashboard?tab=portfolio">Manage portfolio</Link>
                     <Link className="text-link" to={`/gardeners/${user.id}`}>View public profile</Link>
                   </div>
                 )}
@@ -345,7 +587,7 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                 </Link>
               </aside>
             </div>
-            {role === 'gardener' && <GardenerTools isApproved={form.is_approved} />}
+            <DashboardActivity role={role} />
           </>
         )}
       </section>
@@ -353,7 +595,7 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   )
 }
 
-function AdminDashboard({ summary, onStatusChange }) {
+function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted, activeTab }) {
   const counts = summary.counts || {}
   const [categories, setCategories] = useState([])
   const [services, setServices] = useState([])
@@ -361,11 +603,63 @@ function AdminDashboard({ summary, onStatusChange }) {
   const [activity, setActivity] = useState({ inquiries: [], bookings: [] })
   const [reports, setReports] = useState([])
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' })
+  const [editingAccount, setEditingAccount] = useState(null)
+  const [accountSaving, setAccountSaving] = useState(false)
   const [adminError, setAdminError] = useState('')
   const [adminMessage, setAdminMessage] = useState('')
   const [approvalInProgress, setApprovalInProgress] = useState(null)
-  const loadAdminData = useCallback(() => Promise.all([profileApi.adminCategories(), profileApi.adminServices(), profileApi.adminActivity(), profileApi.adminReports(), profileApi.adminPendingGardeners()]).then(([categoryData, serviceData, activityData, reportData, gardenerData]) => { setCategories(categoryData.categories); setServices(serviceData.services); setActivity(activityData); setReports(reportData.reports); setPendingGardeners(gardenerData.gardeners) }).catch((error) => setAdminError(error.message)), [])
+
+  async function saveAccountEdit(event) {
+    event.preventDefault()
+    if (!editingAccount) return
+    setAccountSaving(true); setAdminError(''); setAdminMessage('')
+    try {
+      const result = await profileApi.adminUpdateUser(editingAccount.id, {
+        firstName: editingAccount.firstName,
+        lastName: editingAccount.lastName,
+        phone: editingAccount.phone,
+        role: editingAccount.role,
+        isActive: editingAccount.isActive,
+      })
+      onUserUpdated(result.user)
+      setEditingAccount(null)
+      setAdminMessage('Account updated successfully.')
+    } catch (saveError) {
+      setAdminError(saveError.message)
+    } finally {
+      setAccountSaving(false)
+    }
+  }
+
+  async function handleDeleteAccount(account) {
+    if (!window.confirm(`Delete account "${account.first_name} ${account.last_name}" (${account.email})? This cannot be undone.`)) return
+    setAdminError(''); setAdminMessage('')
+    try {
+      await profileApi.adminDeleteUser(account.id)
+      onUserDeleted(account.id)
+      if (editingAccount?.id === account.id) setEditingAccount(null)
+      setAdminMessage('Account deleted successfully.')
+    } catch (deleteError) {
+      setAdminError(deleteError.message)
+    }
+  }
+
+  const loadAdminData = useCallback(() => Promise.all([
+    profileApi.adminCategories(),
+    profileApi.adminServices(),
+    profileApi.adminActivity(),
+    profileApi.adminReports(),
+    profileApi.adminPendingGardeners(),
+  ]).then(([categoryData, serviceData, activityData, reportData, gardenerData]) => {
+    setCategories(categoryData.categories)
+    setServices(serviceData.services)
+    setActivity(activityData)
+    setReports(reportData.reports)
+    setPendingGardeners(gardenerData.gardeners)
+  }).catch((error) => setAdminError(error.message)), [])
+
   useEffect(() => { loadAdminData() }, [loadAdminData])
+
   async function addCategory(event) { event.preventDefault(); try { await profileApi.createCategory(categoryForm); setCategoryForm({ name: '', description: '' }); loadAdminData() } catch (error) { setAdminError(error.message) } }
   async function toggleCategory(category) { try { await profileApi.updateCategory(category.id, { name: category.name, description: category.description, isActive: !category.is_active }); loadAdminData() } catch (error) { setAdminError(error.message) } }
   async function toggleService(service) { try { await profileApi.updateServiceStatus(service.id, !service.is_active); loadAdminData() } catch (error) { setAdminError(error.message) } }
@@ -381,16 +675,606 @@ function AdminDashboard({ summary, onStatusChange }) {
       setAdminMessage(isApproved ? 'Gardener approved successfully.' : 'Feedback sent. The gardener remains pending.')
     } catch (error) { setAdminError(error.message) } finally { setApprovalInProgress(null) }
   }
-  return <main className="dashboard-page"><AppSidebar /><section className="container dashboard-content"><p className="eyebrow">Administrator dashboard</p><h1>Platform overview.</h1><p className="dashboard-lead">Monitor accounts, marketplace content, reports, and platform activity.</p><div className="stat-grid admin-stats">{[['Clients', counts.clients], ['Gardeners', counts.gardeners], ['Pending gardeners', counts.pending_gardeners], ['Services', counts.services], ['Bookings', counts.bookings], ['Open reports', counts.open_reports]].map(([label, value]) => <div className="stat-card" key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div>{adminError && <div className="form-error" role="alert">{adminError}</div>}{adminMessage && <div className="form-success" role="status">{adminMessage}</div>}  <section className="admin-management-grid" id="admin-approvals"><section className="dashboard-panel"><p className="eyebrow">Gardener approval</p><h2>Review pending gardeners</h2>{pendingGardeners.length === 0 && <p className="form-note">No gardener profiles are waiting for approval.</p>}<div className="admin-item-list">{pendingGardeners.map((gardener) => <div className="admin-item" key={gardener.id}><span><strong>{gardener.business_name || `${gardener.first_name} ${gardener.last_name}`}</strong><small>{gardener.first_name} {gardener.last_name} · {gardener.service_area}</small></span><div className="inline-actions"><button className="button" type="button" disabled={approvalInProgress === gardener.id} onClick={() => updateGardenerApproval(gardener.id, true)}>{approvalInProgress === gardener.id ? 'Saving...' : 'Approve'}</button><button className="table-action" type="button" disabled={approvalInProgress === gardener.id} onClick={() => updateGardenerApproval(gardener.id, false)}>Request changes</button></div></div>)}</div></section><section className="dashboard-panel"><p className="eyebrow">Categories</p><h2>Manage service categories</h2><form className="profile-form admin-category-form" onSubmit={addCategory}><input required placeholder="Category name" value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} /><input placeholder="Description" value={categoryForm.description} onChange={(event) => setCategoryForm({ ...categoryForm, description: event.target.value })} /><button className="button" type="submit">Add category</button></form><div className="admin-item-list">{categories.map((category) => <div className="admin-item" key={category.id}><span><strong>{category.name}</strong><small>{category.is_active ? 'Active' : 'Inactive'}</small></span><button className="table-action" type="button" onClick={() => toggleCategory(category)}>{category.is_active ? 'Deactivate' : 'Activate'}</button></div>)}</div></section><section className="dashboard-panel"><p className="eyebrow">Service listings</p><h2>Monitor marketplace content</h2><div className="admin-item-list">{services.map((service) => <div className="admin-item" key={service.id}><span><strong>{service.title}</strong><small>{service.gardener_name} · {service.is_active ? 'Active' : 'Inactive'}</small></span><button className="table-action" type="button" onClick={() => toggleService(service)}>{service.is_active ? 'Deactivate' : 'Activate'}</button></div>)}</div></section></section><section className="dashboard-panel user-management" id="admin-activity"><p className="eyebrow">Activity</p><h2>Inquiries and bookings</h2><div className="admin-activity-grid"><div><h3>Recent inquiries</h3>{activity.inquiries.slice(0, 8).map((item) => <p className="admin-activity-row" key={item.id}><strong>{item.subject}</strong><span>{item.client_name} → {item.gardener_name} · {formatStatusLabel(item.status)}</span></p>)}</div><div><h3>Recent bookings</h3>{activity.bookings.slice(0, 8).map((item) => <p className="admin-activity-row" key={item.id}><strong>{item.service_title || 'Service booking'}</strong><span>{item.client_name} → {item.gardener_name} · {formatStatusLabel(item.status)}</span></p>)}</div></div></section><section className="dashboard-panel user-management" id="admin-reports"><p className="eyebrow">Reports</p><h2>Review reported content</h2><div className="admin-item-list">{reports.length === 0 && <p className="form-note">No reports have been submitted.</p>}{reports.map((report) => <div className="admin-item admin-report" key={report.id}><span><strong>{report.reason}</strong><small>{report.reporter_name} · {report.status}</small>{report.details && <em>{report.details}</em>}</span><select value={report.status} onChange={(event) => updateReport(report.id, event.target.value)}><option value="open" disabled>Open</option><option value="reviewing">Reviewing</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></div>)}</div></section><section className="dashboard-panel user-management" id="admin-accounts"><p className="eyebrow">Account management</p><h2>Recent accounts</h2><div className="user-table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>{summary.users.map((account) => <tr key={account.id}><td>{account.first_name} {account.last_name}<small>{account.email}</small></td><td>{account.role}</td><td><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td><td><button className="table-action" type="button" onClick={() => onStatusChange(account.id, !account.is_active)}>{account.is_active ? 'Deactivate' : 'Activate'}</button></td></tr>)}</tbody></table></div></section></section></main>
+
+  const sectionMeta = {
+    overview: {
+      title: 'Platform overview.',
+      lead: 'Monitor accounts, marketplace content, reports, and platform activity.',
+    },
+    analytics: {
+      title: 'Analytics & summary reports.',
+      lead: 'Review platform conversion metrics, marketplace supply health, and structured operational logs.',
+    },
+    approvals: {
+      title: 'Approvals & catalog.',
+      lead: 'Review pending gardener applications, manage service categories, and moderate marketplace listings.',
+    },
+    activity: {
+      title: 'Platform activity.',
+      lead: 'Inspect recent client inquiries, provider offers, and booking statuses across Zamboanga City.',
+    },
+    reports: {
+      title: 'Reported content.',
+      lead: 'Review and resolve flagged listings, profiles, or messages.',
+    },
+    accounts: {
+      title: 'Account management.',
+      lead: 'Review registered clients and gardeners and update account access status.',
+    },
+  }[activeTab] || {
+    title: 'Platform overview.',
+    lead: 'Monitor accounts, marketplace content, reports, and platform activity.',
+  }
+
+  return (
+    <main className="dashboard-page">
+      <AppSidebar />
+      <section className="container dashboard-content">
+        <div className="dashboard-topbar">
+          <p className="eyebrow" style={{ margin: 0 }}>Administrator dashboard</p>
+          <div className="dashboard-tabs dashboard-tabs-top" role="tablist" aria-label="Administrator sections">
+            <Link className={`dashboard-tab${activeTab === 'overview' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'overview'} to="/dashboard">Overview</Link>
+            <Link className={`dashboard-tab${activeTab === 'analytics' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'analytics'} to="/dashboard?tab=analytics">Analytics</Link>
+            <Link className={`dashboard-tab${activeTab === 'approvals' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'approvals'} to="/dashboard?tab=approvals">Approvals</Link>
+            <Link className={`dashboard-tab${activeTab === 'activity' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'activity'} to="/dashboard?tab=activity">Activity</Link>
+            <Link className={`dashboard-tab${activeTab === 'reports' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'reports'} to="/dashboard?tab=reports">Reports</Link>
+            <Link className={`dashboard-tab${activeTab === 'accounts' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'accounts'} to="/dashboard?tab=accounts">Accounts</Link>
+          </div>
+        </div>
+        <div className="dashboard-hero-row">
+          <div>
+            <h1>{sectionMeta.title}</h1>
+            <p className="dashboard-lead" style={{ marginBottom: 0 }}>{sectionMeta.lead}</p>
+          </div>
+          {activeTab === 'overview' && (
+            <div className="inline-actions dashboard-hero-actions">
+              <Link className="button" to="/dashboard?tab=approvals">Review approvals</Link>
+              <Link className="button button-outline" to="/dashboard?tab=analytics">Analytics & reports</Link>
+              <Link className="button button-outline" to="/dashboard?tab=accounts">Manage accounts</Link>
+            </div>
+          )}
+        </div>
+
+        {adminError && <div className="form-error" role="alert">{adminError}</div>}
+        {adminMessage && <div className="form-success" role="status">{adminMessage}</div>}
+
+        {activeTab === 'overview' && (
+          <>
+            <div className="stat-grid admin-stats">
+              {[
+                ['Clients', counts.clients],
+                ['Gardeners', counts.gardeners],
+                ['Pending gardeners', counts.pending_gardeners],
+                ['Services', counts.services],
+                ['Bookings', counts.bookings],
+                ['Open reports', counts.open_reports],
+              ].map(([label, value], index) => (
+                <div className={`stat-card${index === 0 ? ' stat-card-primary' : ''}`} key={label}>
+                  <strong>{value ?? 0}</strong>
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+            <section className="dashboard-overview-grid">
+              <div className="dashboard-panel">
+                <div className="activity-heading">
+                  <div>
+                    <p className="eyebrow">Moderation queue</p>
+                    <h2>Pending approvals & reports.</h2>
+                  </div>
+                  <Link className="text-link" to="/dashboard?tab=approvals">Open approvals</Link>
+                </div>
+                {pendingGardeners.length === 0 ? (
+                  <p className="form-note">No gardener profiles are waiting for approval.</p>
+                ) : (
+                  pendingGardeners.slice(0, 4).map((gardener) => (
+                    <Link className="activity-row" to="/dashboard?tab=approvals" key={gardener.id}>
+                      <span>
+                        <strong>{gardener.business_name || `${gardener.first_name} ${gardener.last_name}`}</strong>
+                        <small>{gardener.first_name} {gardener.last_name} · {gardener.service_area}</small>
+                      </span>
+                      <span className="status-badge status-pending">Pending</span>
+                    </Link>
+                  ))
+                )}
+                <div className="inline-actions dashboard-action-wrap">
+                  <Link className="button button-outline" to="/dashboard?tab=reports">
+                    Review reports ({reports.filter((r) => r.status === 'open').length} open)
+                  </Link>
+                  <Link className="text-link" to="/dashboard?tab=accounts">Manage accounts ({summary.users.length})</Link>
+                </div>
+              </div>
+              <div className="dashboard-panel">
+                <div className="activity-heading">
+                  <div>
+                    <p className="eyebrow">Activity snapshot</p>
+                    <h2>Recent inquiries & bookings.</h2>
+                  </div>
+                  <Link className="text-link" to="/dashboard?tab=activity">View all activity</Link>
+                </div>
+                {activity.inquiries.length === 0 && activity.bookings.length === 0 && (
+                  <p className="form-note">No inquiries or bookings recorded yet.</p>
+                )}
+                {activity.inquiries.slice(0, 4).map((item) => (
+                  <Link className="activity-row" to={`/inquiries/${item.id}`} key={`inq-${item.id}`}>
+                    <span>
+                      <strong>{item.subject}</strong>
+                      <small>{item.client_name} → {item.gardener_name}</small>
+                    </span>
+                    <span className={getStatusBadgeClass(item.status)}>{formatStatusLabel(item.status)}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+
+        {activeTab === 'analytics' && (() => {
+          const totalInquiries = activity.inquiries.length
+          const openInquiries = activity.inquiries.filter((i) => i.status === 'open' || i.status === 'responded').length
+          const confirmedInquiries = activity.inquiries.filter((i) => i.status === 'confirmed' || i.status === 'accepted').length
+          const totalBookings = activity.bookings.length
+          const completedBookings = activity.bookings.filter((b) => b.status === 'completed').length
+          const activeBookings = activity.bookings.filter((b) => b.status === 'confirmed' || b.status === 'in_progress' || b.status === 'pending').length
+          const completionRate = totalBookings > 0 ? Math.round((completedBookings / totalBookings) * 100) : 0
+
+          const activeServices = services.filter((s) => s.is_active).length
+          const activeCategories = categories.filter((c) => c.is_active).length
+          const activeAccounts = summary.users.filter((u) => u.is_active).length
+          const openReportsCount = reports.filter((r) => r.status === 'open' || r.status === 'reviewing').length
+          const resolvedReportsCount = reports.filter((r) => r.status === 'resolved' || r.status === 'dismissed').length
+
+          const pct = (part, total) => (total > 0 ? Math.round((part / total) * 100) : 0)
+
+          const summaryRows = [
+            {
+              metric: 'Inquiries — Open / Responded',
+              count: openInquiries,
+              total: totalInquiries,
+              note: 'Awaiting offer review or mutual agreement',
+            },
+            {
+              metric: 'Inquiries — Confirmed / Accepted',
+              count: confirmedInquiries,
+              total: totalInquiries,
+              note: 'Progressed to agreement or confirmed booking',
+            },
+            {
+              metric: 'Bookings — Completed',
+              count: completedBookings,
+              total: totalBookings,
+              note: `${completionRate}% completion rate across all bookings`,
+            },
+            {
+              metric: 'Bookings — Active / Pending',
+              count: activeBookings,
+              total: totalBookings,
+              note: 'Scheduled or awaiting completion',
+            },
+            {
+              metric: 'Services — Active Listings',
+              count: activeServices,
+              total: services.length,
+              note: 'Published and active in catalog',
+            },
+            {
+              metric: 'Categories — Active',
+              count: activeCategories,
+              total: categories.length,
+              note: 'Available for gardener service listings',
+            },
+            {
+              metric: 'Accounts — Active',
+              count: activeAccounts,
+              total: summary.users.length,
+              note: `${counts.clients ?? 0} clients · ${counts.gardeners ?? 0} approved gardeners`,
+            },
+            {
+              metric: 'Reports — Open / Reviewing',
+              count: openReportsCount,
+              total: reports.length,
+              note: `${resolvedReportsCount} resolved or dismissed`,
+            },
+          ]
+
+          return (
+            <>
+              <section className="admin-analytics-grid" aria-label="Platform analytics summary">
+                <div className="dashboard-panel admin-analytics-card">
+                  <div className="activity-heading">
+                    <div>
+                      <p className="eyebrow">Pipeline analytics</p>
+                      <h2>Requests & bookings.</h2>
+                    </div>
+                    <span className="panel-count">{completionRate}% completed</span>
+                  </div>
+                  <div className="analytics-meter-list">
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Active inquiries (open / responded)</span>
+                        <strong>{openInquiries} / {totalInquiries}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill is-amber" style={{ width: `${pct(openInquiries, totalInquiries)}%` }} />
+                      </div>
+                    </div>
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Converted / confirmed inquiries</span>
+                        <strong>{confirmedInquiries} / {totalInquiries}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{ width: `${pct(confirmedInquiries, totalInquiries)}%` }} />
+                      </div>
+                    </div>
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Completed bookings</span>
+                        <strong>{completedBookings} / {totalBookings}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{ width: `${pct(completedBookings, totalBookings)}%` }} />
+                      </div>
+                    </div>
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Upcoming / active bookings</span>
+                        <strong>{activeBookings} / {totalBookings}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill is-amber" style={{ width: `${pct(activeBookings, totalBookings)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="dashboard-panel admin-analytics-card">
+                  <div className="activity-heading">
+                    <div>
+                      <p className="eyebrow">Supply health</p>
+                      <h2>Marketplace catalog.</h2>
+                    </div>
+                    <Link className="text-link" to="/dashboard?tab=approvals">Manage</Link>
+                  </div>
+                  <div className="analytics-meter-list">
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Active service listings</span>
+                        <strong>{activeServices} / {services.length}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{ width: `${pct(activeServices, services.length)}%` }} />
+                      </div>
+                    </div>
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Active service categories</span>
+                        <strong>{activeCategories} / {categories.length}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{ width: `${pct(activeCategories, categories.length)}%` }} />
+                      </div>
+                    </div>
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Pending gardener reviews</span>
+                        <strong>{pendingGardeners.length} waiting</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill is-amber" style={{ width: `${pct(pendingGardeners.length, (counts.gardeners || 0) + pendingGardeners.length)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="dashboard-panel admin-analytics-card">
+                  <div className="activity-heading">
+                    <div>
+                      <p className="eyebrow">Trust & accounts</p>
+                      <h2>Safety & access.</h2>
+                    </div>
+                    <Link className="text-link" to="/dashboard?tab=accounts">Accounts</Link>
+                  </div>
+                  <div className="analytics-meter-list">
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Active user accounts</span>
+                        <strong>{activeAccounts} / {summary.users.length}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{ width: `${pct(activeAccounts, summary.users.length)}%` }} />
+                      </div>
+                    </div>
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Open / reviewing reports</span>
+                        <strong>{openReportsCount} / {reports.length}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill is-amber" style={{ width: `${pct(openReportsCount, reports.length)}%` }} />
+                      </div>
+                    </div>
+                    <div className="analytics-meter-row">
+                      <div className="analytics-meter-label">
+                        <span>Resolved / dismissed reports</span>
+                        <strong>{resolvedReportsCount} / {reports.length}</strong>
+                      </div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{ width: `${pct(resolvedReportsCount, reports.length)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="dashboard-panel user-management">
+                <div className="activity-heading">
+                  <div>
+                    <p className="eyebrow">Summary log</p>
+                    <h2>Operational breakdown report.</h2>
+                  </div>
+                  <Link className="text-link" to="/dashboard?tab=activity">Inspect activity log</Link>
+                </div>
+                <div className="user-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Metric</th>
+                        <th>Count</th>
+                        <th>Share</th>
+                        <th>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summaryRows.map((row) => (
+                        <tr key={row.metric}>
+                          <td><strong>{row.metric}</strong></td>
+                          <td>{row.count} / {row.total}</td>
+                          <td>{pct(row.count, row.total)}%</td>
+                          <td><small>{row.note}</small></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          )
+        })()}
+
+        {activeTab === 'approvals' && (
+          <section className="admin-management-grid" id="admin-approvals">
+            <section className="dashboard-panel">
+              <p className="eyebrow">Gardener approval</p>
+              <h2>Review pending gardeners</h2>
+              {pendingGardeners.length === 0 && <p className="form-note">No gardener profiles are waiting for approval.</p>}
+              <div className="admin-item-list">
+                {pendingGardeners.map((gardener) => (
+                  <div className="admin-item" key={gardener.id}>
+                    <span>
+                      <strong>{gardener.business_name || `${gardener.first_name} ${gardener.last_name}`}</strong>
+                      <small>{gardener.first_name} {gardener.last_name} · {gardener.service_area}</small>
+                    </span>
+                    <div className="inline-actions">
+                      <button className="button" type="button" disabled={approvalInProgress === gardener.id} onClick={() => updateGardenerApproval(gardener.id, true)}>
+                        {approvalInProgress === gardener.id ? 'Saving...' : 'Approve'}
+                      </button>
+                      <button className="table-action" type="button" disabled={approvalInProgress === gardener.id} onClick={() => updateGardenerApproval(gardener.id, false)}>
+                        Request changes
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section className="dashboard-panel">
+              <p className="eyebrow">Categories</p>
+              <h2>Manage service categories</h2>
+              <form className="profile-form admin-category-form" onSubmit={addCategory}>
+                <input required placeholder="Category name" value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} />
+                <input placeholder="Description" value={categoryForm.description} onChange={(event) => setCategoryForm({ ...categoryForm, description: event.target.value })} />
+                <button className="button" type="submit">Add category</button>
+              </form>
+              <div className="admin-item-list">
+                {categories.map((category) => (
+                  <div className="admin-item" key={category.id}>
+                    <span>
+                      <strong>{category.name}</strong>
+                      <small>{category.is_active ? 'Active' : 'Inactive'}</small>
+                    </span>
+                    <button className="table-action" type="button" onClick={() => toggleCategory(category)}>
+                      {category.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section className="dashboard-panel">
+              <p className="eyebrow">Service listings</p>
+              <h2>Monitor marketplace content</h2>
+              <div className="admin-item-list">
+                {services.map((service) => (
+                  <div className="admin-item" key={service.id}>
+                    <span>
+                      <strong>{service.title}</strong>
+                      <small>{service.gardener_name} · {service.is_active ? 'Active' : 'Inactive'}</small>
+                    </span>
+                    <button className="table-action" type="button" onClick={() => toggleService(service)}>
+                      {service.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </section>
+        )}
+
+        {activeTab === 'activity' && (
+          <section className="dashboard-panel user-management" id="admin-activity">
+            <p className="eyebrow">Activity</p>
+            <h2>Inquiries and bookings</h2>
+            <div className="admin-activity-grid">
+              <div className="admin-activity-column">
+                <div className="admin-activity-colhead">
+                  <h3>Recent inquiries</h3>
+                  <span className="panel-count">{activity.inquiries.length}</span>
+                </div>
+                {activity.inquiries.length === 0 && <p className="form-note">No inquiries recorded yet.</p>}
+                {activity.inquiries.slice(0, 20).map((item) => (
+                  <Link className="admin-activity-row admin-activity-link" to={`/inquiries/${item.id}`} key={item.id}>
+                    <div>
+                      <strong>{item.subject}</strong>
+                      <span>{item.client_name} → {item.gardener_name}</span>
+                    </div>
+                    <span className={getStatusBadgeClass(item.status)}>{formatStatusLabel(item.status)}</span>
+                  </Link>
+                ))}
+              </div>
+              <div className="admin-activity-column">
+                <div className="admin-activity-colhead">
+                  <h3>Recent bookings</h3>
+                  <span className="panel-count">{activity.bookings.length}</span>
+                </div>
+                {activity.bookings.length === 0 && <p className="form-note">No bookings recorded yet.</p>}
+                {activity.bookings.slice(0, 20).map((item) => (
+                  <div className="admin-activity-row" key={item.id}>
+                    <div>
+                      <strong>{item.service_title || 'Service booking'}</strong>
+                      <span>{item.client_name} → {item.gardener_name}</span>
+                    </div>
+                    <span className={getStatusBadgeClass(item.status)}>{formatStatusLabel(item.status)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'reports' && (
+          <section className="dashboard-panel user-management" id="admin-reports">
+            <p className="eyebrow">Reports</p>
+            <h2>Review reported content</h2>
+            <div className="admin-item-list">
+              {reports.length === 0 && <p className="form-note">No reports have been submitted.</p>}
+              {reports.map((report) => (
+                <div className="admin-item admin-report" key={report.id}>
+                  <span>
+                    <strong>{report.reason}</strong>
+                    <small>{report.reporter_name} · {report.status}</small>
+                    {report.details && <em>{report.details}</em>}
+                  </span>
+                  <select value={report.status} onChange={(event) => updateReport(report.id, event.target.value)}>
+                    <option value="open" disabled>Open</option>
+                    <option value="reviewing">Reviewing</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="dismissed">Dismissed</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'accounts' && (
+          <section className="dashboard-panel user-management" id="admin-accounts">
+            <p className="eyebrow">Account management</p>
+            <h2>Manage accounts</h2>
+            {editingAccount && (
+              <form className="profile-form admin-account-edit-form" onSubmit={saveAccountEdit}>
+                <div className="activity-heading">
+                  <h3>Edit {editingAccount.email}</h3>
+                  <button className="table-action" type="button" onClick={() => setEditingAccount(null)}>Cancel</button>
+                </div>
+                <div className="form-row">
+                  <label>First name<input required value={editingAccount.firstName} onChange={(e) => setEditingAccount({ ...editingAccount, firstName: e.target.value })} /></label>
+                  <label>Last name<input required value={editingAccount.lastName} onChange={(e) => setEditingAccount({ ...editingAccount, lastName: e.target.value })} /></label>
+                </div>
+                <div className="form-row">
+                  <label>Phone<input value={editingAccount.phone} onChange={(e) => setEditingAccount({ ...editingAccount, phone: e.target.value })} /></label>
+                  <label>
+                    Role
+                    <select value={editingAccount.role} onChange={(e) => setEditingAccount({ ...editingAccount, role: e.target.value })}>
+                      <option value="client">Client</option>
+                      <option value="gardener">Gardener</option>
+                      <option value="administrator">Administrator</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="inline-actions">
+                  <button className="button" type="submit" disabled={accountSaving}>
+                    <Save size={15} /> {accountSaving ? 'Saving...' : 'Save changes'}
+                  </button>
+                </div>
+              </form>
+            )}
+            <div className="user-table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                  {summary.users.map((account) => (
+                    <tr key={account.id}>
+                      <td>{account.first_name} {account.last_name}<small>{account.email}</small></td>
+                      <td>{account.role}</td>
+                      <td><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td>
+                      <td>
+                        <div className="inline-actions">
+                          <button
+                            className="table-action"
+                            type="button"
+                            onClick={() => setEditingAccount({
+                              id: account.id,
+                              email: account.email,
+                              firstName: account.first_name,
+                              lastName: account.last_name,
+                              phone: account.phone || '',
+                              role: account.role,
+                              isActive: Boolean(account.is_active),
+                            })}
+                          >
+                            Edit
+                          </button>
+                          <button className="table-action" type="button" onClick={() => onStatusChange(account.id, !account.is_active)}>
+                            {account.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button className="table-action table-action-danger" type="button" onClick={() => handleDeleteAccount(account)}>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+      </section>
+    </main>
+  )
 }
 
 export default function DashboardPage({ profileView = false }) {
   const { user } = useAuth()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
-  const activeTab = resolveDashboardTab(searchParams.get('tab'), profileView)
+  const hashTab = location.hash?.startsWith('#admin-') ? location.hash.replace('#admin-', '') : ''
+  const activeTab = resolveDashboardTab(searchParams.get('tab') || hashTab, profileView)
   const [profileData, setProfileData] = useState({ form: initialProfile, counts: {} })
   const [summary, setSummary] = useState({ counts: {}, users: [] })
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!location.hash) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    const target = document.getElementById(location.hash.slice(1))
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [location.hash, summary])
 
   useEffect(() => {
     if (user.role === 'administrator') {
@@ -412,7 +1296,21 @@ export default function DashboardPage({ profileView = false }) {
     } catch (statusError) { setError(statusError.message) }
   }
 
+  function handleUserUpdated(updatedUser) {
+    setSummary((current) => ({
+      ...current,
+      users: current.users.map((account) => (account.id === updatedUser.id ? updatedUser : account)),
+    }))
+  }
+
+  function handleUserDeleted(deletedUserId) {
+    setSummary((current) => ({
+      ...current,
+      users: current.users.filter((account) => account.id !== deletedUserId),
+    }))
+  }
+
   if (error) return <main className="dashboard-page"><AppSidebar /><section className="container dashboard-content"><div className="form-error" role="alert">{error}</div></section></main>
-  if (user.role === 'administrator') return <AdminDashboard summary={summary} onStatusChange={changeStatus} />
+  if (user.role === 'administrator') return <AdminDashboard summary={summary} onStatusChange={changeStatus} onUserUpdated={handleUserUpdated} onUserDeleted={handleUserDeleted} activeTab={activeTab} />
   return <UserDashboard user={user} profileData={profileData} activeTab={activeTab} onSaved={(result) => setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))} />
 }
