@@ -1,6 +1,6 @@
 # HugaTiera – Folder Structure
 
-This document reflects the **actual current repository structure** of HugaTiera (verified November 12, 2026).
+This document reflects the **actual current repository structure** of HugaTiera (verified November 17, 2026).
 
 ```text
 HugaTiera/
@@ -44,6 +44,7 @@ HugaTiera/
 │   │   ├── ai.service.js
 │   │   └── notification.service.js
 │   ├── tests/
+│   │   ├── avatarsServicesAdmin.test.js
 │   │   ├── integration.test.js
 │   │   ├── r2.requestImages.test.js
 │   │   ├── r3.agreements.test.js
@@ -51,10 +52,12 @@ HugaTiera/
 │   │   ├── r5.generalRequest.test.js
 │   │   └── r6.aiAssistance.test.js
 │   ├── uploads/
+│   │   ├── avatars/
 │   │   ├── portfolios/
-│   │   └── request-images/
-│   │       ├── originals/
-│   │       └── generated/
+│   │   ├── request-images/
+│   │   │   ├── originals/
+│   │   │   └── generated/
+│   │   └── services/
 │   ├── .env.example
 │   ├── app.js
 │   ├── package.json
@@ -66,7 +69,9 @@ HugaTiera/
 │   ├── backups/
 │   ├── migrations/
 │   │   ├── 001_unified_requests_and_agreements.sql
-│   │   └── 001_unified_requests_and_agreements_rollback.sql
+│   │   ├── 001_unified_requests_and_agreements_rollback.sql
+│   │   ├── 002_avatars_service_images.sql
+│   │   └── 002_avatars_service_images_rollback.sql
 │   ├── schema/
 │   │   └── hugatiera_schema.sql
 │   └── README.md
@@ -87,6 +92,8 @@ HugaTiera/
 │   │   │   ├── react.svg
 │   │   │   └── vite.svg
 │   │   ├── components/
+│   │   │   ├── AiAssistantWidget.jsx
+│   │   │   ├── AppSidebar.jsx
 │   │   │   └── ProtectedRoute.jsx
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx
