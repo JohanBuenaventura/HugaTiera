@@ -1,5 +1,6 @@
 const { pool } = require('../config/database')
 const { createNotification } = require('../services/notification.service')
+const { avatarsDirectory, removeFileIfExists } = require('../middleware/upload.middleware')
 
 async function getSummary(req, res, next) {
   try {
@@ -13,7 +14,7 @@ async function getSummary(req, res, next) {
         (SELECT COUNT(*) FROM gardener_profiles WHERE is_approved = FALSE) AS pending_gardeners
     `)
     const [users] = await pool.query(
-      'SELECT id, email, role, first_name, last_name, is_active, created_at FROM users ORDER BY created_at DESC LIMIT 50',
+      'SELECT id, email, role, first_name, last_name, phone, avatar_path, is_active, created_at FROM users ORDER BY created_at DESC LIMIT 50',
     )
 
     return res.json({ counts: counts[0], users })
@@ -228,14 +229,103 @@ async function updateReport(req, res, next) {
   } catch (error) { return next(error) }
 }
 
+async function updateUser(req, res, next) {
+  const userId = Number(req.params.userId)
+  if (!Number.isInteger(userId) || userId < 1) {
+    return res.status(400).json({ message: 'A valid user is required.' })
+  }
+
+  const firstName = typeof req.body.firstName === 'string' ? req.body.firstName.trim() : ''
+  const lastName = typeof req.body.lastName === 'string' ? req.body.lastName.trim() : ''
+  const phone = typeof req.body.phone === 'string' && req.body.phone.trim() ? req.body.phone.trim() : null
+  const role = typeof req.body.role === 'string' ? req.body.role.trim() : ''
+  const isActive = req.body.isActive === undefined ? true : (req.body.isActive === true || req.body.isActive === 'true')
+
+  if (!firstName || firstName.length > 100 || !lastName || lastName.length > 100) {
+    return res.status(400).json({ message: 'First name and last name are required.' })
+  }
+  if (phone && phone.length > 30) {
+    return res.status(400).json({ message: 'Phone number must be 30 characters or fewer.' })
+  }
+  if (!['client', 'gardener', 'administrator'].includes(role)) {
+    return res.status(400).json({ message: 'Role must be client, gardener, or administrator.' })
+  }
+  if (userId === req.user.id && (role !== 'administrator' || !isActive)) {
+    return res.status(400).json({ message: 'You cannot demote or deactivate your own administrator account.' })
+  }
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [existing] = await connection.execute('SELECT id FROM users WHERE id = ? LIMIT 1', [userId])
+    if (!existing.length) {
+      await connection.rollback()
+      return res.status(404).json({ message: 'User was not found.' })
+    }
+
+    await connection.execute(
+      'UPDATE users SET first_name = ?, last_name = ?, phone = ?, role = ?, is_active = ? WHERE id = ?',
+      [firstName, lastName, phone, role, isActive, userId],
+    )
+    if (role === 'client') {
+      await connection.execute('INSERT IGNORE INTO client_profiles (user_id) VALUES (?)', [userId])
+    } else if (role === 'gardener') {
+      await connection.execute('INSERT IGNORE INTO gardener_profiles (user_id) VALUES (?)', [userId])
+    }
+
+    const [rows] = await connection.execute(
+      'SELECT id, email, role, first_name, last_name, phone, avatar_path, is_active, created_at FROM users WHERE id = ? LIMIT 1',
+      [userId],
+    )
+    await connection.commit()
+    return res.json({ user: rows[0] })
+  } catch (error) {
+    await connection.rollback()
+    return next(error)
+  } finally {
+    connection.release()
+  }
+}
+
+async function deleteUser(req, res, next) {
+  const userId = Number(req.params.userId)
+  if (!Number.isInteger(userId) || userId < 1) {
+    return res.status(400).json({ message: 'A valid user is required.' })
+  }
+  if (userId === req.user.id) {
+    return res.status(400).json({ message: 'You cannot delete your own administrator account.' })
+  }
+
+  try {
+    const [rows] = await pool.execute('SELECT id, avatar_path FROM users WHERE id = ? LIMIT 1', [userId])
+    if (!rows.length) {
+      return res.status(404).json({ message: 'User was not found.' })
+    }
+    const avatarPath = rows[0].avatar_path
+
+    await pool.execute('DELETE FROM users WHERE id = ?', [userId])
+    await removeFileIfExists(avatarsDirectory, avatarPath)
+    return res.status(204).send()
+  } catch (error) {
+    if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+      return res.status(409).json({
+        message: 'This account has existing inquiries, bookings, or records and cannot be deleted. Deactivate the account instead.',
+      })
+    }
+    return next(error)
+  }
+}
+
 module.exports = {
   createCategory,
+  deleteUser,
   getSummary,
   listPendingGardeners,
   listActivity,
   listCategories,
   listReports,
   listServices,
+  updateUser,
   updateUserStatus,
   updateCategory,
   updateGardenerApproval,
