@@ -1,14 +1,34 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Leaf, LogOut } from 'lucide-react'
+import {
+  BarChart3,
+  Bell,
+  CalendarDays,
+  ClipboardList,
+  Leaf,
+  LogOut,
+  Menu,
+  MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PieChart,
+  Settings,
+  ShieldCheck,
+  Store,
+  Users,
+  X,
+} from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { communicationApi } from '../services/communication'
 import { getDashboardNavLinks } from '../services/profiles'
+import AiAssistantWidget from './AiAssistantWidget'
 
 export default function AppSidebar() {
   const { user, logout } = useAuth()
   const location = useLocation()
   const [unreadCounts, setUnreadCounts] = useState({})
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('hugatiera.sidebar.collapsed') === 'true')
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     if (!user || !['client', 'gardener'].includes(user.role)) return
@@ -25,7 +45,9 @@ export default function AppSidebar() {
       setUnreadCounts({
         inquiries: count('inquiry'),
         bookings: count('booking'),
-        messages: count('conversation') + general,
+        messages: count('conversation'),
+        notifications: unread.length,
+        general,
       })
     }).catch(() => {})
   }, [user])
@@ -34,28 +56,124 @@ export default function AppSidebar() {
 
   const links = getDashboardNavLinks(user.role, unreadCounts)
   const isActive = (item) => {
-    if (item.type === 'anchor') return location.hash === item.href.slice(1)
-    if (item.to === '/dashboard') return location.pathname === '/dashboard' && !location.search
-    return location.pathname === item.to.split('?')[0]
+    if (item.type === 'anchor') {
+      return location.pathname === '/dashboard' && location.hash === item.href
+    }
+    if (item.to === '/dashboard') {
+      return location.pathname === '/dashboard' && !location.search && !location.hash
+    }
+    if (item.to.includes('tab=')) {
+      const tabValue = item.to.split('tab=')[1]
+      return (location.pathname === '/dashboard' && location.search.includes(`tab=${tabValue}`))
+        || (tabValue === 'profile' && location.pathname === '/profile')
+    }
+    const base = item.to.split('?')[0]
+    return location.pathname === base || location.pathname.startsWith(`${base}/`)
   }
-  const badge = (count) => count > 0 && <b className="notification-badge">{count}</b>
+  const badge = (count) => count > 0 && <b className="notification-badge">{count > 99 ? '99+' : count}</b>
+  const iconFor = (label) => ({
+    Overview: BarChart3,
+    Analytics: PieChart,
+    Inquiries: ClipboardList,
+    Messages: MessageCircle,
+    Notifications: Bell,
+    Bookings: CalendarDays,
+    Profile: Settings,
+    Approvals: ShieldCheck,
+    Activity: BarChart3,
+    Reports: ClipboardList,
+    Accounts: Users,
+    Marketplace: Store,
+  }[label] || ClipboardList)
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current
+      localStorage.setItem('hugatiera.sidebar.collapsed', String(next))
+      return next
+    })
+  }
+
+  const closeMobile = () => setMobileOpen(false)
+
+  const renderLink = (item) => {
+    const Icon = iconFor(item.label)
+    const active = isActive(item)
+    const destination = item.type === 'anchor' ? `/dashboard${item.href}` : item.to
+    return (
+      <Link
+        key={item.label}
+        to={destination}
+        onClick={closeMobile}
+        className={`${active ? 'is-active ' : ''}app-sidebar-link`}
+        aria-current={active ? 'page' : undefined}
+        title={collapsed ? item.label : undefined}
+      >
+        <span className="app-sidebar-link-icon"><Icon size={17} strokeWidth={1.9} /></span>
+        <span className="app-sidebar-link-label">{item.label}</span>
+        {badge(item.badge)}
+      </Link>
+    )
+  }
 
   return (
-    <aside className="app-sidebar">
-      <Link className="brand app-sidebar-brand" to="/">
-        <span className="brand-mark"><Leaf size={19} /></span>
-        <span>Huga<span>Tiera</span></span>
-      </Link>
-      <div className="app-sidebar-role">
-        <span className="app-sidebar-avatar">{user.firstName?.slice(0, 1) || 'H'}</span>
-        <span><strong>{user.firstName || 'Account'}</strong><small>{user.role}</small></span>
-      </div>
-      <nav className="app-sidebar-nav" aria-label="Application navigation">
-        {links.map((item) => item.type === 'anchor'
-          ? <a className={isActive(item) ? 'is-active' : ''} href={item.href} key={item.label}>{item.label} {badge(item.badge)}</a>
-          : <Link className={isActive(item) ? 'is-active' : ''} to={item.to} key={item.label}>{item.label} {badge(item.badge)}</Link>)}
-      </nav>
-      <button className="app-sidebar-logout" type="button" onClick={logout}><LogOut size={16} /> Log out</button>
-    </aside>
+    <>
+      <aside className={`app-sidebar${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' is-mobile-open' : ''}`}>
+        <div className="app-sidebar-topline">
+          <Link
+            className="brand app-sidebar-brand"
+            to="/dashboard"
+            onClick={closeMobile}
+            aria-label="HugaTiera dashboard"
+            title={collapsed ? 'HugaTiera dashboard' : undefined}
+          >
+            <span className="brand-mark" aria-hidden="true"><Leaf size={18} /></span>
+            <span className="app-sidebar-brand-label">Huga<span>Tiera</span></span>
+          </Link>
+          <button
+            className="app-sidebar-toggle"
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
+          <button
+            className="app-sidebar-mobile-toggle"
+            type="button"
+            onClick={() => setMobileOpen((open) => !open)}
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileOpen}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+        <div className="app-sidebar-drawer">
+          <div className="app-sidebar-section-label">Navigation</div>
+          <nav className="app-sidebar-nav" aria-label="Application navigation">
+            {links.map(renderLink)}
+          </nav>
+          <div className="app-sidebar-role">
+            <span className="app-sidebar-avatar" aria-hidden="true">{user.firstName?.slice(0, 1) || 'H'}</span>
+            <span className="app-sidebar-role-copy">
+              <strong>{user.firstName || 'Account'}</strong>
+              <small>{user.role}</small>
+            </span>
+          </div>
+          <button
+            className="app-sidebar-logout"
+            type="button"
+            onClick={() => { closeMobile(); logout() }}
+            title={collapsed ? 'Log out' : undefined}
+          >
+            <LogOut size={16} />
+            <span className="app-sidebar-link-label">Log out</span>
+          </button>
+        </div>
+      </aside>
+      {user.role !== 'administrator' && location.pathname !== '/assistant' && <AiAssistantWidget />}
+    </>
   )
 }
