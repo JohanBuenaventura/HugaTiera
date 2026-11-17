@@ -203,7 +203,7 @@ export function RegisterPage() {
       </label>
       <fieldset><legend>I want to...</legend><div className="role-options"><label className={form.role === 'client' ? 'selected' : ''}><input type="radio" name="role" value="client" checked={form.role === 'client'} onChange={(event) => setForm({ ...form, role: event.target.value })} /> Find a gardener</label><label className={form.role === 'gardener' ? 'selected' : ''}><input type="radio" name="role" value="gardener" checked={form.role === 'gardener'} onChange={(event) => setForm({ ...form, role: event.target.value })} /> Offer services</label></div></fieldset>
       <button className="button" type="submit" disabled={submitting}>{submitting ? 'Creating account...' : 'Create account'}</button>
-      {location.pathname && <p className="form-note">Your account is protected with a secure session cookie.</p>}
+      {location.pathname && <p className="form-note"></p>}
     </form>
   </AuthLayout>
 }
