@@ -76,14 +76,14 @@ const steps = [
   ['04', 'Book with confidence', 'Confirm the service only when both sides approve.'],
 ]
 
-function Logo() {
+function Logo({ to = '/' }) {
   return (
-    <a className="brand" href="#top" aria-label="HugaTiera home">
+    <Link className="brand" to={to} aria-label="HugaTiera home">
       <span className="brand-mark" aria-hidden="true">
         <Leaf size={19} strokeWidth={2.5} />
       </span>
       <span>Huga<span>Tiera</span></span>
-    </a>
+    </Link>
   )
 }
 
@@ -100,9 +100,31 @@ function HomePage() {
   const [featuredServices, setFeaturedServices] = useState([])
   const [categoryMap, setCategoryMap] = useState({})
   const [featuredError, setFeaturedError] = useState('')
+  const [testimonialIndex, setTestimonialIndex] = useState(0)
   const { user } = useAuth()
 
   const closeMenu = () => setMenuOpen(false)
+  const testimonials = [
+    {
+      quote: '“I finally knew where to start. Seeing local work and being able to ask questions made the whole process feel much less overwhelming.”',
+      initials: 'AM',
+      name: 'Anna Marie',
+      meta: 'Home gardener · Zamboanga City',
+    },
+    {
+      quote: '“Posting a photo of our backyard got us two clear offers within a day. Having the scope and schedule agreed in writing gave us peace of mind.”',
+      initials: 'MR',
+      name: 'Marco Reyes',
+      meta: 'Client · Tetuan, Zamboanga City',
+    },
+    {
+      quote: '“Clients come to me with clearer ideas and photos already organized. It saves time on site visits and keeps every booking straightforward.”',
+      initials: 'JL',
+      name: 'Jose Lim',
+      meta: 'Approved gardener · Pasonanca',
+    },
+  ]
+  const currentTestimonial = testimonials[testimonialIndex]
 
   useEffect(() => {
     servicesApi.list({ sort: 'newest', limit: 3 })
@@ -123,7 +145,7 @@ function HomePage() {
     <div className="editorial-home" id="top">
       <header className="editorial-header">
         <div className="editorial-nav container">
-          <Logo />
+          <Logo to={user ? '/dashboard' : '/'} />
           <button className="menu-toggle editorial-menu-toggle" type="button" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
             {menuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
@@ -132,6 +154,9 @@ function HomePage() {
             <a href="#services" onClick={closeMenu}>Services</a>
             <a href="#how-it-works" onClick={closeMenu}>Process</a>
             <Link to="/assistant" onClick={closeMenu}>Garden assistant</Link>
+            <Link className="editorial-mobile-cta" to={user ? '/dashboard' : '/login'} onClick={closeMenu}>
+              {user ? 'Dashboard' : 'Get started'} <ArrowUpRight size={15} />
+            </Link>
           </nav>
           <Button href={user ? '/dashboard' : '/login'} onClick={closeMenu}>{user ? 'Dashboard' : 'Get started'} <ArrowUpRight size={16} /></Button>
         </div>
@@ -200,8 +225,39 @@ function HomePage() {
 
         <section className="editorial-testimonials editorial-section">
           <div className="container editorial-testimonial-grid">
-            <div><p className="editorial-kicker editorial-kicker-light">A little inspiration</p><h2>“The best gardens<br /><em>feel like you.”</em></h2><div className="editorial-testimonial-controls"><button type="button" aria-label="Previous testimonial"><ChevronLeft size={18} /></button><button type="button" aria-label="Next testimonial"><ChevronRight size={18} /></button></div></div>
-            <article className="editorial-quote-card"><div className="editorial-stars" aria-label="5 out of 5 stars"><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /></div><blockquote>“I finally knew where to start. Seeing local work and being able to ask questions made the whole process feel much less overwhelming.”</blockquote><div className="editorial-quote-person"><span>AM</span><div><strong>Anna Marie</strong><small>Home gardener · Zamboanga City</small></div></div></article>
+            <div>
+              <p className="editorial-kicker editorial-kicker-light">A little inspiration</p>
+              <h2>“The best gardens<br /><em>feel like you.”</em></h2>
+              <div className="editorial-testimonial-controls">
+                <button
+                  type="button"
+                  aria-label="Previous testimonial"
+                  onClick={() => setTestimonialIndex((idx) => (idx - 1 + testimonials.length) % testimonials.length)}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next testimonial"
+                  onClick={() => setTestimonialIndex((idx) => (idx + 1) % testimonials.length)}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
+            <article className="editorial-quote-card">
+              <div className="editorial-stars" aria-label="5 out of 5 stars">
+                <Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" /><Star size={15} fill="currentColor" />
+              </div>
+              <blockquote>{currentTestimonial.quote}</blockquote>
+              <div className="editorial-quote-person">
+                <span>{currentTestimonial.initials}</span>
+                <div>
+                  <strong>{currentTestimonial.name}</strong>
+                  <small>{currentTestimonial.meta}</small>
+                </div>
+              </div>
+            </article>
           </div>
         </section>
 
@@ -255,7 +311,8 @@ function App() {
               <Route path="/profile" element={<DashboardPage profileView />} />
               <Route path="/inquiries" element={<InquiryPage />} />
               <Route path="/inquiries/new" element={<InquiryPage create />} />
-              <Route path="/messages" element={<CommunicationPage />} />
+              <Route path="/messages" element={<CommunicationPage mode="messages" />} />
+              <Route path="/notifications" element={<CommunicationPage mode="notifications" />} />
               <Route path="/bookings" element={<BookingPage />} />
               <Route path="/bookings/new" element={<BookingPage create />} />
               <Route path="/bookings/:bookingId" element={<BookingPage detail />} />
