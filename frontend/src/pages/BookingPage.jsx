@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, Leaf, MapPin } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -10,6 +10,7 @@ import {
   getStatusBadgeClass,
 } from '../services/bookings'
 import { inquiriesApi } from '../services/inquiries'
+import { fetchInquiryImages, getRequestImageUrl } from '../services/requestImages'
 import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
@@ -300,33 +301,89 @@ function BookingDetails({ id }) {
 }
 
 function BookingList() {
+  const { user } = useAuth()
   const [bookings, setBookings] = useState([])
+  const [covers, setCovers] = useState({})
   const [error, setError] = useState('')
-  useEffect(() => { bookingsApi.list().then((result) => setBookings(result.bookings)).catch((loadError) => setError(loadError.message)) }, [])
+  useEffect(() => {
+    let active = true
+    bookingsApi.list()
+      .then(async (result) => {
+        if (!active) return
+        setBookings(result.bookings)
+        const inquiryIds = [...new Set(result.bookings.map((b) => b.inquiry_id).filter(Boolean))]
+        if (inquiryIds.length === 0) return
+        const settled = await Promise.allSettled(
+          inquiryIds.map((inqId) => fetchInquiryImages(inqId).then((res) => [inqId, res.images?.[0]?.id || null])),
+        )
+        if (!active) return
+        const nextCovers = {}
+        for (const item of settled) {
+          if (item.status === 'fulfilled') {
+            const [inqId, imageId] = item.value
+            if (imageId) nextCovers[inqId] = getRequestImageUrl(imageId)
+          }
+        }
+        setCovers(nextCovers)
+      })
+      .catch((loadError) => { if (active) setError(loadError.message) })
+    return () => { active = false }
+  }, [])
+
   return (
     <section className="container booking-content">
-      <p className="eyebrow">Service schedule</p>
-      <h1>Bookings.</h1>
+      <p className="eyebrow">Agreements & schedule</p>
+      <h1>Bookings and agreements.</h1>
+      <p className="booking-note">
+        Track confirmed service arrangements, agreed pricing, and mutual agreement versions.
+      </p>
       {error && <div className="form-error">{error}</div>}
       {!error && bookings.length === 0 && <div className="empty-state">You do not have any bookings yet.</div>}
-      <div className="booking-list">
-        {bookings.map((booking) => (
-          <Link className="booking-list-item" to={`/bookings/${booking.id}`} key={booking.id}>
-            <div>
-              <strong>{booking.service_title || 'Gardening service'}</strong>
-              <span>
-                {[
-                  new Date(booking.scheduled_start).toLocaleString(),
-                  booking.agreement_version != null ? `Agreement v${booking.agreement_version}` : null,
-                  booking.agreed_amount != null ? `PHP ${Number(booking.agreed_amount).toLocaleString()}` : null,
-                ].filter(Boolean).join(' · ')}
-              </span>
-            </div>
-            <span className={getStatusBadgeClass(booking.status)}>
-              {formatStatusLabel(booking.status)}
-            </span>
-          </Link>
-        ))}
+      <div className="marketplace-grid marketplace-card-grid">
+        {bookings.map((booking) => {
+          const coverUrl = booking.inquiry_id ? covers[booking.inquiry_id] : null
+          const otherParty = user?.role === 'gardener' ? booking.client_name : booking.gardener_name
+          return (
+            <article className="marketplace-card visual-market-card" key={booking.id}>
+              <div className="marketplace-card-media">
+                {coverUrl ? (
+                  <img src={coverUrl} alt={booking.service_title || 'Gardening service'} loading="lazy" />
+                ) : (
+                  <div className="marketplace-card-placeholder" aria-hidden="true">
+                    <Leaf size={26} />
+                    <span>{booking.agreement_version != null ? `Agreement v${booking.agreement_version}` : 'Service booking'}</span>
+                  </div>
+                )}
+                <span className={`${getStatusBadgeClass(booking.status)} media-status-badge`}>
+                  {formatStatusLabel(booking.status)}
+                </span>
+              </div>
+              <div className="marketplace-card-body">
+                <h2>{booking.service_title || 'Gardening service'}</h2>
+                <p>
+                  {booking.agreed_scope || booking.notes || 'Confirmed gardening service arrangement.'}
+                </p>
+                <div className="service-meta">
+                  <span>{otherParty || 'Confirmed party'}</span>
+                  <strong className="card-price">
+                    {booking.agreed_amount != null ? `₱${Number(booking.agreed_amount).toLocaleString()}` : 'See agreement'}
+                  </strong>
+                </div>
+                <div className="marketplace-card-footer">
+                  <span className="card-area">
+                    <CalendarDays size={13} />
+                    {booking.scheduled_start ? new Date(booking.scheduled_start).toLocaleDateString() : 'TBD'}
+                    {booking.location ? ` · ` : ''}
+                    {booking.location && <><MapPin size={13} /> {booking.location}</>}
+                  </span>
+                  <Link className="card-cta" to={`/bookings/${booking.id}`}>
+                    View agreement <ArrowRight size={15} />
+                  </Link>
+                </div>
+              </div>
+            </article>
+          )
+        })}
       </div>
     </section>
   )
