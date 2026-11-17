@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, Leaf } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
+import AppSidebar from '../components/AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
 import { profileApi } from '../services/profiles'
@@ -36,14 +37,20 @@ export default function GardenerPage() {
   }
 
   return (
-    <main className="marketplace-page">
-      <header className="dashboard-header container">
-        <Link className="brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
-        <div className="inline-actions">
-          <Link className="text-link" to="/services">Browse services</Link>
-          <Link className="button button-outline" to={user ? '/dashboard' : '/login'}>{user ? 'Dashboard' : 'Sign in'}</Link>
-        </div>
-      </header>
+    <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+      {user ? (
+        <AppSidebar />
+      ) : (
+        <header className="dashboard-header public-header">
+          <div className="container public-header-inner">
+            <Link className="brand" to="/"><span className="brand-mark"><Leaf size={18} /></span><span>Huga<span>Tiera</span></span></Link>
+            <div className="inline-actions">
+              <Link className="text-link" to="/services">Browse services</Link>
+              <Link className="button button-outline" to="/login">Sign in</Link>
+            </div>
+          </div>
+        </header>
+      )}
       <section className="container detail-content">
         {error && <div className="form-error">{error}</div>}
         {!data && !error && <p>Loading gardener profile...</p>}
