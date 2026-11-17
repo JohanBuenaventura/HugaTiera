@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Leaf, MapPin, Sparkles } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -8,6 +8,7 @@ import { requestPhotoAnalysis, requestRequirementAssistance } from '../services/
 import { inquiriesApi } from '../services/inquiries'
 import {
   deleteRequestImage,
+  fetchInquiryImages,
   getRequestImageUrl,
   updateRequestImageDescription,
   uploadRequestImage,
@@ -269,7 +270,7 @@ function InquiryForm() {
           <button
             className="button button-outline"
             type="button"
-            disabled={generatingAiReq || !form.description.trim()}
+            disabled={generatingAiReq}
             onClick={handleGenerateAiRequirements}
           >
             <Sparkles size={15} /> {generatingAiReq ? 'Organizing with AI...' : 'Organize requirements & get AI suggestions'}
@@ -326,21 +327,20 @@ function InquiryForm() {
         </label>
         {uploadingPhoto && <p className="form-note">Processing and stripping metadata from photo...</p>}
         {uploadedImages.length > 0 && (
-          <div className="portfolio-gallery" style={{ marginTop: '10px', marginBottom: '10px' }}>
+          <div className="request-photo-grid">
             {uploadedImages.map((img) => (
-              <figure key={img.id} style={{ padding: '8px', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '8px' }}>
+              <figure className="request-photo-card" key={img.id}>
                 <img src={getRequestImageUrl(img.id)} alt="Uploaded garden space" />
-                <figcaption style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                <figcaption className="request-photo-caption">
                   <textarea
-                    rows="2"
+                    rows="3"
                     maxLength="2000"
                     value={img.ai_description || ''}
                     onChange={(e) => handleLocalPhotoDescriptionChange(img.id, e.target.value)}
                     onBlur={(e) => handleSavePhotoDescription(img.id, e.target.value)}
                     placeholder="Optional space description (click 'Describe with AI' or type manually)"
-                    style={{ fontSize: '0.85rem', width: '100%' }}
                   />
-                  <div className="inline-actions">
+                  <div className="request-photo-actions">
                     <button
                       className="table-action"
                       type="button"
@@ -644,21 +644,27 @@ function InquiryDetails({ id }) {
             {inquiry.expires_at && <span><strong>Expires</strong>{formatDate(inquiry.expires_at)}</span>}
           </div>
           {images.length > 0 && (
-            <div style={{ marginTop: '14px', marginBottom: '14px' }}>
+            <div className="inquiry-photos-section">
               <h3>Garden photos & space descriptions ({images.length})</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '12px', marginTop: '8px' }}>
+              <div className="inquiry-photo-list">
                 {images.map((img) => (
-                  <figure key={img.id} style={{ margin: 0, padding: '8px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.1)' }}>
-                    <a href={getRequestImageUrl(img.id)} target="_blank" rel="noreferrer">
+                  <figure className={`inquiry-photo-card${img.ai_description ? ' has-notes' : ''}`} key={img.id}>
+                    <a className="inquiry-photo-thumb" href={getRequestImageUrl(img.id)} target="_blank" rel="noreferrer">
                       <img
                         src={getRequestImageUrl(img.id)}
-                        alt={img.ai_description || img.originalName || `Garden photo #${img.id}`}
-                        style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '6px' }}
+                        alt={`Garden photo #${img.id}`}
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none'
+                          const fallback = event.currentTarget.nextElementSibling
+                          if (fallback) fallback.style.display = 'grid'
+                        }}
                       />
+                      <span className="inquiry-photo-fallback" style={{ display: 'none' }}>Photo unavailable</span>
                     </a>
                     {img.ai_description && (
-                      <figcaption className="form-note" style={{ marginTop: '6px', fontSize: '0.86rem' }}>
-                        <strong>Space notes:</strong> {img.ai_description}
+                      <figcaption className="inquiry-photo-notes">
+                        <strong>Space notes</strong>
+                        <p>{img.ai_description}</p>
                       </figcaption>
                     )}
                   </figure>
@@ -918,6 +924,7 @@ function InquiryList() {
   const [params, setParams] = useSearchParams()
   const activeTab = user?.role === 'gardener' && params.get('tab') === 'open' ? 'open' : 'mine'
   const [inquiries, setInquiries] = useState([])
+  const [inquiryCovers, setInquiryCovers] = useState({})
   const [openRequests, setOpenRequests] = useState([])
   const [categories, setCategories] = useState([])
   const [filters, setFilters] = useState({ categoryId: '', area: '' })
@@ -941,7 +948,25 @@ function InquiryList() {
           if (active) setOpenRequests(Array.isArray(result?.requests) ? result.requests : [])
         } else {
           const result = await inquiriesApi.list()
-          if (active) setInquiries(Array.isArray(result?.inquiries) ? result.inquiries : [])
+          const list = Array.isArray(result?.inquiries) ? result.inquiries : []
+          if (!active) return
+          setInquiries(list)
+
+          const ids = list.map((item) => item.id).filter(Boolean)
+          if (ids.length > 0) {
+            const settled = await Promise.allSettled(
+              ids.map((inqId) => fetchInquiryImages(inqId).then((res) => [inqId, res.images?.[0]?.id || null])),
+            )
+            if (!active) return
+            const nextCovers = {}
+            for (const entry of settled) {
+              if (entry.status === 'fulfilled') {
+                const [inqId, imageId] = entry.value
+                if (imageId) nextCovers[inqId] = getRequestImageUrl(imageId)
+              }
+            }
+            setInquiryCovers(nextCovers)
+          }
         }
       } catch (loadError) {
         if (active) setError(loadError.message)
@@ -957,8 +982,8 @@ function InquiryList() {
     <section className="container inquiry-content">
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
         <div>
-          <p className="eyebrow">{activeTab === 'open' ? 'Open service requests board' : 'Your conversations'}</p>
-          <h1>{activeTab === 'open' ? 'Browse open client requests.' : 'Inquiries and quotations.'}</h1>
+          <p className="eyebrow">{activeTab === 'open' ? 'Open service requests board' : 'Requests, offers & agreements'}</p>
+          <h1>{activeTab === 'open' ? 'Browse open client requests.' : 'Inquiries and offers.'}</h1>
         </div>
         {user?.role === 'client' && (
           <div className="inline-actions">
@@ -987,7 +1012,7 @@ function InquiryList() {
       </div>
 
       {activeTab === 'open' && user?.role === 'gardener' && (
-        <div className="dashboard-panel" style={{ marginTop: '14px', marginBottom: '16px' }}>
+        <div className="dashboard-panel profile-form" style={{ marginTop: '14px', marginBottom: '16px' }}>
           <div className="form-row">
             <label>Filter by category
               <select value={filters.categoryId} onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}>
@@ -1015,23 +1040,56 @@ function InquiryList() {
         <div className="empty-state">You do not have any inquiries yet.</div>
       )}
 
-      {!loading && !error && activeTab === 'mine' && (
-        <div className="inquiry-list">
-          {inquiries.map((inquiry) => (
-            <Link className="inquiry-list-item" to={`/inquiries/${inquiry.id}`} key={inquiry.id}>
-              <div>
-                <strong>{inquiry.subject}</strong>
-                <span>
-                  {inquiry.request_type === 'general' ? 'General request' : 'Direct inquiry'}
-                  {' · '}
-                  {inquiry.service_title || inquiry.category_name || 'Gardening service'}
-                  {inquiry.offer_count > 0 ? ` · ${inquiry.offer_count} ${Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}` : ''}
-                  {inquiry.my_quotation_status ? ` · Your offer: ${formatStatusLabel(inquiry.my_quotation_status)}` : ''}
-                </span>
-              </div>
-              <span className={getStatusBadgeClass(inquiry.status)}>{formatStatusLabel(inquiry.status)}</span>
-            </Link>
-          ))}
+      {!loading && !error && activeTab === 'mine' && inquiries.length > 0 && (
+        <div className="marketplace-grid marketplace-card-grid" style={{ marginTop: '20px' }}>
+          {inquiries.map((inquiry) => {
+            const coverUrl = inquiryCovers[inquiry.id] || null
+            const partnerLabel = user?.role === 'gardener'
+              ? `${inquiry.client_first_name || ''} ${inquiry.client_last_name || ''}`.trim() || 'Client'
+              : inquiry.gardener_name || (inquiry.offer_count > 0 ? `${inquiry.offer_count} provider ${Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}` : 'Open to providers')
+            return (
+              <article className="marketplace-card visual-market-card" key={inquiry.id}>
+                <div className="marketplace-card-media">
+                  {coverUrl ? (
+                    <img
+                      src={coverUrl}
+                      alt={inquiry.subject}
+                      loading="lazy"
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
+                  ) : (
+                    <div className="marketplace-card-placeholder" aria-hidden="true">
+                      <Leaf size={26} />
+                      <span>{inquiry.request_type === 'general' ? 'General request' : 'Direct inquiry'}</span>
+                    </div>
+                  )}
+                  <span className={`${getStatusBadgeClass(inquiry.status)} media-status-badge`}>
+                    {formatStatusLabel(inquiry.status)}
+                  </span>
+                </div>
+                <div className="marketplace-card-body">
+                  <h2>{inquiry.subject}</h2>
+                  <p>{inquiry.ai_summary || inquiry.description || 'Gardening service inquiry.'}</p>
+                  <div className="service-meta">
+                    <span>{partnerLabel}</span>
+                    <strong className="card-price">
+                      {inquiry.my_quotation_amount != null
+                        ? `₱${Number(inquiry.my_quotation_amount).toLocaleString()}`
+                        : inquiry.offer_count > 0
+                          ? `${inquiry.offer_count} ${Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}`
+                          : inquiry.service_title || inquiry.category_name || 'Request'}
+                    </strong>
+                  </div>
+                  <div className="marketplace-card-footer">
+                    <span className="card-area"><MapPin size={13} /> {inquiry.location || 'Zamboanga City'}</span>
+                    <Link className="card-cta" to={`/inquiries/${inquiry.id}`}>
+                      View details <ArrowRight size={15} />
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            )
+          })}
         </div>
       )}
 
@@ -1039,24 +1097,54 @@ function InquiryList() {
         <div className="empty-state">No open general service requests match your filters right now.</div>
       )}
 
-      {!loading && !error && activeTab === 'open' && (
-        <div className="inquiry-list">
-          {openRequests.map((reqItem) => (
-            <Link className="inquiry-list-item" to={`/inquiries/${reqItem.id}`} key={reqItem.id}>
-              <div>
-                <strong>{reqItem.subject}</strong>
-                <span>
-                  {reqItem.category_name || 'General gardening'}
-                  {' · Area: '}
-                  {reqItem.location || 'Zamboanga City'}
-                  {Array.isArray(reqItem.images) && reqItem.images.length > 0 ? ` · ${reqItem.images.length} photo(s)` : ''}
-                  {reqItem.expires_at ? ` · Expires ${formatDate(reqItem.expires_at)}` : ''}
-                  {reqItem.my_quotation_status ? ` · Your offer: ${formatStatusLabel(reqItem.my_quotation_status)}` : ''}
-                </span>
-              </div>
-              <span className={getStatusBadgeClass(reqItem.status)}>{formatStatusLabel(reqItem.status)}</span>
-            </Link>
-          ))}
+      {!loading && !error && activeTab === 'open' && openRequests.length > 0 && (
+        <div className="marketplace-grid marketplace-card-grid" style={{ marginTop: '20px' }}>
+          {openRequests.map((reqItem) => {
+            const firstImageId = Array.isArray(reqItem.images) && reqItem.images[0]?.id
+            const coverUrl = firstImageId ? getRequestImageUrl(firstImageId) : null
+            return (
+              <article className="marketplace-card visual-market-card" key={reqItem.id}>
+                <div className="marketplace-card-media">
+                  {coverUrl ? (
+                    <img
+                      src={coverUrl}
+                      alt={reqItem.subject}
+                      loading="lazy"
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
+                  ) : (
+                    <div className="marketplace-card-placeholder" aria-hidden="true">
+                      <Leaf size={26} />
+                      <span>{reqItem.category_name || 'General gardening'}</span>
+                    </div>
+                  )}
+                  <span className={`${getStatusBadgeClass(reqItem.status)} media-status-badge`}>
+                    {formatStatusLabel(reqItem.status)}
+                  </span>
+                </div>
+                <div className="marketplace-card-body">
+                  <h2>{reqItem.subject}</h2>
+                  <p>{reqItem.ai_summary || reqItem.description || 'Open client gardening request.'}</p>
+                  <div className="service-meta">
+                    <span>{reqItem.client_first_name ? `Client: ${reqItem.client_first_name}` : 'Local client'}</span>
+                    <strong className="card-price">
+                      {reqItem.my_quotation_status
+                        ? `Offer ${formatStatusLabel(reqItem.my_quotation_status)}`
+                        : reqItem.offer_count > 0
+                          ? `${reqItem.offer_count} offer(s)`
+                          : 'Open for offers'}
+                    </strong>
+                  </div>
+                  <div className="marketplace-card-footer">
+                    <span className="card-area"><MapPin size={13} /> {reqItem.location || 'Zamboanga City'}</span>
+                    <Link className="card-cta" to={`/inquiries/${reqItem.id}`}>
+                      View details <ArrowRight size={15} />
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            )
+          })}
         </div>
       )}
     </section>
