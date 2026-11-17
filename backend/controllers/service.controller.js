@@ -1,4 +1,10 @@
 const { pool } = require('../config/database')
+const {
+  processAndSaveServiceImage,
+  removeFileIfExists,
+  resolveContainedPath,
+  servicesDirectory,
+} = require('../middleware/upload.middleware')
 
 function text(value) {
   return typeof value === 'string' ? value.trim() : ''
@@ -69,8 +75,8 @@ async function listServices(req, res, next) {
   try {
     const [services] = await pool.execute(`
       SELECT s.id, s.title, s.description, s.indicative_price, s.price_unit,
-             s.service_area, s.category_id, c.name AS category_name,
-             s.gardener_id, u.first_name, u.last_name, gp.business_name
+             s.service_area, s.image_path, s.category_id, c.name AS category_name,
+             s.gardener_id, u.first_name, u.last_name, u.avatar_path AS gardener_avatar_path, gp.business_name
       FROM services s
       JOIN users u ON u.id = s.gardener_id
       JOIN gardener_profiles gp ON gp.user_id = u.id
@@ -101,7 +107,7 @@ async function getGardener(req, res, next) {
   }
   try {
     const [gardeners] = await pool.execute(`
-      SELECT u.id, u.first_name, u.last_name, gp.business_name, gp.description,
+      SELECT u.id, u.first_name, u.last_name, u.avatar_path, gp.business_name, gp.description,
              gp.service_area, gp.years_of_experience
       FROM users u
       JOIN gardener_profiles gp ON gp.user_id = u.id
@@ -110,7 +116,7 @@ async function getGardener(req, res, next) {
     `, [gardenerId])
     if (!gardeners[0]) return res.status(404).json({ message: 'Gardener profile was not found.' })
     const [services] = await pool.execute(
-      'SELECT id, title, description, indicative_price, price_unit, service_area, category_id FROM services WHERE gardener_id = ? AND is_active = TRUE ORDER BY created_at DESC',
+      'SELECT id, title, description, indicative_price, price_unit, service_area, image_path, category_id FROM services WHERE gardener_id = ? AND is_active = TRUE ORDER BY created_at DESC',
       [gardenerId],
     )
     const [portfolios] = await pool.execute(
@@ -148,7 +154,7 @@ async function listMyServices(req, res, next) {
   try {
     const [services] = await pool.execute(`
       SELECT s.id, s.title, s.description, s.indicative_price, s.price_unit,
-             s.service_area, s.category_id, c.name AS category_name, s.is_active
+             s.service_area, s.image_path, s.category_id, c.name AS category_name, s.is_active
       FROM services s
       JOIN service_categories c ON c.id = s.category_id
       WHERE s.gardener_id = ?
@@ -168,8 +174,8 @@ async function getService(req, res, next) {
   try {
     const [services] = await pool.execute(`
       SELECT s.id, s.title, s.description, s.indicative_price, s.price_unit,
-             s.service_area, c.name AS category_name, s.gardener_id,
-             u.first_name, u.last_name, u.phone, gp.business_name, gp.description AS gardener_description
+             s.service_area, s.image_path, c.name AS category_name, s.gardener_id,
+             u.first_name, u.last_name, u.phone, u.avatar_path AS gardener_avatar_path, gp.business_name, gp.description AS gardener_description
       FROM services s
       JOIN users u ON u.id = s.gardener_id AND u.is_active = TRUE
       JOIN gardener_profiles gp ON gp.user_id = u.id AND gp.is_approved = TRUE
@@ -235,13 +241,96 @@ async function deactivateService(req, res, next) {
   }
 }
 
+async function uploadServiceImage(req, res, next) {
+  const serviceId = Number(req.params.serviceId)
+  if (!Number.isInteger(serviceId) || serviceId < 1) {
+    return res.status(400).json({ message: 'A valid service is required.' })
+  }
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ message: 'A service photo file is required.' })
+  }
+
+  let saved = null
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, image_path FROM services WHERE id = ? AND gardener_id = ? LIMIT 1',
+      [serviceId, req.user.id],
+    )
+    if (!rows.length) return res.status(404).json({ message: 'Service was not found or is not owned by you.' })
+    const previousPath = rows[0].image_path
+
+    saved = await processAndSaveServiceImage(req.file.buffer, req.user.id)
+    await pool.execute('UPDATE services SET image_path = ? WHERE id = ? AND gardener_id = ?', [saved.relativePath, serviceId, req.user.id])
+    if (previousPath && previousPath !== saved.relativePath) {
+      await removeFileIfExists(servicesDirectory, previousPath)
+    }
+
+    return res.json({
+      imagePath: saved.relativePath,
+      imageUrl: `/api/services/${serviceId}/image`,
+    })
+  } catch (error) {
+    if (saved) await removeFileIfExists(servicesDirectory, saved.relativePath)
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message })
+    return next(error)
+  }
+}
+
+async function deleteServiceImage(req, res, next) {
+  const serviceId = Number(req.params.serviceId)
+  if (!Number.isInteger(serviceId) || serviceId < 1) {
+    return res.status(400).json({ message: 'A valid service is required.' })
+  }
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, image_path FROM services WHERE id = ? AND gardener_id = ? LIMIT 1',
+      [serviceId, req.user.id],
+    )
+    if (!rows.length) return res.status(404).json({ message: 'Service was not found or is not owned by you.' })
+    const previousPath = rows[0].image_path
+
+    await pool.execute('UPDATE services SET image_path = NULL WHERE id = ? AND gardener_id = ?', [serviceId, req.user.id])
+    await removeFileIfExists(servicesDirectory, previousPath)
+    return res.json({ status: 'ok', imagePath: null })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function sendServiceImage(req, res, next) {
+  const serviceId = Number(req.params.serviceId)
+  if (!Number.isInteger(serviceId) || serviceId < 1) {
+    return res.status(400).json({ message: 'A valid service is required.' })
+  }
+  try {
+    const [rows] = await pool.execute('SELECT image_path FROM services WHERE id = ? LIMIT 1', [serviceId])
+    if (!rows.length || !rows[0].image_path) {
+      return res.status(404).json({ message: 'Service photo was not found.' })
+    }
+    const absolutePath = resolveContainedPath(servicesDirectory, rows[0].image_path)
+    res.set('Cache-Control', 'no-cache')
+    return res.sendFile(absolutePath, (err) => {
+      if (err && !res.headersSent) {
+        return res.status(404).json({ message: 'Service photo file was not found.' })
+      }
+      return undefined
+    })
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message })
+    return next(error)
+  }
+}
+
 module.exports = {
   createService,
   deactivateService,
+  deleteServiceImage,
   getService,
   getGardener,
   listCategories,
   listMyServices,
   listServices,
+  sendServiceImage,
   updateService,
+  uploadServiceImage,
 }
