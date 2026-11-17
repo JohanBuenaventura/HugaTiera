@@ -80,7 +80,8 @@ HugaTiera/
 │   ├── implementation/
 │   │   └── implementation-plan.md
 │   ├── api-reference.md
-│   └── architecture-and-workflows.md
+│   ├── architecture-and-workflows.md
+│   └── erd-and-dfd.md
 │
 ├── frontend/
 │   ├── public/
