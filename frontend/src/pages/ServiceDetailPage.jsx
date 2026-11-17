@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Leaf } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
+import AppSidebar from '../components/AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
 import { profileApi } from '../services/profiles'
@@ -36,13 +37,13 @@ export default function ServiceDetailPage() {
     }
   }
 
-  if (error) return <main className="marketplace-page"><PageHeader /><section className="container detail-content"><div className="form-error">{error}</div></section></main>
-  if (!data) return <main className="marketplace-page"><PageHeader /><section className="container detail-content"><p>Loading service...</p></section></main>
+  if (error) return <main className={`marketplace-page${user ? ' protected-page' : ''}`}>{user ? <AppSidebar /> : <PageHeader />}<section className="container detail-content"><div className="form-error">{error}</div></section></main>
+  if (!data) return <main className={`marketplace-page${user ? ' protected-page' : ''}`}>{user ? <AppSidebar /> : <PageHeader />}<section className="container detail-content"><p>Loading service...</p></section></main>
   const { service, portfolios } = data
 
   return (
-    <main className="marketplace-page">
-      <PageHeader />
+    <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+      {user ? <AppSidebar /> : <PageHeader />}
       <section className="container detail-content">
         <Link className="back-link" to="/services"><ArrowLeft size={15} /> Back to services</Link>
         <div className="detail-grid">
@@ -115,11 +116,15 @@ export default function ServiceDetailPage() {
 }
 
 function PageHeader() {
-  const { user } = useAuth()
   return (
-    <header className="dashboard-header container">
-      <Link className="brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
-      <Link className="button button-outline" to={user ? '/dashboard' : '/login'}>{user ? 'Dashboard' : 'Sign in'}</Link>
+    <header className="dashboard-header public-header">
+      <div className="container public-header-inner">
+        <Link className="brand" to="/"><span className="brand-mark"><Leaf size={18} /></span><span>Huga<span>Tiera</span></span></Link>
+        <div className="inline-actions">
+          <Link className="text-link" to="/services">Services</Link>
+          <Link className="button button-outline" to="/login">Sign in</Link>
+        </div>
+      </div>
     </header>
   )
 }
