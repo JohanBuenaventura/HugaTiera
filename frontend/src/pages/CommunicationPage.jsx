@@ -1,12 +1,23 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Send } from 'lucide-react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeft, Send } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
 
 function Conversation({ conversation, onSelect, selected }) {
-  return <button className={`conversation-item${selected ? ' is-selected' : ''}`} type="button" onClick={() => onSelect(conversation)}><strong>{conversation.other_party_name || 'Conversation'}</strong><span>{conversation.inquiry_subject || 'General conversation'}</span><small>{conversation.latest_message || 'No messages yet'}</small>{conversation.unread_count > 0 && <b>{conversation.unread_count}</b>}</button>
+  return (
+    <button
+      className={`conversation-item${selected ? ' is-selected' : ''}`}
+      type="button"
+      onClick={() => onSelect(conversation)}
+    >
+      <strong>{conversation.other_party_name || 'Conversation'}</strong>
+      <span>{conversation.inquiry_subject || 'General conversation'}</span>
+      <small>{conversation.latest_message || 'No messages yet'}</small>
+      {conversation.unread_count > 0 && <b>{conversation.unread_count}</b>}
+    </button>
+  )
 }
 
 function notificationPath(notification, user) {
@@ -18,29 +29,82 @@ function notificationPath(notification, user) {
   return null
 }
 
-export default function CommunicationPage() {
+export default function CommunicationPage({ mode = 'messages' }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [conversations, setConversations] = useState([])
   const [selected, setSelected] = useState(null)
   const [messages, setMessages] = useState([])
+  const [loadingMessages, setLoadingMessages] = useState(false)
   const [draft, setDraft] = useState('')
   const [notifications, setNotifications] = useState([])
+  const [notifFilter, setNotifFilter] = useState('all')
+  const [visibleNotifCount, setVisibleNotifCount] = useState(10)
   const [error, setError] = useState('')
+  const initialParamHandled = useRef(false)
+  const isNotificationsView = mode === 'notifications'
 
-  const loadConversations = useCallback(() => communicationApi.conversations().then((result) => { setConversations(result.conversations); if (!selected && params.get('conversationId')) setSelected(result.conversations.find((item) => item.id === Number(params.get('conversationId'))) || null) }).catch((loadError) => setError(loadError.message)), [params, selected])
-  useEffect(() => { loadConversations(); communicationApi.notifications().then((result) => setNotifications(result.notifications)).catch((loadError) => setError(loadError.message)) }, [loadConversations])
-  useEffect(() => { if (selected) communicationApi.messages(selected.id).then((result) => { setMessages(result.messages); loadConversations() }).catch((loadError) => setError(loadError.message)) }, [selected, loadConversations])
+  const loadConversations = useCallback(() => {
+    if (isNotificationsView) return Promise.resolve()
+    return communicationApi.conversations().then((result) => {
+      setConversations(result.conversations)
+      const targetId = params.get('conversationId')
+      if (!initialParamHandled.current && targetId) {
+        initialParamHandled.current = true
+        const match = result.conversations.find((item) => item.id === Number(targetId)) || null
+        if (match) {
+          setLoadingMessages(true)
+          setSelected(match)
+        }
+      }
+    }).catch((loadError) => setError(loadError.message))
+  }, [isNotificationsView, params])
+
+  useEffect(() => {
+    loadConversations()
+    if (isNotificationsView) {
+      communicationApi.notifications()
+        .then((result) => setNotifications(result.notifications))
+        .catch((loadError) => setError(loadError.message))
+    }
+  }, [isNotificationsView, loadConversations])
+
+  useEffect(() => {
+    if (isNotificationsView || !selected) return
+    let active = true
+    communicationApi.messages(selected.id)
+      .then((result) => {
+        if (!active) return
+        setMessages(result.messages)
+        loadConversations()
+      })
+      .catch((loadError) => { if (active) setError(loadError.message) })
+      .finally(() => { if (active) setLoadingMessages(false) })
+    return () => { active = false }
+  }, [isNotificationsView, selected, loadConversations])
 
   async function send(event) {
     event.preventDefault()
     if (!draft.trim() || !selected) return
-    try { await communicationApi.sendMessage(selected.id, draft); setDraft(''); const result = await communicationApi.messages(selected.id); setMessages(result.messages); loadConversations() } catch (sendError) { setError(sendError.message) }
+    try {
+      await communicationApi.sendMessage(selected.id, draft)
+      setDraft('')
+      const result = await communicationApi.messages(selected.id)
+      setMessages(result.messages)
+      loadConversations()
+    } catch (sendError) {
+      setError(sendError.message)
+    }
   }
 
   async function markAllRead() {
-    try { await communicationApi.markAllNotificationsRead(); setNotifications((items) => items.map((item) => ({ ...item, read_at: item.read_at || new Date().toISOString() }))) } catch (readError) { setError(readError.message) }
+    try {
+      await communicationApi.markAllNotificationsRead()
+      setNotifications((items) => items.map((item) => ({ ...item, read_at: item.read_at || new Date().toISOString() })))
+    } catch (readError) {
+      setError(readError.message)
+    }
   }
 
   async function openNotification(notification) {
@@ -48,11 +112,178 @@ export default function CommunicationPage() {
       try {
         await communicationApi.markNotificationRead(notification.id)
         setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item))
-      } catch (readError) { setError(readError.message); return }
+      } catch (readError) {
+        setError(readError.message)
+        return
+      }
     }
     const path = notificationPath(notification, user)
     if (path) navigate(path)
   }
 
-  return <main className="marketplace-page protected-page"><AppSidebar /><section className="container communication-content"><div className="communication-heading"><div><p className="eyebrow">Stay connected</p><h1>Messages and notifications.</h1><p className="communication-lead">Keep conversations, updates, and next steps in one clear workspace.</p></div><button className="table-action" type="button" onClick={markAllRead}>Mark all notifications read</button></div>{error && <div className="form-error" role="alert">{error}</div>}<div className="communication-grid"><aside className="dashboard-panel conversation-list"><div className="panel-heading"><div><p className="panel-kicker">Your inbox</p><h2>Conversations</h2></div><span className="panel-count">{conversations.length}</span></div><p className="panel-description">Messages with clients and gardeners.</p>{conversations.length === 0 && <p className="form-note">Your conversations will appear here.</p>}{conversations.map((conversation) => <Conversation key={conversation.id} conversation={conversation} selected={selected?.id === conversation.id} onSelect={setSelected} />)}</aside><section className="dashboard-panel message-panel"><div className="panel-heading"><div><p className="panel-kicker">Message thread</p><h2>{selected ? selected.other_party_name : 'Select a conversation'}</h2></div>{selected && <span className="conversation-status">Active conversation</span>}</div>{selected ? <><div className="message-history">{messages.length === 0 && <p className="form-note">No messages yet. Start the conversation.</p>}{messages.map((message) => <div className={`message-bubble${message.sender_id === user.id ? ' message-own' : ''}`} key={message.id}><p>{message.message_text}</p><small>{new Date(message.sent_at).toLocaleString()}</small></div>)}</div><form className="message-form" onSubmit={send}><input aria-label="Message" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength="5000" placeholder="Write a message..." /><button className="button" type="submit"><Send size={16} /> Send</button></form></> : <p className="form-note message-empty">Choose a conversation to view its message history.</p>}</section><aside className="dashboard-panel notification-panel"><div className="panel-heading"><div><p className="panel-kicker">Stay updated</p><h2>Notifications</h2></div><span className="panel-count">{notifications.filter((notification) => !notification.read_at).length} unread</span></div><p className="panel-description">Inquiry, booking, approval, review, and messaging updates.</p>{notifications.length === 0 && <p className="form-note">No notifications yet.</p>}<div className="notification-list">{notifications.map((notification) => <button className={`notification-item${notification.read_at ? '' : ' is-unread'}`} type="button" onClick={() => openNotification(notification)} key={notification.id}><span className="notification-icon" aria-hidden="true" /><div><strong>{notification.title}</strong><p>{notification.message}</p><small>{new Date(notification.created_at).toLocaleString()}</small>{notificationPath(notification, user) && <span className="notification-link">Open related item</span>}</div></button>)}</div></aside></div></section></main>
+  return (
+    <main className="marketplace-page protected-page">
+      <AppSidebar />
+      <section className="container communication-content">
+        <div className="communication-heading">
+          <div>
+            <p className="eyebrow">{isNotificationsView ? 'Stay updated' : 'Stay connected'}</p>
+            <h1>{isNotificationsView ? 'Notifications.' : 'Messages.'}</h1>
+            <p className="communication-lead">
+              {isNotificationsView
+                ? 'Review inquiry, offer, agreement, booking, approval, and messaging updates.'
+                : 'Select a conversation below to open its message thread.'}
+            </p>
+          </div>
+          {isNotificationsView ? (
+            <div className="inline-actions">
+              <button className="table-action" type="button" onClick={markAllRead}>Mark all notifications read</button>
+              <Link className="button button-outline" to="/messages">Open messages</Link>
+            </div>
+          ) : (
+            <Link className="button button-outline" to="/notifications">View notifications</Link>
+          )}
+        </div>
+
+        {error && <div className="form-error" role="alert">{error}</div>}
+
+        {isNotificationsView ? (
+          <section className="dashboard-panel notification-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="panel-kicker">Activity feed</p>
+                <h2>All notifications</h2>
+              </div>
+              <div className="inline-actions">
+                <button
+                  className={notifFilter === 'all' ? 'button button-sm' : 'button button-outline button-sm'}
+                  type="button"
+                  onClick={() => { setNotifFilter('all'); setVisibleNotifCount(10) }}
+                >
+                  All ({notifications.length})
+                </button>
+                <button
+                  className={notifFilter === 'unread' ? 'button button-sm' : 'button button-outline button-sm'}
+                  type="button"
+                  onClick={() => { setNotifFilter('unread'); setVisibleNotifCount(10) }}
+                >
+                  Unread ({notifications.filter((n) => !n.read_at).length})
+                </button>
+              </div>
+            </div>
+            {(() => {
+              const filtered = notifFilter === 'unread'
+                ? notifications.filter((n) => !n.read_at)
+                : notifications
+              const shown = filtered.slice(0, visibleNotifCount)
+              return (
+                <>
+                  {filtered.length === 0 && (
+                    <p className="form-note" style={{ marginTop: '14px' }}>
+                      {notifFilter === 'unread' ? 'You are all caught up — no unread notifications.' : 'No notifications yet.'}
+                    </p>
+                  )}
+                  <div className="notification-list notification-feed-compact">
+                    {shown.map((notification) => (
+                      <button
+                        className={`notification-item${notification.read_at ? '' : ' is-unread'}`}
+                        type="button"
+                        onClick={() => openNotification(notification)}
+                        key={notification.id}
+                      >
+                        <span className="notification-icon" aria-hidden="true" />
+                        <div className="notification-body">
+                          <div className="notification-row-top">
+                            <strong>{notification.title}</strong>
+                            <small>{new Date(notification.created_at).toLocaleString()}</small>
+                          </div>
+                          <p>{notification.message}</p>
+                        </div>
+                        {notificationPath(notification, user) && <span className="notification-link">Open</span>}
+                      </button>
+                    ))}
+                  </div>
+                  {filtered.length > visibleNotifCount && (
+                    <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                      <button
+                        className="button button-outline"
+                        type="button"
+                        onClick={() => setVisibleNotifCount((c) => c + 10)}
+                      >
+                        Show more ({filtered.length - visibleNotifCount} remaining)
+                      </button>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+          </section>
+        ) : (
+          <div className={`communication-grid${selected ? ' has-selected' : ' is-inbox-only'}`}>
+            <aside className="dashboard-panel conversation-list">
+              <div className="panel-heading">
+                <div>
+                  <p className="panel-kicker">Your inbox</p>
+                  <h2>Conversations</h2>
+                </div>
+                <span className="panel-count">{conversations.length}</span>
+              </div>
+              <p className="panel-description">Click a conversation to view and reply to messages.</p>
+              {conversations.length === 0 && <p className="form-note">Your conversations will appear here.</p>}
+              {conversations.map((conversation) => (
+                <Conversation
+                  key={conversation.id}
+                  conversation={conversation}
+                  selected={selected?.id === conversation.id}
+                  onSelect={(conv) => {
+                    setError('')
+                    setMessages([])
+                    setLoadingMessages(true)
+                    setSelected(conv)
+                  }}
+                />
+              ))}
+            </aside>
+            {selected && (
+              <section className="dashboard-panel message-panel">
+                <div className="panel-heading">
+                  <div>
+                    <p className="panel-kicker">Message thread</p>
+                    <h2>{selected.other_party_name || 'Conversation'}</h2>
+                    {selected.inquiry_subject && <small className="form-note">{selected.inquiry_subject}</small>}
+                  </div>
+                  <div className="inline-actions">
+                    <span className="conversation-status">Active conversation</span>
+                    <button className="table-action" type="button" onClick={() => setSelected(null)}>
+                      <ArrowLeft size={14} /> Close
+                    </button>
+                  </div>
+                </div>
+                <div className="message-history">
+                  {loadingMessages && <p className="form-note">Loading messages...</p>}
+                  {!loadingMessages && messages.length === 0 && <p className="form-note">No messages yet. Start the conversation.</p>}
+                  {!loadingMessages && messages.map((message) => (
+                    <div className={`message-bubble${message.sender_id === user.id ? ' message-own' : ''}`} key={message.id}>
+                      <p>{message.message_text}</p>
+                      <small>{new Date(message.sent_at).toLocaleString()}</small>
+                    </div>
+                  ))}
+                </div>
+                <form className="message-form" onSubmit={send}>
+                  <input
+                    aria-label="Message"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    maxLength="5000"
+                    placeholder="Write a message..."
+                  />
+                  <button className="button" type="submit"><Send size={16} /> Send</button>
+                </form>
+              </section>
+            )}
+          </div>
+        )}
+      </section>
+    </main>
+  )
 }
