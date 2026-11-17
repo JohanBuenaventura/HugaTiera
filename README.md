@@ -60,7 +60,7 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
 | **Authentication** | JWT + bcryptjs | `jsonwebtoken` `^9.0.2` (`HttpOnly` cookie), `bcryptjs` `^3.0.2`, `cookie-parser` `^1.4.7` |
 | **Image Processing** | Multer + Sharp | `multer` `^2.5.0`, `sharp` `^0.35.5` (validation, resize, EXIF/GPS stripping) |
 | **AI Integration** | Google Gemini REST API | Primary: `gemini-3.8-flash` \| Automatic Fallback: `gemini-3.5-flash-lite` |
-| **Testing & Linting** | Node.js Test Runner + ESLint | `node --test` (`53/53` automated backend tests across 6 suites), `eslint` `^10.14.0` |
+| **Testing & Linting** | Node.js Test Runner + ESLint | `node --test` (`56/56` automated backend tests across 7 suites), `eslint` `^10.14.0` |
 
 ---
 
@@ -96,15 +96,16 @@ flowchart LR
 | `/services` | Public | `pages/ServicesPage.jsx` | Marketplace search, category/area filter, sort, and pagination. |
 | `/services/:serviceId` | Public | `pages/ServiceDetailPage.jsx` | Service details, gardener summary, direct inquiry link, priced-service agreement modal, and report form. |
 | `/gardeners/:gardenerId` | Public | `pages/GardenerPage.jsx` | Approved gardener profile, active services, portfolio gallery, reviews, direct inquiry action, and report form. |
-| `/login`, `/register` | Public | `pages/AuthPage.jsx` | Sign-in and Client/Gardener registration forms. |
-| `/dashboard` | Protected (`client`, `gardener`, `administrator`) | `pages/DashboardPage.jsx` | Role-specific dashboard (`Overview` and `Profile & Settings` tabs for Client/Gardener; full moderation & metrics panel for Administrator). |
+| `/login`, `/register` | Public | `pages/AuthPage.jsx` | Sign-in (with password visibility toggle and smart recent-email quick fill) and Client/Gardener registration forms. |
+| `/dashboard` | Protected (`client`, `gardener`, `administrator`) | `pages/DashboardPage.jsx` | Role-specific dashboard with profile picture upload (`users.avatar_path`), gardener service cover photos (`services.image_path`) & portfolio tabs, and separated Administrator tabs (`Overview`, `Analytics`, `Approvals`, `Activity`, `Reports`, `Accounts` with edit/role-change/delete). |
 | `/inquiries` | Protected (`client`, `gardener`) | `pages/InquiryPage.jsx` (`InquiriesPage`) | Client request list or Gardener assigned inquiries + Open Service Requests Board tab. |
 | `/inquiries/new` | Protected (`client`) | `pages/InquiryPage.jsx` (`InquiryFormPage`) | Case 1 / Case 2 request creation wizard with garden photo upload, AI photo analysis, and AI requirement assistant. |
 | `/inquiries/:inquiryId` | Protected (`client`, `gardener`, `administrator`) | `pages/InquiryPage.jsx` (`InquiryDetailPage`) | Provider Decision-Support View, offer submission/revision/comparison, R3 Mutual Agreement workspace, and event timeline. |
 | `/bookings` | Protected (`client`, `gardener`) | `pages/BookingPage.jsx` (`BookingsPage`) | Confirmed and historical bookings list with agreement version badges. |
 | `/bookings/new` | Protected (`client`) | `pages/BookingPage.jsx` (`BookingFormPage`) | Redirects/guides users to the R3 Mutual Agreement workflow on the inquiry or service page. |
 | `/bookings/:bookingId` | Protected (`client`, `gardener`) | `pages/BookingPage.jsx` (`BookingDetailPage`) | Booking execution controls, read-only **Mutual Agreement Summary** (`ISS-09`), conversation launcher, and post-completion review form. |
-| `/messages` | Protected (All roles) | `pages/CommunicationPage.jsx` | 1-to-1 conversation threads and in-app notifications center with deep-link routing. |
+| `/messages` | Protected (Client, Gardener) | `pages/CommunicationPage.jsx` | 1-to-1 conversation inbox and message threads. |
+| `/notifications` | Protected (Client, Gardener) | `pages/CommunicationPage.jsx` | Compact activity notifications feed with `All`/`Unread` filters and deep-link routing. |
 | `/assistant` | Protected (All roles) | `pages/AssistantPage.jsx` | Standalone AI Garden Planning Assistant with quota display and safety disclaimer. |
 
 ---
