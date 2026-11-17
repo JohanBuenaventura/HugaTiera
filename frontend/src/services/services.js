@@ -6,7 +6,7 @@ async function request(path, options = {}) {
     credentials: 'include',
     headers: options.body instanceof FormData ? options.headers : { 'Content-Type': 'application/json', ...options.headers },
   })
-  const data = response.status === 204 ? null : await response.json()
+  const data = response.status === 204 ? null : await response.json().catch(() => null)
   if (!response.ok) throw new Error(data?.message || 'The service request failed.')
   return data
 }
@@ -28,4 +28,11 @@ export const servicesApi = {
   updatePortfolio: (id, details) => request(`/portfolios/${id}`, { method: 'PUT', body: JSON.stringify(details) }),
   removePortfolio: (id) => request(`/portfolios/${id}`, { method: 'DELETE' }),
   imageUrl: (id) => `${apiBaseUrl}/portfolios/${id}/image`,
+  serviceImageUrl: (id) => `${apiBaseUrl}/services/${id}/image`,
+  uploadServiceImage: (id, file) => {
+    const body = new FormData()
+    body.append('image', file)
+    return request(`/services/${id}/image`, { method: 'POST', body })
+  },
+  deleteServiceImage: (id) => request(`/services/${id}/image`, { method: 'DELETE' }),
 }
