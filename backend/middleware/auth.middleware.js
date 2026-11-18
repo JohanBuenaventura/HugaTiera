@@ -25,7 +25,7 @@ async function requireAuth(req, res, next) {
 
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, last_name, phone, is_active FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, email, role, first_name, middle_name, last_name, phone, is_active FROM users WHERE id = ? LIMIT 1',
       [payload.id],
     )
     const user = users[0]
@@ -38,12 +38,23 @@ async function requireAuth(req, res, next) {
       })
       return res.status(401).json({ message: 'Your account is inactive or no longer available.' })
     }
+    const [roleRows] = await pool.execute(
+      'SELECT role FROM user_roles WHERE user_id = ? ORDER BY FIELD(role, "client", "gardener", "administrator")',
+      [user.id],
+    )
+    const roles = roleRows.map((row) => row.role)
+
+    if (!roles.includes(user.role)) {
+      return next(new Error('The active account role is not assigned to this user.'))
+    }
 
     req.user = {
       id: user.id,
       email: user.email,
       role: user.role,
+      roles,
       firstName: user.first_name,
+      middleName: user.middle_name || '',
       lastName: user.last_name,
       phone: user.phone,
     }
@@ -55,7 +66,12 @@ async function requireAuth(req, res, next) {
 
 function requireRole(...roles) {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (
+      !req.user
+      || !Array.isArray(req.user.roles)
+      || !req.user.roles.includes(req.user.role)
+      || !roles.includes(req.user.role)
+    ) {
       return res.status(403).json({ message: 'You do not have permission to access this resource.' })
     }
 

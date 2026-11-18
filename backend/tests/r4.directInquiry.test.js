@@ -131,11 +131,14 @@ describe('Step R4 – Case 2 Direct Service Provider Inquiry End-to-End', () => 
         method: 'POST',
         body: {
           firstName: u.firstName,
+          middleName: 'Test',
           lastName: 'Tester',
+          dateOfBirth: '1990-04-15',
           email: `${u.key}.${runId}@hugatiera.test`,
           phone: '09171234567',
           barangay: 'Tetuan',
           address: 'Tetuan, Zamboanga City',
+          city: 'Zamboanga City',
           password: 'Password123!',
           role: u.role,
         },
@@ -169,6 +172,7 @@ describe('Step R4 – Case 2 Direct Service Provider Inquiry End-to-End', () => 
     )
     adminId = adminIns.insertId
     createdUserIds.push(adminId)
+    await pool.execute('INSERT INTO user_roles (user_id, role) VALUES (?, "administrator")', [adminId])
 
     const adminLogin = await apiRequest('/auth/login', {
       method: 'POST',

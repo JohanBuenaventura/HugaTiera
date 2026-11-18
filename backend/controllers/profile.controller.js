@@ -1,4 +1,5 @@
 const { pool } = require('../config/database')
+const { validateDateOfBirth, validateMobileNumber } = require('../utils/accountValidation')
 const {
   avatarsDirectory,
   processAndSaveAvatar,
@@ -12,21 +13,36 @@ function text(value) {
 
 function validateCommonProfile(body) {
   const firstName = text(body.firstName)
+  const middleName = text(body.middleName)
   const lastName = text(body.lastName)
-  const phone = text(body.phone) || null
+  const phone = text(body.phone)
+  const dateOfBirth = text(body.dateOfBirth)
 
   if (!firstName || firstName.length > 100 || !lastName || lastName.length > 100) {
     return { message: 'First name and last name are required.' }
   }
-  if (phone && phone.length > 30) return { message: 'Phone number is too long.' }
+  if (middleName.length > 100) return { message: 'Middle name must be 100 characters or fewer.' }
+  const phoneError = validateMobileNumber(phone)
+  if (phoneError) return { message: phoneError }
+  const birthDateValidation = validateDateOfBirth(dateOfBirth)
+  if (birthDateValidation.error) return { message: birthDateValidation.error }
 
-  return { firstName, lastName, phone }
+  return {
+    firstName,
+    middleName,
+    lastName,
+    phone,
+    dateOfBirth: birthDateValidation.value,
+  }
 }
 
 async function getProfile(req, res, next) {
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, last_name, phone, avatar_path, created_at FROM users WHERE id = ? AND is_active = TRUE LIMIT 1',
+      `SELECT id, email, role, first_name, middle_name, last_name,
+              DATE_FORMAT(date_of_birth, '%Y-%m-%d') AS date_of_birth,
+              phone, avatar_path, created_at
+       FROM users WHERE id = ? AND is_active = TRUE LIMIT 1`,
       [req.user.id],
     )
     const user = users[0]
@@ -67,8 +83,11 @@ async function getProfile(req, res, next) {
         id: user.id,
         email: user.email,
         role: user.role,
+        roles: req.user.roles,
         firstName: user.first_name,
+        middleName: user.middle_name || '',
         lastName: user.last_name,
+        dateOfBirth: user.date_of_birth || '',
         phone: user.phone,
         avatarPath: user.avatar_path,
         createdAt: user.created_at,
@@ -90,21 +109,21 @@ async function updateProfile(req, res, next) {
   try {
     await connection.beginTransaction()
     await connection.execute(
-      'UPDATE users SET first_name = ?, last_name = ?, phone = ? WHERE id = ? AND is_active = TRUE',
-      [common.firstName, common.lastName, common.phone, req.user.id],
+      'UPDATE users SET first_name = ?, middle_name = ?, last_name = ?, date_of_birth = ?, phone = ? WHERE id = ? AND is_active = TRUE',
+      [common.firstName, common.middleName || null, common.lastName, common.dateOfBirth, common.phone, req.user.id],
     )
 
     if (req.user.role === 'client') {
-      const address = text(req.body.address) || null
-      const city = text(req.body.city) || 'Zamboanga City'
+      const address = text(req.body.address)
+      const city = text(req.body.city)
       const bio = text(req.body.bio) || null
-      if (address && address.length > 255) {
+      if (!address || address.length > 255) {
         await connection.rollback()
-        return res.status(400).json({ message: 'Address is too long.' })
+        return res.status(400).json({ message: 'A service address between 1 and 255 characters is required.' })
       }
-      if (city.length > 100) {
+      if (!city || city.length > 100) {
         await connection.rollback()
-        return res.status(400).json({ message: 'City is too long.' })
+        return res.status(400).json({ message: 'A city between 1 and 100 characters is required.' })
       }
       await connection.execute(
         'UPDATE client_profiles SET address = ?, city = ?, bio = ? WHERE user_id = ?',

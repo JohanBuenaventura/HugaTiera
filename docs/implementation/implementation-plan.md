@@ -306,6 +306,7 @@ Adding generation later needs only: one new `feature` value (`image_generation`)
 1. **Photo processing: `sharp` library (approved).** Used in R2 to decode and validate every upload (a file that cannot be decoded is rejected), apply the EXIF orientation, resize to a sensible maximum, and **re-encode the image without any metadata, including GPS location**, before it is stored. Only the cleaned copy is kept. `sharp` is added in R2, not before.
 2. **Request expiry (approved):** `inquiries.expires_at`, handled as described in section 3.1. Requests in agreement are never auto-cancelled.
 3. **Conversation access (confirmed):** in Case 1, a provider can message a client only after submitting an offer on that request.
+4. **Individual multi-role accounts (approved):** one person may hold both Client and Gardener roles, with `user_roles` memberships and a small active-mode switcher. Company/staff accounts are deferred.
 
 ## 10. Documentation changes made in this step
 - `AGENTS.md`: revised workflow rule, AI scope (image generation postponed), revision-track rules.
@@ -313,3 +314,9 @@ Adding generation later needs only: one new `feature` value (`image_generation`)
 - `prompt/prompts.md`: appended R0–R7 prompts. `prompt/phase.md`: added a revision-track note.
 - `project_progress.md`: Phase 15 status corrected to partially verified (not complete), revised decisions, R-step checklist, accurate known issues.
 - `system_bug_and_missing_features.md`: "verified" now means build/lint/API tests only; browser checks pending.
+
+## 11. Approved Individual Multi-Role Extension
+
+This feature is limited to one account per person. A person may enable Client and Gardener capabilities without creating a second login. The `user_roles` table is the source of assigned roles; the existing `users.role` column remains the active dashboard mode. `client_profiles` and `gardener_profiles` continue to store separate role-specific data. Switching modes does not remove either profile, and backend endpoints authorize against assigned memberships while retaining ownership, approval, and workflow checks.
+
+Migration 004 backfills the existing selected role and existing client/gardener profile rows. Apply it only after Migration 003, after a database backup, and with explicit approval. It has not been run locally. Company-level provider organizations, shared workspaces, staff invitations, and owner/manager/clerk permissions are explicitly outside this extension and require a separate approved design.

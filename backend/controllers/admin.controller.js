@@ -1,21 +1,28 @@
 const { pool } = require('../config/database')
 const { createNotification } = require('../services/notification.service')
 const { avatarsDirectory, removeFileIfExists } = require('../middleware/upload.middleware')
+const { validateMobileNumber } = require('../utils/accountValidation')
 
 async function getSummary(req, res, next) {
   try {
     const [counts] = await pool.query(`
       SELECT
-        (SELECT COUNT(*) FROM users WHERE role = 'client' AND is_active = TRUE) AS clients,
-        (SELECT COUNT(*) FROM users WHERE role = 'gardener' AND is_active = TRUE) AS gardeners,
+        (SELECT COUNT(*) FROM user_roles ur JOIN users u ON u.id = ur.user_id WHERE ur.role = 'client' AND u.is_active = TRUE) AS clients,
+        (SELECT COUNT(*) FROM user_roles ur JOIN users u ON u.id = ur.user_id WHERE ur.role = 'gardener' AND u.is_active = TRUE) AS gardeners,
         (SELECT COUNT(*) FROM services WHERE is_active = TRUE) AS services,
         (SELECT COUNT(*) FROM bookings) AS bookings,
         (SELECT COUNT(*) FROM reports WHERE status IN ('open', 'reviewing')) AS open_reports,
         (SELECT COUNT(*) FROM gardener_profiles WHERE is_approved = FALSE) AS pending_gardeners
     `)
-    const [users] = await pool.query(
-      'SELECT id, email, role, first_name, last_name, phone, avatar_path, is_active, created_at FROM users ORDER BY created_at DESC LIMIT 50',
-    )
+    const [users] = await pool.query(`
+      SELECT u.id, u.email, u.role, u.first_name, u.middle_name, u.last_name,
+             u.phone, u.avatar_path, u.is_active, u.created_at,
+             (SELECT GROUP_CONCAT(ur.role ORDER BY FIELD(ur.role, 'client', 'gardener', 'administrator'))
+              FROM user_roles ur WHERE ur.user_id = u.id) AS roles
+      FROM users u
+      ORDER BY u.created_at DESC LIMIT 50
+    `)
+    for (const user of users) user.roles = user.roles ? user.roles.split(',') : []
 
     return res.json({ counts: counts[0], users })
   } catch (error) {
@@ -42,12 +49,13 @@ async function updateUserStatus(req, res, next) {
 async function listPendingGardeners(req, res, next) {
   try {
     const [gardeners] = await pool.execute(`
-      SELECT u.id, u.email, u.first_name, u.last_name, u.is_active, u.created_at,
+      SELECT u.id, u.email, u.first_name, u.middle_name, u.last_name, u.is_active, u.created_at,
              gp.business_name, gp.description, gp.service_area, gp.years_of_experience,
              gp.is_approved
       FROM users u
       JOIN gardener_profiles gp ON gp.user_id = u.id
-      WHERE u.role = 'gardener' AND gp.is_approved = FALSE
+      JOIN user_roles ur ON ur.user_id = u.id AND ur.role = 'gardener'
+      WHERE gp.is_approved = FALSE
       ORDER BY u.created_at ASC
     `)
     return res.json({ gardeners })
@@ -78,8 +86,9 @@ async function updateGardenerApproval(req, res, next) {
     const [result] = await connection.execute(
       `UPDATE gardener_profiles gp
        JOIN users u ON u.id = gp.user_id
+       JOIN user_roles ur ON ur.user_id = u.id AND ur.role = 'gardener'
        SET gp.is_approved = ?
-       WHERE gp.user_id = ? AND u.role = 'gardener'`,
+       WHERE gp.user_id = ?`,
       [isApproved, gardenerId],
     )
     if (!result.affectedRows) {
@@ -236,16 +245,21 @@ async function updateUser(req, res, next) {
   }
 
   const firstName = typeof req.body.firstName === 'string' ? req.body.firstName.trim() : ''
+  const middleName = typeof req.body.middleName === 'string' ? req.body.middleName.trim() : ''
   const lastName = typeof req.body.lastName === 'string' ? req.body.lastName.trim() : ''
-  const phone = typeof req.body.phone === 'string' && req.body.phone.trim() ? req.body.phone.trim() : null
+  const phone = typeof req.body.phone === 'string' ? req.body.phone.trim() : ''
   const role = typeof req.body.role === 'string' ? req.body.role.trim() : ''
   const isActive = req.body.isActive === undefined ? true : (req.body.isActive === true || req.body.isActive === 'true')
 
   if (!firstName || firstName.length > 100 || !lastName || lastName.length > 100) {
     return res.status(400).json({ message: 'First name and last name are required.' })
   }
-  if (phone && phone.length > 30) {
-    return res.status(400).json({ message: 'Phone number must be 30 characters or fewer.' })
+  if (middleName.length > 100) {
+    return res.status(400).json({ message: 'Middle name must be 100 characters or fewer.' })
+  }
+  const phoneError = validateMobileNumber(phone)
+  if (phoneError) {
+    return res.status(400).json({ message: phoneError })
   }
   if (!['client', 'gardener', 'administrator'].includes(role)) {
     return res.status(400).json({ message: 'Role must be client, gardener, or administrator.' })
@@ -264,9 +278,10 @@ async function updateUser(req, res, next) {
     }
 
     await connection.execute(
-      'UPDATE users SET first_name = ?, last_name = ?, phone = ?, role = ?, is_active = ? WHERE id = ?',
-      [firstName, lastName, phone, role, isActive, userId],
+      'UPDATE users SET first_name = ?, middle_name = ?, last_name = ?, phone = ?, role = ?, is_active = ? WHERE id = ?',
+      [firstName, middleName || null, lastName, phone, role, isActive, userId],
     )
+    await connection.execute('INSERT IGNORE INTO user_roles (user_id, role) VALUES (?, ?)', [userId, role])
     if (role === 'client') {
       await connection.execute('INSERT IGNORE INTO client_profiles (user_id) VALUES (?)', [userId])
     } else if (role === 'gardener') {
@@ -274,9 +289,14 @@ async function updateUser(req, res, next) {
     }
 
     const [rows] = await connection.execute(
-      'SELECT id, email, role, first_name, last_name, phone, avatar_path, is_active, created_at FROM users WHERE id = ? LIMIT 1',
+      `SELECT u.id, u.email, u.role, u.first_name, u.middle_name, u.last_name,
+              u.phone, u.avatar_path, u.is_active, u.created_at,
+              (SELECT GROUP_CONCAT(ur.role ORDER BY FIELD(ur.role, 'client', 'gardener', 'administrator'))
+               FROM user_roles ur WHERE ur.user_id = u.id) AS roles
+       FROM users u WHERE u.id = ? LIMIT 1`,
       [userId],
     )
+    rows[0].roles = rows[0].roles ? rows[0].roles.split(',') : []
     await connection.commit()
     return res.json({ user: rows[0] })
   } catch (error) {

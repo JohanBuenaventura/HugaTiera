@@ -19,6 +19,7 @@ import AppSidebar from '../components/AppSidebar'
 
 function ProfileForm({ role, profile, userId, onSaved }) {
   const [form, setForm] = useState(profile)
+  const [maxBirthDate] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10))
   const [avatarVersion, setAvatarVersion] = useState(0)
   const [avatarBusy, setAvatarBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -101,11 +102,74 @@ function ProfileForm({ role, profile, userId, onSaved }) {
         </div>
       </div>
     </div>
-    <div className="form-row"><label>First name<input required value={form.firstName} onChange={change('firstName')} /></label><label>Last name<input required value={form.lastName} onChange={change('lastName')} /></label></div>
-    <div className="form-row"><label>Phone<input value={form.phone || ''} onChange={change('phone')} /><span className="field-note">Optional</span></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
-    {role === 'client' ? <><div className="form-row"><label>Address<input value={form.address || ''} onChange={change('address')} /></label><label>City<input required value={form.city || ''} onChange={change('city')} /></label></div><label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label></> : <><div className="form-row"><label>Business or display name<input value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div><label>Service area<input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label><label>Professional description<textarea value={form.description || ''} onChange={change('description')} rows="4" /></label></>}
+    <div className="form-row"><label>First name<input required maxLength="100" value={form.firstName} onChange={change('firstName')} /></label><label>Middle name <span className="label-note">(optional)</span><input maxLength="100" value={form.middleName || ''} onChange={change('middleName')} /></label></div>
+    <div className="form-row"><label>Last name<input required maxLength="100" value={form.lastName} onChange={change('lastName')} /></label><label>Date of birth<input required type="date" max={maxBirthDate} value={form.dateOfBirth || ''} onChange={change('dateOfBirth')} /><span className="field-note">Private account information; must remain 18 or older.</span></label></div>
+    <div className="form-row"><label>Mobile phone number<input required type="tel" maxLength="30" value={form.phone || ''} onChange={change('phone')} /></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
+    {role === 'client' ? <><div className="form-row"><label>Service address<input required maxLength="255" autoComplete="street-address" value={form.address || ''} onChange={change('address')} /><span className="field-note">Private to your account; shared with a provider only in a mutual service agreement.</span></label><label>City<input required maxLength="100" value={form.city || ''} onChange={change('city')} /></label></div><label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label></> : <><div className="form-row"><label>Business or display name<input value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div><label>Service area<input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label><label>Professional description<textarea value={form.description || ''} onChange={change('description')} rows="4" /></label></>}
     <button className="button" type="submit" disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save profile'}</button>
   </form>
+}
+
+function AccountRoleSettings({ user }) {
+  const { enableRole } = useAuth()
+  const roles = user.roles || [user.role]
+  const availableRole = user.role === 'administrator'
+    ? null
+    : ['client', 'gardener'].find((role) => !roles.includes(role))
+  const [form, setForm] = useState({ address: '', city: 'Zamboanga City' })
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function submit(event) {
+    event.preventDefault()
+    if (!availableRole) return
+    setSaving(true); setError(''); setMessage('')
+    try {
+      await enableRole({ role: availableRole, ...form })
+      setMessage(availableRole === 'gardener'
+        ? 'Gardener mode is enabled. Your profile will remain pending until an administrator approves it.'
+        : 'Client mode is enabled and your service address has been saved privately.')
+    } catch (enableError) {
+      setError(enableError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="dashboard-panel account-role-settings">
+      <p className="eyebrow">One account, multiple roles</p>
+      <h3>Use HugaTiera as a client and a gardener.</h3>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {message && <div className="form-success" role="status">{message}</div>}
+      {availableRole === 'client' ? (
+        <form className="profile-form" onSubmit={submit}>
+          <p className="field-note">Your Client profile uses the same login. Add the service address you want saved to your private profile.</p>
+          <div className="form-row">
+            <label>Service address<input required maxLength="255" autoComplete="street-address" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>
+            <label>City<input required maxLength="100" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>
+          </div>
+          <button className="button button-outline" type="submit" disabled={saving}>
+            {saving ? 'Enabling client mode...' : 'Enable Client mode'}
+          </button>
+        </form>
+      ) : availableRole === 'gardener' ? (
+        <div className="inline-actions">
+          <span className="field-note">Your Gardener profile will need administrator approval before its services become public.</span>
+          <button className="button button-outline" type="button" disabled={saving} onClick={submit}>
+            {saving ? 'Enabling gardener mode...' : 'Enable Gardener mode'}
+          </button>
+        </div>
+      ) : (
+        <p className="field-note">
+          {roles.includes('client') && roles.includes('gardener')
+            ? 'Both roles are enabled. Use “Switch mode” in the sidebar to change workspaces.'
+            : 'Administrator accounts use the administration workspace.'}
+        </p>
+      )}
+    </section>
+  )
 }
 
 function Stats({ role, counts }) {
@@ -422,8 +486,8 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   const form = profileData.form || initialProfile
   const isProfileView = activeTab === 'profile'
   const displayName = role === 'gardener'
-    ? (form.businessName || `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim())
-    : `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim()
+    ? (form.businessName || [form.firstName || user.firstName, form.middleName || user.middleName, form.lastName || user.lastName].filter(Boolean).join(' '))
+    : [form.firstName || user.firstName, form.middleName || user.middleName, form.lastName || user.lastName].filter(Boolean).join(' ')
 
   return (
     <main className="dashboard-page">
@@ -512,16 +576,19 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
         )}
 
         {isProfileView ? (
-          <section className="dashboard-panel profile-settings-panel">
-            <div className="activity-heading">
-              <div>
-                <p className="eyebrow">Your profile</p>
-                <h2>Update your {roleLabel.toLowerCase()} information.</h2>
+          <>
+            <AccountRoleSettings user={user} />
+            <section className="dashboard-panel profile-settings-panel">
+              <div className="activity-heading">
+                <div>
+                  <p className="eyebrow">Your profile</p>
+                  <h2>Update your {roleLabel.toLowerCase()} information.</h2>
+                </div>
+                <Link className="text-link" to="/dashboard">Back to overview</Link>
               </div>
-              <Link className="text-link" to="/dashboard">Back to overview</Link>
-            </div>
-            <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
-          </section>
+              <ProfileForm key={`${role}-${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
+            </section>
+          </>
         ) : role === 'gardener' && (activeTab === 'services' || activeTab === 'portfolio') ? (
           <GardenerTools isApproved={form.is_approved} section={activeTab} />
         ) : (
@@ -616,6 +683,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
     try {
       const result = await profileApi.adminUpdateUser(editingAccount.id, {
         firstName: editingAccount.firstName,
+        middleName: editingAccount.middleName,
         lastName: editingAccount.lastName,
         phone: editingAccount.phone,
         role: editingAccount.role,
@@ -1186,13 +1254,16 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                   <button className="table-action" type="button" onClick={() => setEditingAccount(null)}>Cancel</button>
                 </div>
                 <div className="form-row">
-                  <label>First name<input required value={editingAccount.firstName} onChange={(e) => setEditingAccount({ ...editingAccount, firstName: e.target.value })} /></label>
-                  <label>Last name<input required value={editingAccount.lastName} onChange={(e) => setEditingAccount({ ...editingAccount, lastName: e.target.value })} /></label>
+                  <label>First name<input required maxLength="100" value={editingAccount.firstName} onChange={(e) => setEditingAccount({ ...editingAccount, firstName: e.target.value })} /></label>
+                  <label>Middle name<input maxLength="100" value={editingAccount.middleName} onChange={(e) => setEditingAccount({ ...editingAccount, middleName: e.target.value })} /></label>
                 </div>
                 <div className="form-row">
-                  <label>Phone<input value={editingAccount.phone} onChange={(e) => setEditingAccount({ ...editingAccount, phone: e.target.value })} /></label>
+                  <label>Last name<input required maxLength="100" value={editingAccount.lastName} onChange={(e) => setEditingAccount({ ...editingAccount, lastName: e.target.value })} /></label>
+                  <label>Mobile phone number<input required type="tel" maxLength="30" value={editingAccount.phone} onChange={(e) => setEditingAccount({ ...editingAccount, phone: e.target.value })} /></label>
+                </div>
+                <div className="form-row">
                   <label>
-                    Role
+                    Active mode (also enables that role if needed)
                     <select value={editingAccount.role} onChange={(e) => setEditingAccount({ ...editingAccount, role: e.target.value })}>
                       <option value="client">Client</option>
                       <option value="gardener">Gardener</option>
@@ -1215,8 +1286,8 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                 <tbody>
                   {summary.users.map((account) => (
                     <tr key={account.id}>
-                      <td>{account.first_name} {account.last_name}<small>{account.email}</small></td>
-                      <td>{account.role}</td>
+                      <td>{[account.first_name, account.middle_name, account.last_name].filter(Boolean).join(' ')}<small>{account.email}</small></td>
+                      <td>{account.role}<small>Enabled: {(account.roles || [account.role]).join(', ')}</small></td>
                       <td><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td>
                       <td>
                         <div className="inline-actions">
@@ -1227,6 +1298,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                               id: account.id,
                               email: account.email,
                               firstName: account.first_name,
+                              middleName: account.middle_name || '',
                               lastName: account.last_name,
                               phone: account.phone || '',
                               role: account.role,

@@ -149,6 +149,11 @@ describe('Step R6 – Gemini Requirements Assistant, Photo Understanding, Provid
        VALUES (?, 'Zamboanga Landscape Studio', 'Tropical garden design', 'Tetuan, Zamboanga City', 6, 1)`,
       [gardenerId],
     )
+    await pool.execute(
+      `INSERT INTO user_roles (user_id, role)
+       VALUES (?, 'client'), (?, 'client'), (?, 'gardener')`,
+      [clientAId, clientBId, gardenerId],
+    )
 
     const [cats] = await pool.query('SELECT id, name FROM service_categories WHERE is_active = 1 ORDER BY id ASC LIMIT 1')
     if (cats[0]) {

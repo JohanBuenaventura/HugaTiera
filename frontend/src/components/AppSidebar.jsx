@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
   Bell,
@@ -24,9 +24,12 @@ import { getDashboardNavLinks } from '../services/profiles'
 import AiAssistantWidget from './AiAssistantWidget'
 
 export default function AppSidebar() {
-  const { user, logout } = useAuth()
+  const { user, logout, switchRole } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const [unreadCounts, setUnreadCounts] = useState({})
+  const [switchingRole, setSwitchingRole] = useState(false)
+  const [roleSwitchError, setRoleSwitchError] = useState('')
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('hugatiera.sidebar.collapsed') === 'true')
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -95,6 +98,22 @@ export default function AppSidebar() {
   }
 
   const closeMobile = () => setMobileOpen(false)
+  const availableRoles = user.roles || [user.role]
+
+  async function handleRoleChange(event) {
+    const role = event.target.value
+    if (!role || role === user.role) return
+    setSwitchingRole(true); setRoleSwitchError('')
+    try {
+      await switchRole(role)
+      closeMobile()
+      navigate('/dashboard')
+    } catch (error) {
+      setRoleSwitchError(error.message)
+    } finally {
+      setSwitchingRole(false)
+    }
+  }
 
   const renderLink = (item) => {
     const Icon = iconFor(item.label)
@@ -162,6 +181,17 @@ export default function AppSidebar() {
               <small>{user.role}</small>
             </span>
           </div>
+          {availableRoles.length > 1 && (
+            <label className="app-sidebar-mode">
+              <span>Switch mode</span>
+              <select aria-label="Switch account mode" value={user.role} disabled={switchingRole} onChange={handleRoleChange}>
+                {availableRoles.map((role) => (
+                  <option value={role} key={role}>{role === 'gardener' ? 'Gardener' : role === 'client' ? 'Client' : 'Administrator'}</option>
+                ))}
+              </select>
+              {roleSwitchError && <small className="form-error" role="alert">{roleSwitchError}</small>}
+            </label>
+          )}
           <button
             className="app-sidebar-logout"
             type="button"

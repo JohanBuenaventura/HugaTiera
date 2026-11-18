@@ -158,7 +158,19 @@ export function RegisterPage() {
   const location = useLocation()
   const [params] = useSearchParams()
   const initialRole = params.get('role') === 'gardener' ? 'gardener' : 'client'
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', role: initialRole })
+  const [maxBirthDate] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10))
+  const [form, setForm] = useState({
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    dateOfBirth: '',
+    phone: '',
+    address: '',
+    city: 'Zamboanga City',
+    email: '',
+    password: '',
+    role: initialRole,
+  })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -174,10 +186,19 @@ export function RegisterPage() {
     <form className="auth-form" onSubmit={handleSubmit}>
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-row">
-        <label>First name<input required placeholder="First name" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></label>
-        <label>Last name<input required placeholder="Last name" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></label>
+        <label>First name<input required maxLength="100" placeholder="First name" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></label>
+        <label>Middle name <span className="label-note">(optional)</span><input maxLength="100" placeholder="Middle name" value={form.middleName} onChange={(event) => setForm({ ...form, middleName: event.target.value })} /></label>
       </div>
-      <label>Email address<input type="email" required autoComplete="email" placeholder="you@example.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
+      <div className="form-row">
+        <label>Last name<input required maxLength="100" placeholder="Last name" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></label>
+        <label>Date of birth<input required type="date" max={maxBirthDate} autoComplete="bday" value={form.dateOfBirth} onChange={(event) => setForm({ ...form, dateOfBirth: event.target.value })} /><span className="field-note">You must be at least 18. Your birth date stays private.</span></label>
+      </div>
+      <label>Mobile phone number<input required type="tel" autoComplete="tel" maxLength="30" placeholder="+63 917 123 4567" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+      {form.role === 'client' && <>
+        <label>Service address<input required maxLength="255" autoComplete="street-address" placeholder="House/building number, street, and barangay" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /><span className="field-note">Kept private; your exact address is shared only as part of a service agreement.</span></label>
+        <label>City<input required maxLength="100" autoComplete="address-level2" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>
+      </>}
+      <label>Email address<input type="email" required maxLength="255" autoComplete="email" placeholder="you@example.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
       <label>
         Password <span className="label-note">(8–72 characters)</span>
         <div className="password-input-wrap">

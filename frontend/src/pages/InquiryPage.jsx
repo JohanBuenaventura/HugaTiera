@@ -14,6 +14,7 @@ import {
   uploadRequestImage,
 } from '../services/requestImages'
 import { servicesApi } from '../services/services'
+import { profileApi } from '../services/profiles'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
 
@@ -25,6 +26,7 @@ function formatDate(value) {
 }
 
 function InquiryForm() {
+  const { user } = useAuth()
   const [params] = useSearchParams()
   const serviceId = params.get('serviceId')
   const gardenerId = params.get('gardenerId')
@@ -65,6 +67,25 @@ function InquiryForm() {
       servicesApi.gardener(gardenerId).then((result) => setGardener(result.gardener)).catch((loadError) => setError(loadError.message))
     }
   }, [gardenerId, isGeneralRequest, serviceId, validGardenerId, validServiceId])
+
+  useEffect(() => {
+    let active = true
+    if (user?.role !== 'client') return undefined
+
+    profileApi.get()
+      .then((result) => {
+        if (active && result.profile?.city) {
+          setForm((previous) => ({
+            ...previous,
+            location: previous.location || result.profile.city,
+          }))
+        }
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message)
+      })
+    return () => { active = false }
+  }, [user?.id, user?.role])
 
   const change = (field) => (event) => setForm({ ...form, [field]: event.target.value })
 
@@ -320,6 +341,7 @@ function InquiryForm() {
           </label>
           <label>Service area / barangay (area-level only)
             <input maxLength="255" value={form.location} onChange={change('location')} placeholder="e.g. Tetuan, Zamboanga City (exact address shared later)" />
+            <span className="field-note">Your saved city is suggested. Do not enter your street address here; this location can appear on the Open Requests Board.</span>
           </label>
         </div>
         <label>Garden photos (up to 5 JPEG, PNG, or WebP images; GPS/EXIF stripped automatically)
@@ -796,6 +818,10 @@ function InquiryDetails({ id }) {
               <small>
                 Schedule: {new Date(activeAgreement.scheduled_start).toLocaleString()} to {new Date(activeAgreement.scheduled_end).toLocaleString()} · Location: {activeAgreement.location}
               </small>
+              <div className="detail-facts" style={{ marginTop: '10px' }}>
+                {activeAgreement.client_phone && <span><strong>Client phone</strong><a href={`tel:${activeAgreement.client_phone.replace(/[^\d+]/g, '')}`}>{activeAgreement.client_phone}</a></span>}
+                {activeAgreement.gardener_phone && <span><strong>Provider phone</strong><a href={`tel:${activeAgreement.gardener_phone.replace(/[^\d+]/g, '')}`}>{activeAgreement.gardener_phone}</a></span>}
+              </div>
               <p className="form-note" style={{ marginTop: '8px' }}>
                 Client approval: {activeAgreement.client_approved_at ? 'Approved' : 'Pending'} · Gardener approval: {activeAgreement.gardener_approved_at ? 'Approved' : 'Pending'}
               </p>
@@ -839,6 +865,7 @@ function InquiryDetails({ id }) {
                   </div>
                   <label>Location
                     <input required maxLength="255" value={agreementForm.location} onChange={(e) => setAgreementForm({ ...agreementForm, location: e.target.value })} />
+                    <span className="field-note">The exact location is part of this agreement and is visible only to its parties.</span>
                   </label>
                   <label>Conditions
                     <textarea rows="2" value={agreementForm.conditions} onChange={(e) => setAgreementForm({ ...agreementForm, conditions: e.target.value })} />

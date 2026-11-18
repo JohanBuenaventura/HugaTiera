@@ -74,6 +74,10 @@ describe('Profile Avatars, Service Cover Photos & Admin Account Management', () 
     )
     unusedUserId = unusedRes.insertId
     await pool.execute('INSERT INTO client_profiles (user_id, city) VALUES (?, "Zamboanga City")', [unusedUserId])
+    await pool.execute(
+      'INSERT INTO user_roles (user_id, role) VALUES (?, "administrator"), (?, "client"), (?, "gardener"), (?, "client")',
+      [adminId, clientId, gardenerId, unusedUserId],
+    )
 
     const [cats] = await pool.execute('SELECT id FROM service_categories WHERE is_active = TRUE LIMIT 1')
     const [svcRes] = await pool.execute(

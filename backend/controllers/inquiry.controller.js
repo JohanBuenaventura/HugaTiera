@@ -317,7 +317,7 @@ async function getInquiry(req, res, next) {
 
     const isOwner = inquiry.client_id === req.user.id
     const isTargetedGardener = inquiry.gardener_id === req.user.id
-    const isAdmin = req.user.role === 'administrator'
+    const isAdmin = req.user.roles.includes('administrator')
 
     if (!isOwner && !isTargetedGardener && !isAdmin) {
       if (inquiry.request_type === 'general' && req.user.role === 'gardener') {
@@ -585,7 +585,8 @@ async function createInquiry(req, res, next) {
           `SELECT u.id
            FROM users u
            JOIN gardener_profiles gp ON gp.user_id = u.id AND gp.is_approved = TRUE
-           WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE
+           JOIN user_roles ur ON ur.user_id = u.id AND ur.role = 'gardener'
+           WHERE u.id = ? AND u.is_active = TRUE
            LIMIT 1
            FOR UPDATE`,
           [resolvedGardenerId],

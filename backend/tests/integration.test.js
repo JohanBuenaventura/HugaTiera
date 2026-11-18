@@ -88,6 +88,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       [adminEmail, passwordHash],
     )
     adminId = result.insertId
+    await pool.execute('INSERT INTO user_roles (user_id, role) VALUES (?, "administrator")', [adminId])
     createdUserIds.push(adminId)
 
     const loginRes = await apiRequest('/auth/login', {
@@ -142,11 +143,31 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(adminAttempt.status, 400)
 
+    const underageReg = await apiRequest('/auth/register', {
+      method: 'POST',
+      body: {
+        firstName: 'Young',
+        lastName: 'Applicant',
+        dateOfBirth: '2009-04-15',
+        phone: '09171234567',
+        email: `underage.${runId}@hugatiera.local`,
+        password: 'Password123!',
+        role: 'gardener',
+      },
+    })
+    assert.equal(underageReg.status, 400)
+    assert.match(underageReg.data.message, /at least 18/i)
+
     const clientReg = await apiRequest('/auth/register', {
       method: 'POST',
       body: {
         firstName: 'Maria',
+        middleName: 'Cruz',
         lastName: 'Santos',
+        dateOfBirth: '1990-04-15',
+        phone: '+63 917 123 4567',
+        address: '12 Garden Street, Tetuan',
+        city: 'Zamboanga City',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
         role: 'client',
@@ -154,15 +175,32 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(clientReg.status, 201)
     assert.equal(clientReg.data.user.role, 'client')
+    assert.deepEqual(clientReg.data.user.roles, ['client'])
+    assert.equal(clientReg.data.user.middleName, 'Cruz')
+    assert.equal('dateOfBirth' in clientReg.data.user, false)
     clientCookie = clientReg.cookie
     clientId = clientReg.data.user.id
     createdUserIds.push(clientId)
+    const [[registeredClient]] = await pool.execute(
+      `SELECT u.middle_name, DATE_FORMAT(u.date_of_birth, '%Y-%m-%d') AS date_of_birth, cp.address, cp.city
+       FROM users u JOIN client_profiles cp ON cp.user_id = u.id WHERE u.id = ?`,
+      [clientId],
+    )
+    assert.equal(registeredClient.middle_name, 'Cruz')
+    assert.equal(registeredClient.date_of_birth, '1990-04-15')
+    assert.equal(registeredClient.address, '12 Garden Street, Tetuan')
+    assert.equal(registeredClient.city, 'Zamboanga City')
 
     const duplicateReg = await apiRequest('/auth/register', {
       method: 'POST',
       body: {
         firstName: 'Maria',
+        middleName: 'Cruz',
         lastName: 'Santos',
+        dateOfBirth: '1990-04-15',
+        phone: '+63 917 123 4567',
+        address: '12 Garden Street, Tetuan',
+        city: 'Zamboanga City',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
         role: 'client',
@@ -175,6 +213,8 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Ramon',
         lastName: 'Verde',
+        dateOfBirth: '1988-08-20',
+        phone: '09187654321',
         email: `gardener.${runId}@hugatiera.local`,
         password: 'Password123!',
         role: 'gardener',
@@ -189,6 +229,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     const meRes = await apiRequest('/auth/me', { cookie: clientCookie })
     assert.equal(meRes.status, 200)
     assert.equal(meRes.data.user.id, clientId)
+    assert.equal('dateOfBirth' in meRes.data.user, false)
   })
 
   test('TC-03: Role-based authorization blocks unauthorized access', async () => {
@@ -204,6 +245,47 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: { title: 'Unauthorized', description: 'Test', categoryId },
     })
     assert.equal(clientServiceAttempt.status, 403)
+
+    const invalidRoleSwitch = await apiRequest('/auth/active-role', {
+      method: 'PATCH',
+      cookie: clientCookie,
+      body: { role: 'gardener' },
+    })
+    assert.equal(invalidRoleSwitch.status, 403)
+
+    const missingClientDetails = await apiRequest('/auth/roles', {
+      method: 'POST',
+      cookie: gardenerCookie,
+      body: { role: 'client' },
+    })
+    assert.equal(missingClientDetails.status, 400)
+
+    const enabledGardener = await apiRequest('/auth/roles', {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { role: 'gardener' },
+    })
+    assert.equal(enabledGardener.status, 201)
+    assert.deepEqual(enabledGardener.data.user.roles, ['client', 'gardener'])
+    assert.equal(enabledGardener.data.user.role, 'gardener')
+
+    const gardenerServiceList = await apiRequest('/services/mine', { cookie: clientCookie })
+    assert.equal(gardenerServiceList.status, 200)
+
+    const switchedBack = await apiRequest('/auth/active-role', {
+      method: 'PATCH',
+      cookie: clientCookie,
+      body: { role: 'client' },
+    })
+    assert.equal(switchedBack.status, 200)
+    assert.equal(switchedBack.data.user.role, 'client')
+    assert.deepEqual(switchedBack.data.user.roles, ['client', 'gardener'])
+
+    const inactiveModeServiceList = await apiRequest('/services/mine', { cookie: clientCookie })
+    assert.equal(inactiveModeServiceList.status, 403)
+
+    const bothModesProfile = await apiRequest('/profiles/me', { cookie: clientCookie })
+    assert.deepEqual(bothModesProfile.data.user.roles, ['client', 'gardener'])
   })
 
   test('TC-04: Client and Gardener profile retrieval and updates', async () => {
@@ -212,8 +294,10 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       cookie: clientCookie,
       body: {
         firstName: 'Maria',
+        middleName: 'Cruz',
         lastName: 'Santos',
-        phone: '09171234567',
+        dateOfBirth: '1990-04-15',
+        phone: '+63 917 123 4567',
         address: 'Tetuan',
         city: 'Zamboanga City',
         bio: 'Homeowner looking for garden maintenance.',
@@ -228,6 +312,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Ramon',
         lastName: 'Verde',
+        dateOfBirth: '1988-08-20',
         phone: '09187654321',
         businessName: 'Verde Zamboanga Gardens',
         serviceArea: 'Zamboanga City',
@@ -721,7 +806,9 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     assert.equal(getClientProfile.data.user.role, 'client')
     const clientForm = profileHelpers.buildProfileForm(getClientProfile.data)
     assert.equal(clientForm.firstName, 'Maria')
+    assert.equal(clientForm.middleName, 'Cruz')
     assert.equal(clientForm.lastName, 'Santos')
+    assert.equal(clientForm.dateOfBirth, '1990-04-15')
     assert.equal(clientForm.address, 'Tetuan')
     assert.equal(clientForm.city, 'Zamboanga City')
 
@@ -747,7 +834,9 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       cookie: clientCookie,
       body: {
         firstName: 'Maria',
+        middleName: 'Cruz',
         lastName: 'Santos',
+        dateOfBirth: '1990-04-15',
         phone: '09171234568',
         address: 'Pasonanca',
         city: 'Zamboanga City',
@@ -817,6 +906,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     assert.equal(profileHelpers.shouldShowFloatingMessageIcon({ id: 1, role: 'administrator' }), false)
     assert.equal(profileHelpers.shouldShowFloatingMessageIcon({ id: clientId, role: 'client' }), true)
     assert.equal(profileHelpers.shouldShowFloatingMessageIcon({ id: gardenerId, role: 'gardener' }), true)
+    assert.equal(profileHelpers.shouldShowFloatingMessageIcon({ id: clientId, role: 'client', roles: ['client', 'gardener'] }), true)
     assert.equal(profileHelpers.FLOATING_MESSAGE_ICON_LABEL, 'Open messages and notifications')
   })
 

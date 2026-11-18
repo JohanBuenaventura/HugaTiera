@@ -198,6 +198,8 @@ Requirements:
 12. Secure cookie or token handling based on the selected authentication approach.
 13. Prevent users from accessing features belonging to other roles.
 14. Do not allow public Administrator registration.
+15. Allow one person to hold both Client and Gardener roles under one login. Store assigned role memberships separately from the selected dashboard mode, and authorize role-specific backend operations only when the required role is both assigned and currently active.
+16. Keep company/team provider accounts out of scope unless separately approved.
 
 Explain the selected authentication approach and its security implications before implementation.
 
@@ -236,6 +238,8 @@ Administrator:
 - Access administrative dashboard.
 - View platform summary information.
 - Access basic user management functions.
+
+One account may have both Client and Gardener profiles. Switching the active dashboard mode must preserve both profiles and their data.
 
 Requirements:
 

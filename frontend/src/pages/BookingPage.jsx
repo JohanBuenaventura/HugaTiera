@@ -10,6 +10,7 @@ import {
   getStatusBadgeClass,
 } from '../services/bookings'
 import { inquiriesApi } from '../services/inquiries'
+import { profileApi } from '../services/profiles'
 import { fetchInquiryImages, getRequestImageUrl } from '../services/requestImages'
 import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
@@ -17,6 +18,7 @@ import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
 
 function BookingForm() {
+  const { user } = useAuth()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const inquiryIdParam = Number(params.get('inquiryId'))
@@ -37,29 +39,42 @@ function BookingForm() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (direct) {
-      servicesApi.detail(serviceId).then((res) => {
-        if (res?.service) {
-          setForm((prev) => ({
-            ...prev,
-            scopeOfWork: prev.scopeOfWork || `${res.service.title}: ${res.service.description}`,
-            amount: prev.amount || (res.service.indicative_price ?? ''),
-            priceBasis: prev.priceBasis || (res.service.price_unit ?? ''),
-          }))
-        }
-      }).catch(() => {})
-    } else if (Number.isInteger(inquiryIdParam) && inquiryIdParam > 0) {
-      inquiriesApi.get(inquiryIdParam).then((res) => {
-        const quote = (res?.quotations || []).find((q) => q.id === quotationId || q.status === 'accepted')
-        setResolvedInquiryId(inquiryIdParam)
-        setForm((prev) => ({
-          ...prev,
-          scopeOfWork: prev.scopeOfWork || quote?.details || res?.inquiry?.description || '',
-          amount: prev.amount || (quote?.amount ?? ''),
-          location: prev.location || (res?.inquiry?.location ?? ''),
-        }))
-      }).catch(() => {})
+    let active = true
+    async function loadAgreementDefaults() {
+      const profileResult = await profileApi.get()
+      const exactAddress = [profileResult.profile?.address, profileResult.profile?.city]
+        .filter(Boolean)
+        .join(', ')
+      let service = null
+      let inquiry = null
+      let quote = null
+
+      if (direct) {
+        const result = await servicesApi.detail(serviceId)
+        service = result?.service || null
+      } else if (Number.isInteger(inquiryIdParam) && inquiryIdParam > 0) {
+        const result = await inquiriesApi.get(inquiryIdParam)
+        inquiry = result?.inquiry || null
+        quote = (result?.quotations || []).find((item) => item.id === quotationId || item.status === 'accepted') || null
+      }
+
+      if (!active) return
+      if (inquiry) setResolvedInquiryId(inquiryIdParam)
+      setForm((prev) => ({
+        ...prev,
+        scopeOfWork: prev.scopeOfWork || (service
+          ? `${service.title}: ${service.description}`
+          : quote?.details || inquiry?.description || ''),
+        amount: prev.amount || (service?.indicative_price ?? quote?.amount ?? ''),
+        priceBasis: prev.priceBasis || service?.price_unit || '',
+        location: prev.location || exactAddress || inquiry?.location || '',
+      }))
     }
+
+    loadAgreementDefaults().catch((loadError) => {
+      if (active) setError(loadError.message)
+    })
+    return () => { active = false }
   }, [direct, inquiryIdParam, quotationId, serviceId])
 
   const change = (field) => (event) => setForm({ ...form, [field]: event.target.value })
@@ -119,6 +134,7 @@ function BookingForm() {
         </div>
         <label>Exact service location
           <input required maxLength="255" value={form.location} onChange={change('location')} placeholder="Complete address or barangay location in Zamboanga City" />
+          {user.role === 'client' && <span className="field-note">Prefilled from your private profile. This address is included in the mutual agreement and shared with its provider.</span>}
         </label>
         <label>Special conditions or notes (optional)
           <textarea rows="3" maxLength="5000" value={form.conditions} onChange={change('conditions')} placeholder="Materials, access instructions, or weather conditions." />
@@ -210,6 +226,8 @@ function BookingDetails({ id }) {
           <span><strong>Starts</strong>{new Date(booking.scheduled_start).toLocaleString()}</span>
           <span><strong>Ends</strong>{new Date(booking.scheduled_end).toLocaleString()}</span>
           <span><strong>Location</strong>{booking.location}</span>
+          {booking.client_phone && <span><strong>Client phone</strong><a href={`tel:${booking.client_phone.replace(/[^\d+]/g, '')}`}>{booking.client_phone}</a></span>}
+          {booking.gardener_phone && <span><strong>Provider phone</strong><a href={`tel:${booking.gardener_phone.replace(/[^\d+]/g, '')}`}>{booking.gardener_phone}</a></span>}
         </div>
         {agreementSummary.hasAgreement && (
           <div className="booking-agreement-summary">

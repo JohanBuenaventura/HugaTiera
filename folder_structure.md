@@ -43,7 +43,10 @@ HugaTiera/
 │   ├── services/
 │   │   ├── ai.service.js
 │   │   └── notification.service.js
+│   ├── utils/
+│   │   └── accountValidation.js
 │   ├── tests/
+│   │   ├── accountValidation.test.js
 │   │   ├── avatarsServicesAdmin.test.js
 │   │   ├── integration.test.js
 │   │   ├── r2.requestImages.test.js
@@ -71,7 +74,11 @@ HugaTiera/
 │   │   ├── 001_unified_requests_and_agreements.sql
 │   │   ├── 001_unified_requests_and_agreements_rollback.sql
 │   │   ├── 002_avatars_service_images.sql
-│   │   └── 002_avatars_service_images_rollback.sql
+│   │   ├── 002_avatars_service_images_rollback.sql
+│   │   ├── 003_registration_profile_details.sql
+│   │   ├── 003_registration_profile_details_rollback.sql
+│   │   ├── 004_multi_role_accounts.sql
+│   │   └── 004_multi_role_accounts_rollback.sql
 │   ├── schema/
 │   │   └── hugatiera_schema.sql
 │   └── README.md

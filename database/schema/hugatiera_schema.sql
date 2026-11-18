@@ -10,13 +10,24 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('client', 'gardener', 'administrator') NOT NULL,
   first_name VARCHAR(100) NOT NULL,
+  middle_name VARCHAR(100) NULL,
   last_name VARCHAR(100) NOT NULL,
+  date_of_birth DATE NULL,
   phone VARCHAR(30) NULL,
   avatar_path VARCHAR(255) NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_users_role_active (role, is_active)
+) ENGINE=InnoDB;
+
+CREATE TABLE user_roles (
+  user_id INT UNSIGNED NOT NULL,
+  role ENUM('client', 'gardener', 'administrator') NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, role),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_user_roles_role_user (role, user_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE client_profiles (

@@ -12,26 +12,35 @@ This directory contains the authoritative relational schema, migration scripts, 
 | **Automated Test Database** | `hugatiera_db_migration_test` |
 | **Database Engine** | MySQL 8.0.16+ / MariaDB 10.4.32 (XAMPP) — `InnoDB` |
 | **Character Set & Collation** | `utf8mb4` / `utf8mb4_unicode_ci` |
-| **Total Tables** | `19` |
-| **Total Foreign Key Constraints** | `46` |
+| **Fresh-Install Tables** | `20` |
+| **Fresh-Install Foreign Key Constraints** | `47` |
 | **Fresh-Install Schema** | `database/schema/hugatiera_schema.sql` |
 | **Migration 001 Forward Script** | `database/migrations/001_unified_requests_and_agreements.sql` |
 | **Migration 001 Structural Rollback** | `database/migrations/001_unified_requests_and_agreements_rollback.sql` |
+| **Migration 003 Forward Script** | `database/migrations/003_registration_profile_details.sql` |
+| **Migration 003 Structural Rollback** | `database/migrations/003_registration_profile_details_rollback.sql` |
+| **Migration 004 Forward Script** | `database/migrations/004_multi_role_accounts.sql` |
+| **Migration 004 Structural Rollback** | `database/migrations/004_multi_role_accounts_rollback.sql` |
 | **Local Backups Directory** | `database/backups/` (git-ignored) |
 
 > [!CAUTION]
 > **Production Migration 001 Status:** Migration 001 (`001_unified_requests_and_agreements.sql`) was **executed and verified on `hugatiera_db` on November 12, 2026**. Both `hugatiera_db` and `hugatiera_db_migration_test` are at the complete 19-table schema (`46` foreign key constraints). **Do NOT rerun `001_unified_requests_and_agreements.sql` on `hugatiera_db`.**
 
+> **Migration 003 status:** The registration/profile branch adds nullable `users.middle_name` and `users.date_of_birth` columns to the fresh-install schema and provides Migration 003 for existing databases. Migration 003 has **not** been run against the local database. Back up the target database and obtain explicit approval before applying it.
+
+> **Migration 004 status:** The multi-role branch adds `user_roles` to the fresh-install schema and provides Migration 004 for existing databases. Migration 004 has **not** been run against the local database. Apply it only after Migration 003, after reviewing and backing up the target database, and with explicit approval.
+
 ---
 
 ## 2. Entity Relationship Diagram (ERD)
 
-The Mermaid Entity Relationship Diagram below represents all **19 tables** in the current `hugatiera_db` schema, including primary keys (`PK`), foreign keys (`FK`), unique keys (`UK`), and relationship cardinalities (`||` mandatory one, `|o` optional one, `o{` zero or many).
+The Mermaid Entity Relationship Diagram below represents the **20-table fresh-install schema**, including nullable registration fields from Migration 003 and role memberships from Migration 004. Existing databases do not have those additions until the migrations are approved and applied. The diagram includes primary keys (`PK`), foreign keys (`FK`), unique keys (`UK`), and relationship cardinalities (`||` mandatory one, `|o` optional one, `o{` zero or many).
 
 ```mermaid
 erDiagram
   users ||--o| client_profiles : "has client profile"
   users ||--o| gardener_profiles : "has gardener profile"
+  users ||--|{ user_roles : "has assigned roles"
   users ||--o{ services : "gardener offers"
   service_categories ||--o{ services : "categorizes"
   users ||--o{ portfolios : "gardener uploads"
@@ -91,13 +100,21 @@ erDiagram
     int_unsigned id PK
     varchar email UK
     varchar password_hash
-    enum role "client | gardener | administrator"
+    enum role "active mode"
     varchar first_name
+    varchar middle_name "nullable"
     varchar last_name
+    date date_of_birth "nullable; private"
     varchar phone
     boolean is_active
     timestamp created_at
     timestamp updated_at
+  }
+
+  user_roles {
+    int_unsigned user_id PK, FK
+    enum role PK "client | gardener | administrator"
+    timestamp created_at
   }
 
   client_profiles {
@@ -335,15 +352,15 @@ erDiagram
 
 ---
 
-## 3. Complete Table-by-Table Schema Reference (19 Tables)
+## 3. Complete Table-by-Table Schema Reference (20 Tables)
 
 ### 3.1 `users`
-- **Purpose:** Stores core authentication credentials, role assignment, contact info, and activation state for all platform users.
+- **Purpose:** Stores core authentication credentials, active dashboard mode, contact info, and activation state for all platform users.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Unique Constraints:** `email` (`UNIQUE`)
 - **Indexes:** `idx_users_role_active (role, is_active)`
 - **Business Rules:**
-  - Public registration (`/api/auth/register`) only permits `'client'` and `'gardener'`; `'administrator'` self-registration is rejected (`403`).
+  - Public registration (`/api/auth/register`) only permits `'client'` and `'gardener'`; other roles are rejected (`400`).
   - `requireAuth` middleware checks `is_active = TRUE` on every authenticated API request so deactivated accounts immediately lose access (`403`).
 
 | Column | Data Type | Nullability | Default | Notes |
@@ -351,18 +368,39 @@ erDiagram
 | `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
 | `email` | `VARCHAR(255)` | `NOT NULL` | — | Unique login identifier |
 | `password_hash` | `VARCHAR(255)` | `NOT NULL` | — | `bcryptjs` hash (`10` salt rounds) |
-| `role` | `ENUM('client', 'gardener', 'administrator')` | `NOT NULL` | — | Role-based access control |
+| `role` | `ENUM('client', 'gardener', 'administrator')` | `NOT NULL` | — | Currently selected dashboard mode; permissions are granted by `user_roles` |
 | `first_name` | `VARCHAR(100)` | `NOT NULL` | — | User's given name |
+| `middle_name` | `VARCHAR(100)` | `NULL` | `NULL` | Optional middle name; introduced by Migration 003 |
 | `last_name` | `VARCHAR(100)` | `NOT NULL` | — | User's family name |
-| `phone` | `VARCHAR(30)` | `NULL` | `NULL` | Optional contact phone |
+| `date_of_birth` | `DATE` | `NULL` | `NULL` | Private date of birth; Migration 003; new registration requires the user to be 18 or older |
+| `phone` | `VARCHAR(30)` | `NULL` | `NULL` | Mobile number required for new registrations; nullable for existing accounts |
 | `is_active` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `TRUE` (`1`) | Account active flag |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
 
 ---
 
+### 3.1a `user_roles`
+- **Purpose:** Stores the roles an account is authorized to use. A person may have both `client` and `gardener`; `users.role` records the currently selected mode.
+- **Primary Key:** Composite (`user_id`, `role`)
+- **Foreign Keys:** `user_id` → `users(id)` `ON DELETE CASCADE`
+- **Indexes:** `idx_user_roles_role_user (role, user_id)`
+- **Business Rules:**
+  - Registration assigns the initially selected role.
+  - Enabling the other public role creates its role-specific profile in the same transaction.
+  - `requireRole` checks assigned memberships; the active mode is a UI/workspace context, not a substitute for authorization.
+  - Migration 004 backfills the existing `users.role` and existing client/gardener profile rows.
+
+| Column | Data Type | Nullability | Default | Notes |
+|---|---|---|---|---|
+| `user_id` | `INT UNSIGNED` | `NOT NULL` | — | PK & FK to `users.id` |
+| `role` | `ENUM('client', 'gardener', 'administrator')` | `NOT NULL` | — | PK; assigned capability |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Membership creation time |
+
+---
+
 ### 3.2 `client_profiles`
-- **Purpose:** Stores extended profile attributes specific to users with `role = 'client'`.
+- **Purpose:** Stores extended profile attributes specific to accounts assigned the client role.
 - **Primary Key:** `user_id` (`INT UNSIGNED`)
 - **Foreign Keys:**
   - `user_id` → `users(id)` `ON DELETE CASCADE` (1:1 relationship with `users`)
@@ -377,7 +415,7 @@ erDiagram
 ---
 
 ### 3.3 `gardener_profiles`
-- **Purpose:** Stores professional details, service area, experience, and administrator approval state for users with `role = 'gardener'`.
+- **Purpose:** Stores professional details, service area, experience, and administrator approval state for accounts assigned the gardener role.
 - **Primary Key:** `user_id` (`INT UNSIGNED`)
 - **Foreign Keys:**
   - `user_id` → `users(id)` `ON DELETE CASCADE` (1:1 relationship with `users`)
@@ -856,7 +894,7 @@ erDiagram
 
 ---
 
-## 4. Foreign Key Constraint Summary (46 Total)
+## 4. Foreign Key Constraint Summary (47 Total)
 
 | Table | Foreign Key Count | Referenced Tables |
 |---|---|---|
@@ -878,8 +916,9 @@ erDiagram
 | `request_events` | `4` | `inquiries`, `quotations`, `agreements`, `users` |
 | `ai_usage_log` | `1` | `users` |
 | `users` | `0` | — |
+| `user_roles` | `1` | `users` |
 | `service_categories` | `0` | — |
-| **Total** | **`46`** | — |
+| **Total** | **`47`** | — |
 
 ---
 
@@ -924,5 +963,17 @@ Migration 001 (`database/migrations/001_unified_requests_and_agreements.sql`) up
 
 ### 5.4 Important Operational & Rollback Notes
 - **Do NOT Rerun Migration 001:** Running `001_unified_requests_and_agreements.sql` a second time against `hugatiera_db` or `hugatiera_db_migration_test` will fail with duplicate column/table/constraint errors (`ER_DUP_FIELDNAME` / `ER_TABLE_EXISTS_ERROR`).
-- **Fresh Installations:** On a brand-new environment with no existing database, run `database/schema/hugatiera_schema.sql` directly. It already creates all `19` tables and `46` foreign keys in their final post-Migration-001 state.
+- **Fresh Installations:** On a brand-new environment with no existing database, run `database/schema/hugatiera_schema.sql` directly. It creates all `20` tables and `47` foreign keys, including the registration and multi-role additions.
 - **MariaDB DDL Auto-Commit & Authoritative Recovery:** In MySQL and MariaDB, `ALTER TABLE`, `CREATE TABLE`, and `DROP TABLE` statements cause an implicit commit and cannot be wrapped in a single atomic SQL rollback transaction. While `001_unified_requests_and_agreements_rollback.sql` is provided to reverse the structural changes on an empty/rehearsal database, **the authoritative production recovery mechanism is restoring the pre-migration dump (`database/backups/hugatiera_db_pre_migration001_final_20261112_202700.sql`)**.
+
+## 6. Migration 003 — Registration/Profile Details
+
+Migration 003 adds nullable `users.middle_name` and `users.date_of_birth` columns. Nullability preserves existing accounts, while application validation requires new registrations (and later profile edits) to provide an adult date of birth and a valid mobile number. New client registrations also store the required service address and city in the existing `client_profiles` table; no new address column or table is added.
+
+The fresh-install schema includes both columns. Existing installations must review and back up the target database before running `database/migrations/003_registration_profile_details.sql`. The forward migration and rollback are authored but have not been executed or rehearsed against the local database. The rollback permanently deletes stored middle names and dates of birth.
+
+## 7. Migration 004 — Individual Multi-Role Accounts
+
+Migration 004 creates `user_roles`, a many-to-many role-membership table, and backfills each user's current `users.role` plus any existing client/gardener profile memberships. `users.role` remains the active dashboard mode. Role-specific profile data remains in `client_profiles` and `gardener_profiles`; self-service role enablement creates the missing profile and membership transactionally.
+
+The fresh-install schema includes `user_roles`. Existing installations must apply Migration 003 first, then review and back up the target database before running `database/migrations/004_multi_role_accounts.sql`. Neither migration has been applied to the local database. The rollback drops `user_roles`, permanently removing any additional memberships while leaving each account's current `users.role` value in place. Do not execute migrations or rollback scripts without explicit approval.

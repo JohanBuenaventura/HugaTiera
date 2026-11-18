@@ -1,12 +1,12 @@
 # HugaTiera — Entity-Relationship Diagram (ERD) and Data Flow Diagrams (DFD)
 
-This document describes the database structure and data flows of **HugaTiera**, grounded directly in the 19-table MySQL schema ([hugatiera_schema.sql](../database/schema/hugatiera_schema.sql), updated through Migration 001 and Migration 002).
+This document describes the database structure and data flows of **HugaTiera**, grounded directly in the 20-table fresh-install MySQL schema ([hugatiera_schema.sql](../database/schema/hugatiera_schema.sql)), including registration details and Migration 004's multi-role membership table. Existing local databases remain at 19 tables / 46 foreign keys until the pending migrations are reviewed and applied.
 
 ---
 
 ## 1. Entity-Relationship Diagram (ERD)
 
-### 1.1 Full 19-Table Database ERD
+### 1.1 Full 20-Table Fresh-Install ERD
 
 ```mermaid
 erDiagram
@@ -14,7 +14,7 @@ erDiagram
     INT id PK
     VARCHAR email UK
     VARCHAR password_hash
-    ENUM role
+    ENUM role "active dashboard mode"
     VARCHAR first_name
     VARCHAR last_name
     VARCHAR phone
@@ -22,6 +22,12 @@ erDiagram
     BOOLEAN is_active
     TIMESTAMP created_at
     TIMESTAMP updated_at
+  }
+
+  user_roles {
+    INT user_id PK,FK
+    ENUM role PK
+    TIMESTAMP created_at
   }
 
   client_profiles {
@@ -257,6 +263,7 @@ erDiagram
 
   users ||--o| client_profiles : "has client profile"
   users ||--o| gardener_profiles : "has gardener profile"
+  users ||--|{ user_roles : "has assigned roles"
   users ||--o{ services : "offers"
   users ||--o{ portfolios : "showcases"
   service_categories ||--o{ services : "classifies"
@@ -309,7 +316,7 @@ erDiagram
 
 | Domain | Tables | Key Schema & Integrity Rules |
 |---|---|---|
-| **Identity & Profiles** | `users`, `client_profiles`, `gardener_profiles` | `users.role` is `client`, `gardener`, or `administrator`. `users.avatar_path` stores optional profile pictures. `gardener_profiles.is_approved` gates public marketplace visibility. |
+| **Identity & Profiles** | `users`, `user_roles`, `client_profiles`, `gardener_profiles` | `users.role` stores the active dashboard mode; `user_roles` stores assigned capabilities, allowing one person to hold both Client and Gardener roles. `users.avatar_path` stores optional profile pictures. `gardener_profiles.is_approved` gates public marketplace visibility. |
 | **Marketplace & Portfolios** | `service_categories`, `services`, `portfolios` | `services.image_path` stores optional service cover/business design photos. `category_id` uses `ON DELETE RESTRICT` to preserve historical listings. |
 | **Unified Request Engine** | `inquiries`, `quotations`, `quotation_revisions`, `request_images`, `request_events` | Supports Case 1 (`general`, `gardener_id` nullable) and Case 2 (`direct`, `gardener_id` required via `chk_inquiries_direct_has_provider`). `uq_quotation_active_offer` prevents duplicate active offers per provider per inquiry. |
 | **Agreements & Bookings** | `agreements`, `bookings`, `reviews` | `agreements` enforces `chk_agreement_agreed_needs_both` and `uq_one_active_agreement`. `bookings.agreement_id` is unique (`uq_booking_agreement`), ensuring one confirmed booking per agreed agreement. `reviews.booking_id` is unique (`uq_review_booking`). |
@@ -359,7 +366,7 @@ flowchart TD
   P6(["6.0 Messaging, Notifications & Reviews"])
   P7(["7.0 Admin Moderation & Analytics"])
 
-  D1[("D1: users, client_profiles, gardener_profiles")]
+  D1[("D1: users, user_roles, client_profiles, gardener_profiles")]
   D2[("D2: service_categories, services, portfolios")]
   D3[("D3: inquiries, request_images, request_events")]
   D4[("D4: quotations, quotation_revisions")]
