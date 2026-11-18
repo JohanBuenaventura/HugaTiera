@@ -122,6 +122,7 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       body: {
         firstName: 'ClientA',
         lastName: 'R2Test',
+        dateOfBirth: '2000-01-01',
         email: `r2.clienta.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'client',
@@ -137,6 +138,7 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       body: {
         firstName: 'ClientB',
         lastName: 'R2Test',
+        dateOfBirth: '2000-01-01',
         email: `r2.clientb.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'client',
@@ -152,6 +154,7 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       body: {
         firstName: 'GardenerOne',
         lastName: 'R2Test',
+        dateOfBirth: '2000-01-01',
         email: `r2.gardener1.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'gardener',
@@ -167,6 +170,7 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       body: {
         firstName: 'GardenerTwo',
         lastName: 'R2Test',
+        dateOfBirth: '2000-01-01',
         email: `r2.gardener2.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'gardener',
@@ -182,6 +186,7 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       body: {
         firstName: 'GardenerThree',
         lastName: 'R2Test',
+        dateOfBirth: '2000-01-01',
         email: `r2.gardener3.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'gardener',

@@ -2,6 +2,7 @@ const apiBaseUrl = import.meta.env?.VITE_API_URL || '/api'
 
 export const initialProfile = {
   firstName: '',
+  middleName: '',
   lastName: '',
   phone: '',
   address: '',
@@ -60,6 +61,7 @@ export function buildProfileForm(result, baseForm = initialProfile) {
     ...userPart,
     ...profilePart,
     firstName: userPart.firstName ?? userPart.first_name ?? baseForm.firstName ?? '',
+    middleName: userPart.middleName ?? userPart.middle_name ?? baseForm.middleName ?? '',
     lastName: userPart.lastName ?? userPart.last_name ?? baseForm.lastName ?? '',
     phone: userPart.phone ?? baseForm.phone ?? '',
     avatarPath: userPart.avatarPath ?? userPart.avatar_path ?? null,

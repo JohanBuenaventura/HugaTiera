@@ -135,6 +135,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Fake',
         lastName: 'Admin',
+        dateOfBirth: '2000-01-01',
         email: `fake.admin.${runId}@hugatiera.local`,
         password: 'Password123!',
         role: 'administrator',
@@ -142,11 +143,57 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(adminAttempt.status, 400)
 
-    const clientReg = await apiRequest('/auth/register', {
+    const longMiddleNameAttempt = await apiRequest('/auth/register', {
+      method: 'POST',
+      body: {
+        firstName: 'Maria',
+        middleName: 'M'.repeat(101),
+        lastName: 'Santos',
+        dateOfBirth: '2000-01-01',
+        email: `long.middle.${runId}@hugatiera.local`,
+        password: 'Password123!',
+        role: 'client',
+      },
+    })
+    assert.equal(longMiddleNameAttempt.status, 400)
+
+    const longAddressAttempt = await apiRequest('/auth/register', {
       method: 'POST',
       body: {
         firstName: 'Maria',
         lastName: 'Santos',
+        dateOfBirth: '2000-01-01',
+        address: 'A'.repeat(256),
+        email: `long.address.${runId}@hugatiera.local`,
+        password: 'Password123!',
+        role: 'client',
+      },
+    })
+    assert.equal(longAddressAttempt.status, 400)
+
+    const underageAttempt = await apiRequest('/auth/register', {
+      method: 'POST',
+      body: {
+        firstName: 'Young',
+        lastName: 'Applicant',
+        dateOfBirth: '2010-01-01',
+        email: `underage.${runId}@hugatiera.local`,
+        password: 'Password123!',
+        role: 'client',
+      },
+    })
+    assert.equal(underageAttempt.status, 400)
+    assert.equal(underageAttempt.data.message, 'You must be at least 18 years old to register.')
+
+    const clientReg = await apiRequest('/auth/register', {
+      method: 'POST',
+      body: {
+        firstName: 'Maria',
+        middleName: 'del Pilar',
+        lastName: 'Santos',
+        dateOfBirth: '2000-01-01',
+        phone: '09171234567',
+        address: '123 Example Street, Tetuan',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
         role: 'client',
@@ -154,15 +201,29 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(clientReg.status, 201)
     assert.equal(clientReg.data.user.role, 'client')
+    assert.equal(clientReg.data.user.middleName, 'del Pilar')
+    assert.equal(clientReg.data.user.phone, '09171234567')
+    assert.equal(Object.hasOwn(clientReg.data.user, 'dateOfBirth'), false)
     clientCookie = clientReg.cookie
     clientId = clientReg.data.user.id
     createdUserIds.push(clientId)
+    const [[registeredClientDetails]] = await pool.execute(
+      "SELECT DATE_FORMAT(date_of_birth, '%Y-%m-%d') AS dateOfBirth, phone FROM users WHERE id = ?",
+      [clientId],
+    )
+    assert.equal(registeredClientDetails.dateOfBirth, '2000-01-01')
+    assert.equal(registeredClientDetails.phone, '09171234567')
+    const registeredClientProfile = await apiRequest('/profiles/me', { cookie: clientCookie })
+    assert.equal(registeredClientProfile.status, 200)
+    assert.equal(registeredClientProfile.data.profile.address, '123 Example Street, Tetuan')
+    assert.equal(Object.hasOwn(registeredClientProfile.data.user, 'dateOfBirth'), false)
 
     const duplicateReg = await apiRequest('/auth/register', {
       method: 'POST',
       body: {
         firstName: 'Maria',
         lastName: 'Santos',
+        dateOfBirth: '2000-01-01',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
         role: 'client',
@@ -175,6 +236,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Ramon',
         lastName: 'Verde',
+        dateOfBirth: '2000-01-01',
         email: `gardener.${runId}@hugatiera.local`,
         password: 'Password123!',
         role: 'gardener',
@@ -182,6 +244,8 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(gardenerReg.status, 201)
     assert.equal(gardenerReg.data.user.role, 'gardener')
+    assert.equal(gardenerReg.data.user.middleName, null)
+    assert.equal(gardenerReg.data.user.phone, null)
     gardenerCookie = gardenerReg.cookie
     gardenerId = gardenerReg.data.user.id
     createdUserIds.push(gardenerId)
@@ -189,6 +253,8 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     const meRes = await apiRequest('/auth/me', { cookie: clientCookie })
     assert.equal(meRes.status, 200)
     assert.equal(meRes.data.user.id, clientId)
+    assert.equal(meRes.data.user.middleName, 'del Pilar')
+    assert.equal(Object.hasOwn(meRes.data.user, 'dateOfBirth'), false)
   })
 
   test('TC-03: Role-based authorization blocks unauthorized access', async () => {
@@ -721,6 +787,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     assert.equal(getClientProfile.data.user.role, 'client')
     const clientForm = profileHelpers.buildProfileForm(getClientProfile.data)
     assert.equal(clientForm.firstName, 'Maria')
+    assert.equal(clientForm.middleName, 'del Pilar')
     assert.equal(clientForm.lastName, 'Santos')
     assert.equal(clientForm.address, 'Tetuan')
     assert.equal(clientForm.city, 'Zamboanga City')
@@ -747,6 +814,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       cookie: clientCookie,
       body: {
         firstName: 'Maria',
+        middleName: 'Reyes',
         lastName: 'Santos',
         phone: '09171234568',
         address: 'Pasonanca',
@@ -755,6 +823,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       },
     })
     assert.equal(updatedClientProfile.status, 200)
+    assert.equal(updatedClientProfile.data.user.middleName, 'Reyes')
     assert.equal(updatedClientProfile.data.user.phone, '09171234568')
     assert.equal(updatedClientProfile.data.profile.address, 'Pasonanca')
     assert.equal(updatedClientProfile.data.profile.bio, 'Updated bio from dedicated profile settings tab.')

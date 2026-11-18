@@ -12,21 +12,24 @@ function text(value) {
 
 function validateCommonProfile(body) {
   const firstName = text(body.firstName)
+  const middleNameProvided = Object.prototype.hasOwnProperty.call(body, 'middleName')
+  const middleName = middleNameProvided ? text(body.middleName) || null : null
   const lastName = text(body.lastName)
   const phone = text(body.phone) || null
 
   if (!firstName || firstName.length > 100 || !lastName || lastName.length > 100) {
     return { message: 'First name and last name are required.' }
   }
+  if (middleName && middleName.length > 100) return { message: 'Middle name must be 100 characters or fewer.' }
   if (phone && phone.length > 30) return { message: 'Phone number is too long.' }
 
-  return { firstName, lastName, phone }
+  return { firstName, middleName, middleNameProvided, lastName, phone }
 }
 
 async function getProfile(req, res, next) {
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, last_name, phone, avatar_path, created_at FROM users WHERE id = ? AND is_active = TRUE LIMIT 1',
+      'SELECT id, email, role, first_name, middle_name, last_name, phone, avatar_path, created_at FROM users WHERE id = ? AND is_active = TRUE LIMIT 1',
       [req.user.id],
     )
     const user = users[0]
@@ -68,6 +71,7 @@ async function getProfile(req, res, next) {
         email: user.email,
         role: user.role,
         firstName: user.first_name,
+        middleName: user.middle_name,
         lastName: user.last_name,
         phone: user.phone,
         avatarPath: user.avatar_path,
@@ -90,8 +94,8 @@ async function updateProfile(req, res, next) {
   try {
     await connection.beginTransaction()
     await connection.execute(
-      'UPDATE users SET first_name = ?, last_name = ?, phone = ? WHERE id = ? AND is_active = TRUE',
-      [common.firstName, common.lastName, common.phone, req.user.id],
+      'UPDATE users SET first_name = ?, middle_name = CASE WHEN ? THEN ? ELSE middle_name END, last_name = ?, phone = ? WHERE id = ? AND is_active = TRUE',
+      [common.firstName, common.middleNameProvided, common.middleName, common.lastName, common.phone, req.user.id],
     )
 
     if (req.user.role === 'client') {

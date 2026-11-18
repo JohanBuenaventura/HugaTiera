@@ -132,6 +132,7 @@ describe('Step R4 – Case 2 Direct Service Provider Inquiry End-to-End', () => 
         body: {
           firstName: u.firstName,
           lastName: 'Tester',
+          dateOfBirth: '2000-01-01',
           email: `${u.key}.${runId}@hugatiera.test`,
           phone: '09171234567',
           barangay: 'Tetuan',

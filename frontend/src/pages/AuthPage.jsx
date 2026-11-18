@@ -4,6 +4,19 @@ import { Eye, EyeOff, Leaf } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import editorialAbout from '../assets/editorial-about.jpg'
 
+function getLatestEligibleDateOfBirth() {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  const cutoff = new Date(Date.UTC(Number(values.year) - 18, Number(values.month) - 1, Number(values.day)))
+
+  return cutoff.toISOString().slice(0, 10)
+}
+
 function AuthLayout({ title, children, footer }) {
   return (
     <main className="auth-page editorial-auth-page">
@@ -158,7 +171,17 @@ export function RegisterPage() {
   const location = useLocation()
   const [params] = useSearchParams()
   const initialRole = params.get('role') === 'gardener' ? 'gardener' : 'client'
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', role: initialRole })
+  const [form, setForm] = useState({
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    dateOfBirth: '',
+    address: '',
+    phone: '',
+    email: '',
+    password: '',
+    role: initialRole,
+  })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -176,6 +199,24 @@ export function RegisterPage() {
       <div className="form-row">
         <label>First name<input required placeholder="First name" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></label>
         <label>Last name<input required placeholder="Last name" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></label>
+      </div>
+      <label>Middle name <span className="label-note">(optional)</span>
+        <input maxLength="100" autoComplete="additional-name" placeholder="Middle name" value={form.middleName} onChange={(event) => setForm({ ...form, middleName: event.target.value })} />
+      </label>
+      {form.role === 'client' && (
+        <label>Address <span className="label-note">(optional)</span>
+          <input maxLength="255" autoComplete="street-address" placeholder="Street, barangay, city" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
+          <span className="field-note">You can add or update this later in your profile.</span>
+        </label>
+      )}
+      <div className="form-row">
+        <label>Date of birth
+          <input required type="date" max={getLatestEligibleDateOfBirth()} autoComplete="bday" value={form.dateOfBirth} onChange={(event) => setForm({ ...form, dateOfBirth: event.target.value })} />
+          <span className="field-note">You must be at least 18 to create an account. Your birthday is not shown publicly.</span>
+        </label>
+        <label>Mobile number <span className="label-note">(optional)</span>
+          <input type="tel" maxLength="30" autoComplete="tel" placeholder="e.g. 09xx xxx xxxx" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+        </label>
       </div>
       <label>Email address<input type="email" required autoComplete="email" placeholder="you@example.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
       <label>

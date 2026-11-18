@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/database')
+const { validateDateOfBirth } = require('../utils/dateOfBirth')
 
 const publicRoles = new Set(['client', 'gardener'])
 
@@ -33,6 +34,7 @@ function createAuthToken(user) {
       email: user.email,
       role: user.role,
       firstName: user.first_name,
+      middleName: user.middle_name,
       lastName: user.last_name,
       phone: user.phone,
     },
@@ -57,6 +59,7 @@ function sanitizeUser(user) {
     email: user.email,
     role: user.role,
     firstName: user.first_name,
+    middleName: user.middle_name,
     lastName: user.last_name,
     phone: user.phone,
   }
@@ -64,8 +67,11 @@ function sanitizeUser(user) {
 
 async function register(req, res, next) {
   const firstName = normalizeText(req.body.firstName)
+  const middleName = normalizeText(req.body.middleName) || null
   const lastName = normalizeText(req.body.lastName)
+  const dateOfBirth = normalizeText(req.body.dateOfBirth)
   const phone = normalizeText(req.body.phone) || null
+  const address = normalizeText(req.body.address) || null
   const email = normalizeText(req.body.email).toLowerCase()
   const password = req.body.password
   const role = normalizeText(req.body.role).toLowerCase()
@@ -74,8 +80,18 @@ async function register(req, res, next) {
   if (!firstName || firstName.length > 100 || !lastName || lastName.length > 100) {
     return res.status(400).json({ message: 'First name and last name are required.' })
   }
+  if (middleName && middleName.length > 100) {
+    return res.status(400).json({ message: 'Middle name must be 100 characters or fewer.' })
+  }
+  const dateOfBirthError = validateDateOfBirth(dateOfBirth)
+  if (dateOfBirthError) {
+    return res.status(400).json({ message: dateOfBirthError })
+  }
   if (phone && phone.length > 30) {
     return res.status(400).json({ message: 'Phone number is too long.' })
+  }
+  if (address && address.length > 255) {
+    return res.status(400).json({ message: 'Address must be 255 characters or fewer.' })
   }
   if (validationError) {
     return res.status(400).json({ message: validationError })
@@ -97,18 +113,18 @@ async function register(req, res, next) {
 
     const passwordHash = await bcrypt.hash(password, 12)
     const [result] = await connection.execute(
-      'INSERT INTO users (email, password_hash, role, first_name, last_name, phone) VALUES (?, ?, ?, ?, ?, ?)',
-      [email, passwordHash, role, firstName, lastName, phone],
+      'INSERT INTO users (email, password_hash, role, first_name, middle_name, last_name, date_of_birth, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [email, passwordHash, role, firstName, middleName, lastName, dateOfBirth, phone],
     )
 
     if (role === 'client') {
-      await connection.execute('INSERT INTO client_profiles (user_id) VALUES (?)', [result.insertId])
+      await connection.execute('INSERT INTO client_profiles (user_id, address) VALUES (?, ?)', [result.insertId, address])
     } else {
       await connection.execute('INSERT INTO gardener_profiles (user_id) VALUES (?)', [result.insertId])
     }
 
     await connection.commit()
-    const user = { id: result.insertId, email, role, first_name: firstName, last_name: lastName, phone }
+    const user = { id: result.insertId, email, role, first_name: firstName, middle_name: middleName, last_name: lastName, phone }
     setAuthCookie(res, createAuthToken(user))
     return res.status(201).json({ user: sanitizeUser(user) })
   } catch (error) {
@@ -130,7 +146,7 @@ async function login(req, res, next) {
 
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, password_hash, role, first_name, last_name, phone FROM users WHERE email = ? AND is_active = TRUE LIMIT 1',
+      'SELECT id, email, password_hash, role, first_name, middle_name, last_name, phone FROM users WHERE email = ? AND is_active = TRUE LIMIT 1',
       [email],
     )
     const user = users[0]

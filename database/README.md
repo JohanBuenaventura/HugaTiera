@@ -17,10 +17,15 @@ This directory contains the authoritative relational schema, migration scripts, 
 | **Fresh-Install Schema** | `database/schema/hugatiera_schema.sql` |
 | **Migration 001 Forward Script** | `database/migrations/001_unified_requests_and_agreements.sql` |
 | **Migration 001 Structural Rollback** | `database/migrations/001_unified_requests_and_agreements_rollback.sql` |
+| **Migration 003 Forward Script** | `database/migrations/003_registration_details.sql` |
+| **Migration 003 Rollback Script** | `database/migrations/003_registration_details_rollback.sql` |
 | **Local Backups Directory** | `database/backups/` (git-ignored) |
 
 > [!CAUTION]
 > **Production Migration 001 Status:** Migration 001 (`001_unified_requests_and_agreements.sql`) was **executed and verified on `hugatiera_db` on November 12, 2026**. Both `hugatiera_db` and `hugatiera_db_migration_test` are at the complete 19-table schema (`46` foreign key constraints). **Do NOT rerun `001_unified_requests_and_agreements.sql` on `hugatiera_db`.**
+
+> [!CAUTION]
+> **Migration 003 Status:** `date_of_birth` is already present in both current databases from its prior approved application. **Do not rerun Migration 003** against either database.
 
 ---
 
@@ -93,7 +98,9 @@ erDiagram
     varchar password_hash
     enum role "client | gardener | administrator"
     varchar first_name
+    varchar middle_name
     varchar last_name
+    date date_of_birth
     varchar phone
     boolean is_active
     timestamp created_at
@@ -353,7 +360,9 @@ erDiagram
 | `password_hash` | `VARCHAR(255)` | `NOT NULL` | — | `bcryptjs` hash (`10` salt rounds) |
 | `role` | `ENUM('client', 'gardener', 'administrator')` | `NOT NULL` | — | Role-based access control |
 | `first_name` | `VARCHAR(100)` | `NOT NULL` | — | User's given name |
+| `middle_name` | `VARCHAR(100)` | `NULL` | `NULL` | Optional middle name; already present in both current databases and included in the fresh-install schema. |
 | `last_name` | `VARCHAR(100)` | `NOT NULL` | — | User's family name |
+| `date_of_birth` | `DATE` | `NULL` | `NULL` | Required for new registrations and validated as 18+ using Manila-local date; private and excluded from auth/profile responses. Existing accounts may remain `NULL`. |
 | `phone` | `VARCHAR(30)` | `NULL` | `NULL` | Optional contact phone |
 | `is_active` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `TRUE` (`1`) | Account active flag |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
@@ -370,7 +379,7 @@ erDiagram
 | Column | Data Type | Nullability | Default | Notes |
 |---|---|---|---|---|
 | `user_id` | `INT UNSIGNED` | `NOT NULL` | — | PK & FK to `users.id` |
-| `address` | `VARCHAR(255)` | `NULL` | `NULL` | Client street/barangay address |
+| `address` | `VARCHAR(255)` | `NULL` | `NULL` | Optional client street/barangay address; can be entered at signup or edited in the profile |
 | `city` | `VARCHAR(100)` | `NOT NULL` | `'Zamboanga City'` | Default city |
 | `bio` | `TEXT` | `NULL` | `NULL` | Optional garden/client notes |
 
@@ -926,3 +935,13 @@ Migration 001 (`database/migrations/001_unified_requests_and_agreements.sql`) up
 - **Do NOT Rerun Migration 001:** Running `001_unified_requests_and_agreements.sql` a second time against `hugatiera_db` or `hugatiera_db_migration_test` will fail with duplicate column/table/constraint errors (`ER_DUP_FIELDNAME` / `ER_TABLE_EXISTS_ERROR`).
 - **Fresh Installations:** On a brand-new environment with no existing database, run `database/schema/hugatiera_schema.sql` directly. It already creates all `19` tables and `46` foreign keys in their final post-Migration-001 state.
 - **MariaDB DDL Auto-Commit & Authoritative Recovery:** In MySQL and MariaDB, `ALTER TABLE`, `CREATE TABLE`, and `DROP TABLE` statements cause an implicit commit and cannot be wrapped in a single atomic SQL rollback transaction. While `001_unified_requests_and_agreements_rollback.sql` is provided to reverse the structural changes on an empty/rehearsal database, **the authoritative production recovery mechanism is restoring the pre-migration dump (`database/backups/hugatiera_db_pre_migration001_final_20261112_202700.sql`)**.
+
+## 6. Migration 003 — Registration Details
+
+Migration 003 (`database/migrations/003_registration_details.sql`) adds nullable `users.date_of_birth` for age validation. `middle_name` is not part of this migration because it already exists in both current databases. The fresh-install schema includes both columns.
+
+- New client and gardener registrations must provide a valid date of birth and be at least 18 years old according to the current date in `Asia/Manila`.
+- Existing accounts may keep `date_of_birth = NULL`; the field is not returned by authentication or profile APIs.
+- Phone remains optional and uses the existing nullable `users.phone` column.
+- `date_of_birth` was previously applied with approval to both `hugatiera_db` and `hugatiera_db_migration_test`; this restoration did not execute either migration script.
+- The rollback script drops the date column and its stored values. Prefer restoring a pre-migration backup if data recovery is required.

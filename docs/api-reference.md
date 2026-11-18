@@ -47,13 +47,20 @@ This document provides the complete technical reference for all **15 REST API ro
   ```json
   {
     "firstName": "Maria",
+    "middleName": "Luna",
     "lastName": "Santos",
+    "dateOfBirth": "1995-02-14",
+    "address": "123 Example Street, Tetuan",
     "email": "maria@example.com",
     "password": "Password123",
     "role": "client",
     "phone": "09171234567"
   }
   ```
+  - `middleName` is optional and limited to 100 characters.
+  - `dateOfBirth` is required for new registrations, must be a valid calendar date, and must make the applicant at least 18 according to the current date in `Asia/Manila`. It is stored privately and is not included in authentication or profile responses.
+  - `phone` is optional and limited to 30 characters.
+  - `address` is optional, limited to 255 characters, and stored only for client accounts in `client_profiles`; gardeners set their service area in their profile.
   - **Validation & Security:** Rejects `role: "administrator"` with `403`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs` (`10` rounds). Creates `client_profiles` (`city = 'Zamboanga City'`) or `gardener_profiles` (`service_area = 'Zamboanga City'`, `is_approved = FALSE`).
 
 ---
@@ -63,7 +70,7 @@ This document provides the complete technical reference for all **15 REST API ro
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
 | `GET` | `/api/profiles/me` | Required | `client`, `gardener`, `administrator` | Returns the user's account info, role-specific profile fields (`client_profiles` or `gardener_profiles`), and dashboard `counts`. |
-| `PUT` | `/api/profiles/me` | Required | `client`, `gardener`, `administrator` | Updates personal details (`firstName`, `lastName`, `phone`) and role-specific profile fields (`address`, `city`, `bio` for clients; `businessName`, `description`, `serviceArea`, `yearsOfExperience` for gardeners). |
+| `PUT` | `/api/profiles/me` | Required | `client`, `gardener`, `administrator` | Updates personal details (`firstName`, optional `middleName`, `lastName`, `phone`) and role-specific profile fields (`address`, `city`, `bio` for clients; `businessName`, `description`, `serviceArea`, `yearsOfExperience` for gardeners). |
 | `POST` | `/api/profiles/reports` | Required | `client`, `gardener`, `administrator` | Submits a moderation report against a user, service, or message. |
 
 - **Dashboard Counts Behavior (`GET /api/profiles/me` — `ISS-03`):**
