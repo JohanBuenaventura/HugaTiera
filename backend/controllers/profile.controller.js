@@ -102,6 +102,10 @@ async function updateProfile(req, res, next) {
       const address = text(req.body.address) || null
       const city = text(req.body.city) || 'Zamboanga City'
       const bio = text(req.body.bio) || null
+      if (!address) {
+        await connection.rollback()
+        return res.status(400).json({ message: 'Address is required for client accounts.' })
+      }
       if (address && address.length > 255) {
         await connection.rollback()
         return res.status(400).json({ message: 'Address is too long.' })

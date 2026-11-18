@@ -10,7 +10,7 @@
 ## Current Phase
 Phase: 15 – System Integration and Testing (with Revision Track R0–R7, Production Migrations 001–003, and Post-Migration Audit Phases 1–3 completed)
 
-Status: **Automated integration, Production Migrations 001–003 on `hugatiera_db`, Post-Migration Audit Phases 1–3 (`ISS-01`–`ISS-10`), UI/UX Consistency & Feature Additions, and documentation synchronization completed. Signup/profile middle-name support, optional client address and phone, and required 18+ date-of-birth validation are restored and verified (`19/19` default backend tests, R2 `12/12`, R3 `5/5`, R4 `6/6`, frontend lint, and build passing). Manual live-key Gemini and physical-device browser checks remain noted below before final Phase 15 sign-off.**
+Status: **Automated integration, Production Migrations 001–003 on `hugatiera_db`, Post-Migration Audit Phases 1–3 (`ISS-01`–`ISS-10`), UI/UX Consistency & Feature Additions, and documentation synchronization completed. Signup/profile middle-name support, required client address, optional phone, and required 18+ date-of-birth validation are restored and verified (`19/19` default backend tests, R2 `12/12`, R3 `5/5`, R4 `6/6`, frontend lint, and build passing). Manual live-key Gemini and physical-device browser checks remain noted below before final Phase 15 sign-off.**
 
 Scope revision (approved 2026-11-10): the system concept was revised after the professor consultation (two unified request workflows, mutual agreement before confirmation, Gemini-assisted photo understanding). The work is tracked as the **Revision Track R0–R7** in `prompt/masterprompt.md` (Section 11A) and `prompt/prompts.md`. It sits between the completed Phases 1–14 and Phase 16. The 16-phase numbering is unchanged.
 
@@ -65,7 +65,7 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 - Approved React + Vite, Node.js + Express.js, and MySQL architecture.
 - 19-table MySQL schema in `database/schema/hugatiera_schema.sql` and Migration 001 in `database/migrations/001_unified_requests_and_agreements.sql` (applied to both `hugatiera_db_migration_test` and `hugatiera_db`).
 - Backend health endpoint at `GET /api/health`.
-- Client and gardener registration with validation, optional middle name in signup and editable profiles, optional client address in signup, hashed passwords, and `HttpOnly` JWT cookies.
+- Client and gardener registration with validation, optional middle name in signup and editable profiles, required client address at signup and profile updates, hashed passwords, and `HttpOnly` JWT cookies.
 - Required private date-of-birth validation for new accounts (18+ by Manila-local date), optional phone at signup, and continued exclusion of date of birth from auth/profile responses.
 - Live `users.is_active = TRUE` verification in `requireAuth` so deactivated accounts immediately lose access.
 - Role-specific profile retrieval, updates, and tabbed `Overview` vs `Profile & Settings` dashboards (`ISS-05`).

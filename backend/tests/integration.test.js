@@ -157,6 +157,20 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(longMiddleNameAttempt.status, 400)
 
+    const missingAddressAttempt = await apiRequest('/auth/register', {
+      method: 'POST',
+      body: {
+        firstName: 'Maria',
+        lastName: 'Santos',
+        dateOfBirth: '2000-01-01',
+        email: `missing.address.${runId}@hugatiera.local`,
+        password: 'Password123!',
+        role: 'client',
+      },
+    })
+    assert.equal(missingAddressAttempt.status, 400)
+    assert.equal(missingAddressAttempt.data.message, 'Address is required for client accounts.')
+
     const longAddressAttempt = await apiRequest('/auth/register', {
       method: 'POST',
       body: {
@@ -224,6 +238,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
         firstName: 'Maria',
         lastName: 'Santos',
         dateOfBirth: '2000-01-01',
+        address: '123 Example Street, Tetuan',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
         role: 'client',
@@ -273,6 +288,18 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
   })
 
   test('TC-04: Client and Gardener profile retrieval and updates', async () => {
+    const clearClientAddress = await apiRequest('/profiles/me', {
+      method: 'PUT',
+      cookie: clientCookie,
+      body: {
+        firstName: 'Maria',
+        lastName: 'Santos',
+        address: '  ',
+      },
+    })
+    assert.equal(clearClientAddress.status, 400)
+    assert.equal(clearClientAddress.data.message, 'Address is required for client accounts.')
+
     const updateClient = await apiRequest('/profiles/me', {
       method: 'PUT',
       cookie: clientCookie,

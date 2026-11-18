@@ -204,9 +204,8 @@ export function RegisterPage() {
         <input maxLength="100" autoComplete="additional-name" placeholder="Middle name" value={form.middleName} onChange={(event) => setForm({ ...form, middleName: event.target.value })} />
       </label>
       {form.role === 'client' && (
-        <label>Address <span className="label-note">(optional)</span>
-          <input maxLength="255" autoComplete="street-address" placeholder="Street, barangay, city" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
-          <span className="field-note">You can add or update this later in your profile.</span>
+        <label>Address
+          <input required maxLength="255" autoComplete="street-address" placeholder="Street, barangay, city" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
         </label>
       )}
       <div className="form-row">

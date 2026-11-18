@@ -379,7 +379,7 @@ erDiagram
 | Column | Data Type | Nullability | Default | Notes |
 |---|---|---|---|---|
 | `user_id` | `INT UNSIGNED` | `NOT NULL` | — | PK & FK to `users.id` |
-| `address` | `VARCHAR(255)` | `NULL` | `NULL` | Optional client street/barangay address; can be entered at signup or edited in the profile |
+| `address` | `VARCHAR(255)` | `NULL` | `NULL` | Required for new client registrations and profile updates; nullable in the schema for existing accounts. |
 | `city` | `VARCHAR(100)` | `NOT NULL` | `'Zamboanga City'` | Default city |
 | `bio` | `TEXT` | `NULL` | `NULL` | Optional garden/client notes |
 

@@ -90,16 +90,18 @@ async function register(req, res, next) {
   if (phone && phone.length > 30) {
     return res.status(400).json({ message: 'Phone number is too long.' })
   }
+  if (!publicRoles.has(role)) {
+    return res.status(400).json({ message: 'Choose either a client or gardener account.' })
+  }
+  if (role === 'client' && !address) {
+    return res.status(400).json({ message: 'Address is required for client accounts.' })
+  }
   if (address && address.length > 255) {
     return res.status(400).json({ message: 'Address must be 255 characters or fewer.' })
   }
   if (validationError) {
     return res.status(400).json({ message: validationError })
   }
-  if (!publicRoles.has(role)) {
-    return res.status(400).json({ message: 'Choose either a client or gardener account.' })
-  }
-
   const connection = await pool.getConnection()
 
   try {

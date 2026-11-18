@@ -60,7 +60,7 @@ This document provides the complete technical reference for all **15 REST API ro
   - `middleName` is optional and limited to 100 characters.
   - `dateOfBirth` is required for new registrations, must be a valid calendar date, and must make the applicant at least 18 according to the current date in `Asia/Manila`. It is stored privately and is not included in authentication or profile responses.
   - `phone` is optional and limited to 30 characters.
-  - `address` is optional, limited to 255 characters, and stored only for client accounts in `client_profiles`; gardeners set their service area in their profile.
+  - `address` is required for client registration, limited to 255 characters, and stored in `client_profiles`; gardeners use their service area instead.
   - **Validation & Security:** Rejects `role: "administrator"` with `403`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs` (`10` rounds). Creates `client_profiles` (`city = 'Zamboanga City'`) or `gardener_profiles` (`service_area = 'Zamboanga City'`, `is_approved = FALSE`).
 
 ---
