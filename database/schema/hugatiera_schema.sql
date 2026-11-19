@@ -10,8 +10,10 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('client', 'gardener', 'administrator') NOT NULL,
   first_name VARCHAR(100) NOT NULL,
+  middle_name VARCHAR(100) NULL,
   last_name VARCHAR(100) NOT NULL,
   phone VARCHAR(30) NULL,
+  date_of_birth DATE NULL,
   avatar_path VARCHAR(255) NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -33,17 +35,52 @@ CREATE TABLE gardener_profiles (
   description TEXT NULL,
   service_area VARCHAR(150) NOT NULL DEFAULT 'Zamboanga City',
   years_of_experience TINYINT UNSIGNED NULL,
+  working_days VARCHAR(64) NOT NULL DEFAULT 'mon,tue,wed,thu,fri,sat,sun',
+  work_start_time TIME NOT NULL DEFAULT '08:00:00',
+  work_end_time TIME NOT NULL DEFAULT '17:00:00',
+  max_concurrent_jobs TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  availability_notes VARCHAR(255) NULL,
   is_approved BOOLEAN NOT NULL DEFAULT FALSE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_gardener_profiles_approved_area (is_approved, service_area)
+) ENGINE=InnoDB;
+
+CREATE TABLE gardener_unavailable_dates (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  gardener_id INT UNSIGNED NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  reason VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (gardener_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT chk_unavailable_dates_range CHECK (end_date >= start_date),
+  INDEX idx_gardener_unavailable_range (gardener_id, start_date, end_date)
 ) ENGINE=InnoDB;
 
 CREATE TABLE service_categories (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL UNIQUE,
   description TEXT NULL,
+  rate_per_sqm_min DECIMAL(10, 2) NOT NULL DEFAULT 60.00,
+  rate_per_sqm_max DECIMAL(10, 2) NOT NULL DEFAULT 120.00,
+  min_base_fee DECIMAL(10, 2) NOT NULL DEFAULT 450.00,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE pricing_addons (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL UNIQUE,
+  item_type ENUM('plant', 'material', 'equipment', 'disposal') NOT NULL DEFAULT 'material',
+  unit VARCHAR(40) NOT NULL DEFAULT 'per item',
+  unit_price_min DECIMAL(10, 2) NOT NULL,
+  unit_price_max DECIMAL(10, 2) NOT NULL,
+  description VARCHAR(255) NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT chk_pricing_addons_range CHECK (unit_price_max >= unit_price_min),
+  INDEX idx_pricing_addons_active_type (is_active, item_type)
 ) ENGINE=InnoDB;
 
 CREATE TABLE services (
@@ -86,6 +123,17 @@ CREATE TABLE inquiries (
   description TEXT NOT NULL,
   requested_date DATE NULL,
   location VARCHAR(255) NULL,
+  area_sqm DECIMAL(8, 2) NULL,
+  work_complexity ENUM('light', 'moderate', 'heavy') NULL,
+  materials_option ENUM('client_provides', 'gardener_provides') NULL,
+  site_visit_requested BOOLEAN NOT NULL DEFAULT FALSE,
+  estimated_labor_min DECIMAL(10, 2) NULL,
+  estimated_labor_max DECIMAL(10, 2) NULL,
+  estimated_materials_min DECIMAL(10, 2) NULL,
+  estimated_materials_max DECIMAL(10, 2) NULL,
+  estimated_min_amount DECIMAL(10, 2) NULL,
+  estimated_max_amount DECIMAL(10, 2) NULL,
+  price_comment TEXT NULL,
   status ENUM('open', 'responded', 'closed', 'cancelled', 'provider_selected', 'in_agreement', 'confirmed', 'expired') NOT NULL DEFAULT 'open',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -103,20 +151,44 @@ CREATE TABLE inquiries (
   INDEX idx_inquiries_expiry (status, expires_at)
 ) ENGINE=InnoDB;
 
+CREATE TABLE inquiry_estimate_items (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  inquiry_id INT UNSIGNED NOT NULL,
+  addon_id INT UNSIGNED NULL,
+  item_name VARCHAR(120) NOT NULL,
+  item_type ENUM('plant', 'material', 'equipment', 'disposal') NOT NULL DEFAULT 'material',
+  unit VARCHAR(40) NOT NULL,
+  quantity DECIMAL(8, 2) NOT NULL,
+  unit_price_min DECIMAL(10, 2) NOT NULL,
+  unit_price_max DECIMAL(10, 2) NOT NULL,
+  subtotal_min DECIMAL(10, 2) NOT NULL,
+  subtotal_max DECIMAL(10, 2) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE CASCADE,
+  FOREIGN KEY (addon_id) REFERENCES pricing_addons(id) ON DELETE SET NULL,
+  INDEX idx_inquiry_estimate_items_inquiry (inquiry_id)
+) ENGINE=InnoDB;
+
 CREATE TABLE quotations (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   inquiry_id INT UNSIGNED NOT NULL,
   gardener_id INT UNSIGNED NOT NULL,
   amount DECIMAL(10, 2) NULL,
+  labor_amount DECIMAL(10, 2) NULL,
+  materials_amount DECIMAL(10, 2) NULL,
+  materials_breakdown TEXT NULL,
   details TEXT NOT NULL,
   availability_start DATE NULL,
   availability_end DATE NULL,
+  estimated_working_days DECIMAL(4, 1) NULL,
+  estimated_hours DECIMAL(5, 1) NULL,
   status ENUM('draft', 'sent', 'accepted', 'declined', 'expired', 'withdrawn') NOT NULL DEFAULT 'draft',
   valid_until DATE NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   response_type ENUM('interest', 'offer', 'feasible', 'modifications', 'cannot_do') NOT NULL DEFAULT 'offer',
   proposed_changes TEXT NULL,
+  requires_site_visit BOOLEAN NOT NULL DEFAULT FALSE,
   revision_number INT UNSIGNED NOT NULL DEFAULT 1,
   locked_at TIMESTAMP NULL,
   active_flag TINYINT UNSIGNED GENERATED ALWAYS AS (IF(status IN ('draft', 'sent', 'accepted'), 1, NULL)) STORED,
@@ -133,10 +205,16 @@ CREATE TABLE quotation_revisions (
   revision_number INT UNSIGNED NOT NULL,
   response_type VARCHAR(20) NOT NULL,
   amount DECIMAL(10, 2) NULL,
+  labor_amount DECIMAL(10, 2) NULL,
+  materials_amount DECIMAL(10, 2) NULL,
+  materials_breakdown TEXT NULL,
   details TEXT NOT NULL,
   proposed_changes TEXT NULL,
+  requires_site_visit BOOLEAN NOT NULL DEFAULT FALSE,
   availability_start DATE NULL,
   availability_end DATE NULL,
+  estimated_working_days DECIMAL(4, 1) NULL,
+  estimated_hours DECIMAL(5, 1) NULL,
   valid_until DATE NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE,
@@ -179,9 +257,11 @@ CREATE TABLE agreements (
   version INT UNSIGNED NOT NULL DEFAULT 1,
   scope_of_work TEXT NOT NULL,
   amount DECIMAL(10, 2) NOT NULL,
+  required_deposit_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
   price_basis VARCHAR(100) NULL,
   scheduled_start DATETIME NOT NULL,
   scheduled_end DATETIME NOT NULL,
+  estimated_working_days DECIMAL(4, 1) NULL,
   location VARCHAR(255) NOT NULL,
   conditions TEXT NULL,
   proposed_by INT UNSIGNED NOT NULL,
@@ -217,6 +297,11 @@ CREATE TABLE bookings (
   location VARCHAR(255) NULL,
   notes TEXT NULL,
   status ENUM('pending', 'accepted', 'declined', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
+  booking_stage ENUM('reserved', 'booked') NOT NULL DEFAULT 'reserved',
+  payment_status ENUM('unpaid', 'pending_verification', 'partially_paid', 'fully_paid') NOT NULL DEFAULT 'unpaid',
+  required_deposit_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  amount_paid DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  paid_at TIMESTAMP NULL,
   requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   agreement_id INT UNSIGNED NULL,
@@ -230,6 +315,28 @@ CREATE TABLE bookings (
   INDEX idx_bookings_client_status (client_id, status, requested_at),
   INDEX idx_bookings_gardener_status (gardener_id, status, requested_at),
   INDEX idx_bookings_schedule (gardener_id, scheduled_start, scheduled_end)
+) ENGINE=InnoDB;
+
+CREATE TABLE booking_payments (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT UNSIGNED NOT NULL,
+  submitted_by INT UNSIGNED NOT NULL,
+  payment_type ENUM('partial', 'full', 'balance') NOT NULL DEFAULT 'partial',
+  payment_method ENUM('gcash', 'maya', 'bank_transfer', 'cash', 'other') NOT NULL DEFAULT 'gcash',
+  amount DECIMAL(10, 2) NOT NULL,
+  reference_number VARCHAR(100) NULL,
+  receipt_path VARCHAR(255) NULL,
+  notes VARCHAR(500) NULL,
+  status ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending',
+  verified_by INT UNSIGNED NULL,
+  verified_at TIMESTAMP NULL,
+  rejection_reason VARCHAR(500) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+  FOREIGN KEY (submitted_by) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_booking_payments_booking (booking_id, status, created_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE reviews (

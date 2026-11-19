@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Leaf } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, Clock, Leaf } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
-import { profileApi } from '../services/profiles'
+import { formatWorkingDaysLabel, profileApi } from '../services/profiles'
 
 export default function GardenerPage() {
   const { gardenerId } = useParams()
@@ -96,6 +96,33 @@ export default function GardenerPage() {
                 </form>
               )}
             </div>
+
+            <section className="dashboard-panel schedule-public-card" style={{ marginTop: '20px' }}>
+              <p className="eyebrow">Working schedule &amp; availability</p>
+              <div className="estimate-meta-grid">
+                <span><CalendarDays size={14} style={{ verticalAlign: 'text-bottom' }} /> <strong>Working days:</strong> {formatWorkingDaysLabel(data.gardener.working_days)}</span>
+                <span><Clock size={14} style={{ verticalAlign: 'text-bottom' }} /> <strong>Hours:</strong> {data.gardener.work_start_time || '08:00'} – {data.gardener.work_end_time || '17:00'}</span>
+                <span>
+                  <strong>Capacity:</strong>{' '}
+                  {Number(data.gardener.max_concurrent_jobs) > 1
+                    ? `Can handle up to ${data.gardener.max_concurrent_jobs} simultaneous jobs`
+                    : 'Solo provider (1 job at a time)'}
+                </span>
+              </div>
+              {data.gardener.availability_notes && (
+                <p className="form-note" style={{ margin: '8px 0 0' }}>
+                  <strong>Provider note:</strong> {data.gardener.availability_notes}
+                </p>
+              )}
+              {Array.isArray(data.gardener.unavailable_dates) && data.gardener.unavailable_dates.length > 0 && (
+                <p className="field-note" style={{ margin: '8px 0 0' }}>
+                  <strong>Upcoming unavailable dates:</strong>{' '}
+                  {data.gardener.unavailable_dates
+                    .map((d) => (d.start_date === d.end_date ? d.start_date : `${d.start_date} to ${d.end_date}`))
+                    .join(', ')}
+                </p>
+              )}
+            </section>
 
             <h2 className="profile-section-title">Services offered</h2>
             {data.services?.length ? (

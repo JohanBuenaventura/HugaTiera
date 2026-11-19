@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/database')
+const { sanitizeUser } = require('../utils/userProfile')
 
 function getTokenFromRequest(req) {
   return req.cookies?.auth_token
@@ -25,7 +26,7 @@ async function requireAuth(req, res, next) {
 
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, last_name, phone, is_active FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, email, role, first_name, middle_name, last_name, phone, date_of_birth, is_active FROM users WHERE id = ? LIMIT 1',
       [payload.id],
     )
     const user = users[0]
@@ -39,14 +40,7 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ message: 'Your account is inactive or no longer available.' })
     }
 
-    req.user = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      phone: user.phone,
-    }
+    req.user = sanitizeUser(user)
     return next()
   } catch (error) {
     return next(error)

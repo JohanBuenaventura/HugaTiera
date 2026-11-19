@@ -135,8 +135,12 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Fake',
         lastName: 'Admin',
+        dateOfBirth: '1995-05-15',
+        phone: '09171234560',
+        address: 'Tetuan, Zamboanga City',
         email: `fake.admin.${runId}@hugatiera.local`,
         password: 'Password123!',
+        confirmPassword: 'Password123!',
         role: 'administrator',
       },
     })
@@ -146,14 +150,23 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       method: 'POST',
       body: {
         firstName: 'Maria',
+        middleName: 'Clara',
         lastName: 'Santos',
+        dateOfBirth: '1996-04-20',
+        phone: '09171234567',
+        address: '123 Tetuan Hwy, Brgy. Tetuan',
+        city: 'Zamboanga City',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
+        confirmPassword: 'Password123!',
         role: 'client',
       },
     })
     assert.equal(clientReg.status, 201)
     assert.equal(clientReg.data.user.role, 'client')
+    assert.equal(clientReg.data.user.middleName, 'Clara')
+    assert.equal(clientReg.data.user.dateOfBirth, '1996-04-20')
+    assert.ok(clientReg.data.user.age >= 18)
     clientCookie = clientReg.cookie
     clientId = clientReg.data.user.id
     createdUserIds.push(clientId)
@@ -163,8 +176,12 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Maria',
         lastName: 'Santos',
+        dateOfBirth: '1996-04-20',
+        phone: '09171234567',
+        address: '123 Tetuan Hwy, Brgy. Tetuan',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
+        confirmPassword: 'Password123!',
         role: 'client',
       },
     })
@@ -175,13 +192,19 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Ramon',
         lastName: 'Verde',
+        dateOfBirth: '1990-08-12',
+        phone: '09187654321',
+        serviceArea: 'Zamboanga City',
+        yearsOfExperience: 5,
         email: `gardener.${runId}@hugatiera.local`,
         password: 'Password123!',
+        confirmPassword: 'Password123!',
         role: 'gardener',
       },
     })
     assert.equal(gardenerReg.status, 201)
     assert.equal(gardenerReg.data.user.role, 'gardener')
+    assert.equal(gardenerReg.data.user.middleName, null)
     gardenerCookie = gardenerReg.cookie
     gardenerId = gardenerReg.data.user.id
     createdUserIds.push(gardenerId)
@@ -465,7 +488,37 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(conflictBooking.status, 409)
 
-    // Gardener transitions confirmed booking: accepted -> in_progress -> completed
+    // Unpaid reservation cannot transition to in_progress until deposit/payment is verified
+    const unpaidStartAttempt = await apiRequest(`/bookings/${inquiryBookingId}/status`, {
+      method: 'PATCH',
+      cookie: gardenerCookie,
+      body: { status: 'in_progress' },
+    })
+    assert.equal(unpaidStartAttempt.status, 409)
+    assert.equal(unpaidStartAttempt.data.code, 'PAYMENT_REQUIRED')
+
+    // Client submits partial deposit payment proof (30% of 4500 = 1350) & gardener verifies to upgrade reservation -> confirmed booking
+    const paySubmit = await apiRequest(`/bookings/${inquiryBookingId}/payments`, {
+      method: 'POST',
+      cookie: clientCookie,
+      body: {
+        paymentType: 'partial',
+        paymentMethod: 'gcash',
+        amount: 1350,
+        referenceNumber: 'GCASH-TC10-001',
+      },
+    })
+    assert.equal(paySubmit.status, 201)
+
+    const payVerify = await apiRequest(`/bookings/${inquiryBookingId}/payments/${paySubmit.data.id}`, {
+      method: 'PATCH',
+      cookie: gardenerCookie,
+      body: { decision: 'verified' },
+    })
+    assert.equal(payVerify.status, 200)
+    assert.equal(payVerify.data.booking.booking_stage, 'booked')
+
+    // Gardener transitions paid confirmed booking: accepted -> in_progress -> completed
     for (const nextStatus of ['in_progress', 'completed']) {
       const statusRes = await apiRequest(`/bookings/${inquiryBookingId}/status`, {
         method: 'PATCH',

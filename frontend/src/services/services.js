@@ -13,12 +13,18 @@ async function request(path, options = {}) {
 
 export const servicesApi = {
   categories: () => request('/services/categories'),
+  pricingAddons: () => request('/services/pricing-addons'),
   list: (filters = {}) => {
     const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value))
     return request(`/services${query.toString() ? `?${query}` : ''}`)
   },
   detail: (id) => request(`/services/${id}`),
   gardener: (id) => request(`/gardeners/${id}`),
+  gardenerAvailability: (id) => request(`/gardeners/${id}/availability`),
+  checkGardenerAvailability: (id, payload) => request(`/gardeners/${id}/availability/check`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
   mine: () => request('/services/mine'),
   create: (service) => request('/services', { method: 'POST', body: JSON.stringify(service) }),
   update: (id, service) => request(`/services/${id}`, { method: 'PUT', body: JSON.stringify(service) }),

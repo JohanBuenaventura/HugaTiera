@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Leaf, MapPin, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Calculator, ClipboardCheck, Leaf, MapPin, Sparkles } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
 import { formatStatusLabel, getStatusBadgeClass } from '../services/bookings'
 import { requestPhotoAnalysis, requestRequirementAssistance } from '../services/ai'
-import { inquiriesApi } from '../services/inquiries'
+import {
+  ADDON_TYPE_LABELS,
+  COMPLEXITY_LABELS,
+  ESTIMATE_DISCLAIMER,
+  MATERIALS_LABELS,
+  MATERIALS_OPTIONS,
+  WORK_COMPLEXITY_OPTIONS,
+  computeLocalPriceEstimate,
+  formatEstimateRange,
+  formatPeso,
+  inquiriesApi,
+} from '../services/inquiries'
 import {
   deleteRequestImage,
   fetchInquiryImages,
@@ -33,6 +44,8 @@ function InquiryForm() {
   const [service, setService] = useState(null)
   const [gardener, setGardener] = useState(null)
   const [categories, setCategories] = useState([])
+  const [pricingAddons, setPricingAddons] = useState([])
+  const [selectedAddonsMap, setSelectedAddonsMap] = useState({})
   const validServiceId = Boolean(serviceId && /^\d+$/.test(serviceId))
   const validGardenerId = Boolean(gardenerId && /^\d+$/.test(gardenerId))
   const isGeneralRequest = typeParam === 'general' || (!validServiceId && !validGardenerId)
@@ -45,6 +58,13 @@ function InquiryForm() {
     location: '',
     categoryId: '',
     expiresInDays: '14',
+    areaSqm: '',
+    lengthM: '',
+    widthM: '',
+    workComplexity: 'moderate',
+    materialsOption: 'client_provides',
+    siteVisitRequested: true,
+    priceComment: '',
   })
   const [uploadedImages, setUploadedImages] = useState([])
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -57,16 +77,58 @@ function InquiryForm() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (isGeneralRequest) {
-      servicesApi.categories().then((result) => setCategories(result.categories || [])).catch((loadError) => setError(loadError.message))
-    } else if (validServiceId) {
+    servicesApi.categories().then((result) => setCategories(result.categories || [])).catch(() => {})
+    servicesApi.pricingAddons().then((result) => setPricingAddons(result.addons || [])).catch(() => {})
+    if (!isGeneralRequest && validServiceId) {
       servicesApi.detail(serviceId).then((result) => setService(result.service)).catch((loadError) => setError(loadError.message))
-    } else if (validGardenerId) {
+    } else if (!isGeneralRequest && validGardenerId) {
       servicesApi.gardener(gardenerId).then((result) => setGardener(result.gardener)).catch((loadError) => setError(loadError.message))
     }
   }, [gardenerId, isGeneralRequest, serviceId, validGardenerId, validServiceId])
 
   const change = (field) => (event) => setForm({ ...form, [field]: event.target.value })
+
+  function toggleAddonItem(addonId, checked) {
+    setSelectedAddonsMap((current) => {
+      const next = { ...current }
+      if (checked) {
+        next[addonId] = next[addonId] || '1'
+      } else {
+        delete next[addonId]
+      }
+      return next
+    })
+  }
+
+  function setAddonQuantity(addonId, value) {
+    setSelectedAddonsMap((current) => ({ ...current, [addonId]: value }))
+  }
+
+  function handleDimensionChange(dim, value) {
+    setForm((current) => {
+      const next = { ...current, [dim]: value }
+      const l = Number(next.lengthM)
+      const w = Number(next.widthM)
+      if (Number.isFinite(l) && l > 0 && Number.isFinite(w) && w > 0) {
+        next.areaSqm = String(Math.round(l * w * 100) / 100)
+      }
+      return next
+    })
+  }
+
+  const selectedAddonsForEstimate = pricingAddons
+    .filter((addon) => selectedAddonsMap[addon.id] !== undefined && Number(selectedAddonsMap[addon.id]) > 0)
+    .map((addon) => ({ ...addon, quantity: Number(selectedAddonsMap[addon.id]) }))
+
+  const selectedCategory = categories.find((cat) => String(cat.id) === String(form.categoryId || service?.category_id || '')) || null
+  const liveEstimate = computeLocalPriceEstimate({
+    areaSqm: form.areaSqm,
+    workComplexity: form.workComplexity,
+    materialsOption: form.materialsOption,
+    category: selectedCategory,
+    service,
+    selectedAddons: selectedAddonsForEstimate,
+  })
 
   async function handlePhotoUpload(event) {
     const file = event.target.files?.[0]
@@ -195,6 +257,15 @@ function InquiryForm() {
         aiSummary: form.aiSummary,
         requestedDate: form.requestedDate,
         location: form.location,
+        areaSqm: form.areaSqm ? Number(form.areaSqm) : null,
+        workComplexity: form.workComplexity,
+        materialsOption: form.materialsOption,
+        siteVisitRequested: Boolean(form.siteVisitRequested),
+        priceComment: form.priceComment,
+        addonItems: selectedAddonsForEstimate.map((item) => ({
+          addonId: item.id,
+          quantity: item.quantity,
+        })),
         requestType: isGeneralRequest ? 'general' : 'direct',
         ...(isGeneralRequest
           ? {
@@ -204,6 +275,7 @@ function InquiryForm() {
           : {
               ...(validServiceId ? { serviceId: Number(serviceId) } : {}),
               ...(validGardenerId ? { gardenerId: Number(gardenerId) } : {}),
+              ...(!validServiceId && form.categoryId ? { categoryId: Number(form.categoryId) } : {}),
             }),
         imageIds: uploadedImages.map((img) => img.id),
       }
@@ -244,13 +316,15 @@ function InquiryForm() {
         <label>Subject
           <input required maxLength="200" value={form.subject} onChange={change('subject')} placeholder="e.g. Small backyard garden improvement" />
         </label>
-        {isGeneralRequest && (
+        {isGeneralRequest ? (
           <div className="form-row">
-            <label>Service category (optional)
+            <label>Service category (helps compute per-m² estimate)
               <select value={form.categoryId} onChange={change('categoryId')}>
-                <option value="">Any gardening category</option>
+                <option value="">Any gardening category (₱60–₱120/m²)</option>
                 {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name} (₱{Number(cat.rate_per_sqm_min).toFixed(0)}–₱{Number(cat.rate_per_sqm_max).toFixed(0)}/m²)
+                  </option>
                 ))}
               </select>
             </label>
@@ -262,7 +336,196 @@ function InquiryForm() {
               </select>
             </label>
           </div>
-        )}
+        ) : (!validServiceId && (
+          <label>Service category (optional — improves per-m² estimate)
+            <select value={form.categoryId} onChange={change('categoryId')}>
+              <option value="">General gardening baseline (₱60–₱120/m²)</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name} (₱{Number(cat.rate_per_sqm_min).toFixed(0)}–₱{Number(cat.rate_per_sqm_max).toFixed(0)}/m²)
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+
+        <div className="price-predictor-box">
+          <div className="price-predictor-header">
+            <Calculator size={18} />
+            <div>
+              <strong>Indicative Price Estimator (per sq. meter)</strong>
+              <p className="field-note">Enter your garden size and site condition so the system can predict a realistic indicative range for you and local gardeners.</p>
+            </div>
+          </div>
+
+          <div className="form-row form-row-3">
+            <label>
+              Estimated area (sq. meters)
+              <input
+                type="number"
+                required
+                min="0.5"
+                max="50000"
+                step="0.5"
+                placeholder="e.g., 25"
+                value={form.areaSqm}
+                onChange={change('areaSqm')}
+              />
+            </label>
+            <label>
+              Length in m <span className="label-note">(Optional helper)</span>
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                placeholder="e.g., 5"
+                value={form.lengthM}
+                onChange={(e) => handleDimensionChange('lengthM', e.target.value)}
+              />
+            </label>
+            <label>
+              Width in m <span className="label-note">(Optional helper)</span>
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                placeholder="e.g., 5"
+                value={form.widthM}
+                onChange={(e) => handleDimensionChange('widthM', e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="form-row">
+            <label>
+              Site condition / work complexity
+              <select value={form.workComplexity} onChange={change('workComplexity')}>
+                {WORK_COMPLEXITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Materials & plants
+              <select value={form.materialsOption} onChange={change('materialsOption')}>
+                {MATERIALS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {pricingAddons.length > 0 && (
+            <div className="addon-picker-section">
+              <div className="addon-picker-heading">
+                <strong>Plants, soil &amp; extra cost items <span className="label-note">(Optional — itemized separately from labor)</span></strong>
+                <span className="field-note">Select any plants, turf, soil, equipment, or hauling needed so the estimator prices them separately from per-sq.m labor.</span>
+              </div>
+              <div className="addon-picker-grid">
+                {pricingAddons.map((addon) => {
+                  const isChecked = selectedAddonsMap[addon.id] !== undefined
+                  return (
+                    <div className={`addon-picker-item${isChecked ? ' is-selected' : ''}`} key={addon.id}>
+                      <label className="addon-picker-check">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => toggleAddonItem(addon.id, e.target.checked)}
+                        />
+                        <span>
+                          <strong>{addon.name}</strong>
+                          <small>
+                            {ADDON_TYPE_LABELS[addon.item_type] || addon.item_type} · {formatEstimateRange(addon.unit_price_min, addon.unit_price_max)} {addon.unit}
+                          </small>
+                        </span>
+                      </label>
+                      {isChecked && (
+                        <div className="addon-qty-wrap">
+                          <label>
+                            Qty ({addon.unit.replace(/^per\s+/i, '')})
+                            <input
+                              type="number"
+                              min="0.5"
+                              max="10000"
+                              step="0.5"
+                              value={selectedAddonsMap[addon.id]}
+                              onChange={(e) => setAddonQuantity(addon.id, e.target.value)}
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className={`price-predictor-result${liveEstimate ? ' has-estimate' : ''}`} aria-live="polite">
+            {liveEstimate ? (
+              <>
+                <div className="price-predictor-range-row">
+                  <span className="eyebrow" style={{ margin: 0 }}>Total predicted indicative range</span>
+                  <strong className="price-predictor-range">
+                    {formatEstimateRange(liveEstimate.estimatedMinAmount, liveEstimate.estimatedMaxAmount)}
+                  </strong>
+                </div>
+                <div className="estimate-breakdown-totals">
+                  <span>
+                    <strong>Labor subtotal:</strong> {formatEstimateRange(liveEstimate.estimatedLaborMin, liveEstimate.estimatedLaborMax)}
+                  </span>
+                  <span>
+                    <strong>Plants &amp; materials:</strong>{' '}
+                    {liveEstimate.estimatedMaterialsMax > 0
+                      ? formatEstimateRange(liveEstimate.estimatedMaterialsMin, liveEstimate.estimatedMaterialsMax)
+                      : '₱0 (Client provides)'}
+                  </span>
+                </div>
+                {liveEstimate.items.length > 0 && (
+                  <ul className="estimate-items-list">
+                    {liveEstimate.items.map((item) => (
+                      <li key={item.addonId}>
+                        <span>{item.itemName} ({item.quantity} × {item.unit})</span>
+                        <strong>{formatEstimateRange(item.subtotalMin, item.subtotalMax)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="price-predictor-breakdown">
+                  Labor formula: {liveEstimate.areaSqm} m² × {liveEstimate.rateSourceLabel} × {liveEstimate.complexityFactor} (condition)
+                  {liveEstimate.materialsMode === 'allowance_multiplier' ? ` × ${liveEstimate.materialsFactor} (general materials allowance)` : ''}
+                  {liveEstimate.floorApplied ? ` · Minimum mobilization base fee of ₱${liveEstimate.minBaseFee.toLocaleString()} applied` : ''}.
+                  {liveEstimate.estimatedWorkingDays ? ` Estimated duration: ~${liveEstimate.estimatedHours} hrs (~${liveEstimate.estimatedWorkingDays} working ${liveEstimate.estimatedWorkingDays === 1 ? 'day' : 'days'}).` : ''}
+                </p>
+                <p className="field-note" style={{ margin: 0 }}>{liveEstimate.disclaimer}</p>
+              </>
+            ) : (
+              <p className="field-note" style={{ margin: 0 }}>
+                Enter your estimated area in square meters (or Length × Width) above to see the predicted indicative price range.
+              </p>
+            )}
+          </div>
+
+          <label className="site-visit-checkbox">
+            <input
+              type="checkbox"
+              checked={form.siteVisitRequested}
+              onChange={(e) => setForm((current) => ({ ...current, siteVisitRequested: e.target.checked }))}
+            />
+            <span>I am open to a quick on-site ocular inspection so the gardener can verify site conditions and give an accurate final quote.</span>
+          </label>
+
+          <label>
+            Your comment on the estimated price / budget <span className="label-note">(Optional)</span>
+            <textarea
+              rows="2"
+              maxLength="2000"
+              value={form.priceComment}
+              onChange={change('priceComment')}
+              placeholder="e.g., Target budget is around ₱2,500–₱3,500; area is roughly 25 sq.m with tall grass and sloped soil."
+            />
+          </label>
+        </div>
         <label>What are you looking for?
           <textarea required rows="5" maxLength="5000" value={form.description} onChange={change('description')} placeholder="Describe your outdoor space, goals, and any details that may help gardeners prepare an offer." />
         </label>
@@ -402,10 +665,16 @@ function InquiryDetails({ id }) {
   const [form, setForm] = useState({
     responseType: 'offer',
     amount: '',
+    laborAmount: '',
+    materialsAmount: '',
+    materialsBreakdown: '',
     details: '',
     proposedChanges: '',
+    requiresSiteVisit: false,
     availabilityStart: '',
     availabilityEnd: '',
+    estimatedWorkingDays: '',
+    estimatedHours: '',
     validUntil: '',
   })
   const [editingQuoteId, setEditingQuoteId] = useState(null)
@@ -446,10 +715,16 @@ function InquiryDetails({ id }) {
     setForm({
       responseType: quote.response_type || 'offer',
       amount: quote.amount ?? '',
+      laborAmount: quote.labor_amount ?? '',
+      materialsAmount: quote.materials_amount ?? '',
+      materialsBreakdown: quote.materials_breakdown || '',
       details: quote.details || '',
       proposedChanges: quote.proposed_changes || '',
+      requiresSiteVisit: Boolean(quote.requires_site_visit),
       availabilityStart: formatDateInput(quote.availability_start),
       availabilityEnd: formatDateInput(quote.availability_end),
+      estimatedWorkingDays: quote.estimated_working_days ?? '',
+      estimatedHours: quote.estimated_hours ?? '',
       validUntil: formatDateInput(quote.valid_until),
     })
   }
@@ -458,11 +733,28 @@ function InquiryDetails({ id }) {
     setForm({
       responseType: 'offer',
       amount: '',
+      laborAmount: '',
+      materialsAmount: '',
+      materialsBreakdown: '',
       details: '',
       proposedChanges: '',
+      requiresSiteVisit: false,
       availabilityStart: '',
       availabilityEnd: '',
+      estimatedWorkingDays: '',
+      estimatedHours: '',
       validUntil: '',
+    })
+  }
+  function handleQuoteSplitChange(field, value) {
+    setForm((current) => {
+      const next = { ...current, [field]: value }
+      const l = next.laborAmount === '' ? null : Number(next.laborAmount)
+      const m = next.materialsAmount === '' ? null : Number(next.materialsAmount)
+      if ((l !== null && Number.isFinite(l)) || (m !== null && Number.isFinite(m))) {
+        next.amount = String(((l && Number.isFinite(l) ? l : 0) + (m && Number.isFinite(m) ? m : 0)).toFixed(2))
+      }
+      return next
     })
   }
   async function sendQuote(event) {
@@ -479,10 +771,16 @@ function InquiryDetails({ id }) {
       setForm({
         responseType: 'offer',
         amount: '',
+        laborAmount: '',
+        materialsAmount: '',
+        materialsBreakdown: '',
         details: '',
         proposedChanges: '',
+        requiresSiteVisit: false,
         availabilityStart: '',
         availabilityEnd: '',
+        estimatedWorkingDays: '',
+        estimatedHours: '',
         validUntil: '',
       })
       await load()
@@ -641,8 +939,70 @@ function InquiryDetails({ id }) {
           <div className="detail-facts">
             <span><strong>Requested date</strong>{formatDate(inquiry.requested_date) || 'Not specified'}</span>
             <span><strong>Location</strong>{inquiry.location || 'Not specified'}</span>
+            {inquiry.area_sqm !== null && inquiry.area_sqm !== undefined && (
+              <span><strong>Garden area</strong>{Number(inquiry.area_sqm)} sq. meters</span>
+            )}
             {inquiry.expires_at && <span><strong>Expires</strong>{formatDate(inquiry.expires_at)}</span>}
           </div>
+          {(inquiry.estimated_min_amount || inquiry.area_sqm || inquiry.price_comment || inquiry.site_visit_requested) && (
+            <div className="estimate-summary-card">
+              <div className="price-predictor-range-row">
+                <div>
+                  <span className="eyebrow" style={{ margin: 0 }}>System indicative estimate</span>
+                  {inquiry.estimated_min_amount && inquiry.estimated_max_amount ? (
+                    <strong className="price-predictor-range">
+                      {formatEstimateRange(inquiry.estimated_min_amount, inquiry.estimated_max_amount)}
+                    </strong>
+                  ) : (
+                    <strong className="price-predictor-range">To be assessed</strong>
+                  )}
+                </div>
+                {Boolean(inquiry.site_visit_requested) && (
+                  <span className="site-visit-pill">
+                    <ClipboardCheck size={14} /> Client open to on-site ocular visit
+                  </span>
+                )}
+              </div>
+              <div className="estimate-meta-grid">
+                {inquiry.area_sqm && <span><strong>Area:</strong> {Number(inquiry.area_sqm)} m²</span>}
+                {inquiry.work_complexity && (
+                  <span><strong>Condition:</strong> {COMPLEXITY_LABELS[inquiry.work_complexity] || inquiry.work_complexity}</span>
+                )}
+                {inquiry.materials_option && (
+                  <span><strong>Materials:</strong> {MATERIALS_LABELS[inquiry.materials_option] || inquiry.materials_option}</span>
+                )}
+              </div>
+              {(inquiry.estimated_labor_min || inquiry.estimated_materials_max > 0) && (
+                <div className="estimate-breakdown-totals">
+                  {inquiry.estimated_labor_min && (
+                    <span><strong>Labor estimate:</strong> {formatEstimateRange(inquiry.estimated_labor_min, inquiry.estimated_labor_max)}</span>
+                  )}
+                  <span>
+                    <strong>Plants &amp; materials:</strong>{' '}
+                    {Number(inquiry.estimated_materials_max) > 0
+                      ? formatEstimateRange(inquiry.estimated_materials_min, inquiry.estimated_materials_max)
+                      : '₱0 (Client provides)'}
+                  </span>
+                </div>
+              )}
+              {Array.isArray(data.estimateItems) && data.estimateItems.length > 0 && (
+                <ul className="estimate-items-list">
+                  {data.estimateItems.map((item) => (
+                    <li key={item.id}>
+                      <span>{item.item_name} ({Number(item.quantity)} × {item.unit})</span>
+                      <strong>{formatEstimateRange(item.subtotal_min, item.subtotal_max)}</strong>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {inquiry.price_comment && (
+                <p className="estimate-client-comment">
+                  <strong>Client price / budget comment:</strong> {inquiry.price_comment}
+                </p>
+              )}
+              <p className="field-note" style={{ margin: 0 }}>{ESTIMATE_DISCLAIMER}</p>
+            </div>
+          )}
           {images.length > 0 && (
             <div className="inquiry-photos-section">
               <h3>Garden photos & space descriptions ({images.length})</h3>
@@ -688,6 +1048,11 @@ function InquiryDetails({ id }) {
                 {quote.gardener_name ? ` · ${quote.gardener_name}` : ''}
                 {quote.locked_at ? ' · Locked after client acceptance' : ''}
               </p>
+              {Boolean(quote.requires_site_visit) && (
+                <p className="site-visit-pill site-visit-pill-amber">
+                  <ClipboardCheck size={14} /> On-site ocular inspection recommended before final price
+                </p>
+              )}
               {user.role === 'client' && quote.gardener_id && (
                 <div style={{ margin: '6px 0 8px', padding: '8px 10px', borderRadius: '6px', background: 'rgba(0,0,0,0.03)' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', fontSize: '0.88rem' }}>
@@ -722,6 +1087,21 @@ function InquiryDetails({ id }) {
                 </div>
               )}
               <p>{quote.details}</p>
+              {(quote.labor_amount !== null && quote.labor_amount !== undefined) || (quote.materials_amount !== null && quote.materials_amount !== undefined) ? (
+                <div className="estimate-breakdown-totals" style={{ margin: '6px 0' }}>
+                  {quote.labor_amount !== null && quote.labor_amount !== undefined && (
+                    <span><strong>Labor:</strong> {formatPeso(quote.labor_amount)}</span>
+                  )}
+                  {quote.materials_amount !== null && quote.materials_amount !== undefined && (
+                    <span><strong>Plants &amp; materials:</strong> {formatPeso(quote.materials_amount)}</span>
+                  )}
+                </div>
+              ) : null}
+              {quote.materials_breakdown && (
+                <p className="form-note" style={{ marginTop: '4px' }}>
+                  <strong>Plants &amp; materials breakdown:</strong> {quote.materials_breakdown}
+                </p>
+              )}
               {quote.proposed_changes && (
                 <p className="form-note" style={{ marginTop: '6px' }}>
                   <strong>Proposed modifications:</strong> {quote.proposed_changes}
@@ -731,6 +1111,8 @@ function InquiryDetails({ id }) {
                 {quote.availability_start
                   ? `Availability: ${formatDate(quote.availability_start)} to ${formatDate(quote.availability_end) || 'open'}`
                   : 'Availability to be discussed'}
+                {quote.estimated_working_days ? ` · Est. ${Number(quote.estimated_working_days)} working ${Number(quote.estimated_working_days) === 1 ? 'day' : 'days'}` : ''}
+                {quote.estimated_hours ? ` (${Number(quote.estimated_hours)} hrs)` : ''}
                 {quote.valid_until ? ` · Valid until ${formatDate(quote.valid_until)}` : ''}
               </small>
               {user.role === 'client' && quote.status === 'sent' && ['open', 'responded'].includes(inquiry.status) && (
@@ -777,6 +1159,7 @@ function InquiryDetails({ id }) {
                       <small>
                         <strong>v{rev.revision_number}</strong> ({RESPONSE_TYPE_LABELS[rev.response_type] || rev.response_type})
                         {rev.amount !== null && rev.amount !== undefined ? ` — ₱${rev.amount}` : ''}
+                        {rev.requires_site_visit ? ' · On-site inspection requested' : ''}
                       </small>
                       <p style={{ margin: '2px 0' }}>{rev.details}</p>
                       {rev.proposed_changes && <small>Proposed modifications: {rev.proposed_changes}</small>}
@@ -866,6 +1249,13 @@ function InquiryDetails({ id }) {
           <form className="dashboard-panel profile-form" onSubmit={sendQuote}>
             <p className="eyebrow">{editingQuoteId ? 'Revise active offer' : 'Respond to client'}</p>
             <h2>{editingQuoteId ? 'Update your offer before acceptance.' : 'Evaluate feasibility and send an offer.'}</h2>
+            {inquiry.estimated_min_amount && inquiry.estimated_max_amount && (
+              <div className="gardener-estimate-ref">
+                <strong>System predicted range: {formatEstimateRange(inquiry.estimated_min_amount, inquiry.estimated_max_amount)}</strong>
+                {inquiry.area_sqm ? ` (${Number(inquiry.area_sqm)} m²)` : ''}
+                {inquiry.price_comment && <p className="field-note" style={{ margin: '4px 0 0' }}>Client note: &ldquo;{inquiry.price_comment}&rdquo;</p>}
+              </div>
+            )}
             <label>Response type
               <select value={form.responseType} onChange={change('responseType')}>
                 <option value="offer">Standard offer</option>
@@ -876,9 +1266,50 @@ function InquiryDetails({ id }) {
               </select>
             </label>
             {form.responseType !== 'cannot_do' && (
-              <label>Indicative amount (PHP)
-                <input type="number" min="0" step="0.01" value={form.amount} onChange={change('amount')} />
-              </label>
+              <>
+                <div className="form-row form-row-3">
+                  <label>Labor cost (PHP) <span className="label-note">(Optional split)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 1500"
+                      value={form.laborAmount}
+                      onChange={(e) => handleQuoteSplitChange('laborAmount', e.target.value)}
+                    />
+                  </label>
+                  <label>Plants &amp; materials (PHP) <span className="label-note">(Optional split)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 1200"
+                      value={form.materialsAmount}
+                      onChange={(e) => handleQuoteSplitChange('materialsAmount', e.target.value)}
+                    />
+                  </label>
+                  <label>Total indicative amount (PHP)
+                    <input type="number" min="0" step="0.01" value={form.amount} onChange={change('amount')} />
+                  </label>
+                </div>
+                <label>Plants &amp; materials breakdown note <span className="label-note">(Optional — e.g., 10 bougainvilleas ₱1,500 + 4 bags soil ₱400)</span>
+                  <textarea
+                    rows="2"
+                    maxLength="2000"
+                    value={form.materialsBreakdown}
+                    onChange={change('materialsBreakdown')}
+                    placeholder="Itemize plant varieties, soil, fertilizer, turf, or hauling included in your materials estimate."
+                  />
+                </label>
+                <label className="site-visit-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.requiresSiteVisit}
+                    onChange={(e) => setForm((current) => ({ ...current, requiresSiteVisit: e.target.checked }))}
+                  />
+                  <span>Requires an on-site ocular inspection before giving or finalizing the exact price</span>
+                </label>
+              </>
             )}
             <label>Details
               <textarea required rows="4" value={form.details} onChange={change('details')} placeholder="Explain what is included, feasibility assessment, and any conditions." />
@@ -890,6 +1321,14 @@ function InquiryDetails({ id }) {
             )}
             {form.responseType !== 'cannot_do' && (
               <>
+                <div className="form-row">
+                  <label>Estimated working days <span className="label-note">(Optional)</span>
+                    <input type="number" min="0.5" max="90" step="0.5" placeholder="e.g., 1.5" value={form.estimatedWorkingDays} onChange={change('estimatedWorkingDays')} />
+                  </label>
+                  <label>Estimated hours <span className="label-note">(Optional)</span>
+                    <input type="number" min="0.5" max="500" step="0.5" placeholder="e.g., 4" value={form.estimatedHours} onChange={change('estimatedHours')} />
+                  </label>
+                </div>
                 <div className="form-row">
                   <label>Available from<input type="date" value={form.availabilityStart} onChange={change('availabilityStart')} /></label>
                   <label>Available until<input type="date" value={form.availabilityEnd} onChange={change('availabilityEnd')} /></label>
@@ -1071,13 +1510,18 @@ function InquiryList() {
                   <h2>{inquiry.subject}</h2>
                   <p>{inquiry.ai_summary || inquiry.description || 'Gardening service inquiry.'}</p>
                   <div className="service-meta">
-                    <span>{partnerLabel}</span>
+                    <span>
+                      {partnerLabel}
+                      {inquiry.area_sqm ? ` · ${Number(inquiry.area_sqm)} m²` : ''}
+                    </span>
                     <strong className="card-price">
                       {inquiry.my_quotation_amount != null
                         ? `₱${Number(inquiry.my_quotation_amount).toLocaleString()}`
-                        : inquiry.offer_count > 0
-                          ? `${inquiry.offer_count} ${Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}`
-                          : inquiry.service_title || inquiry.category_name || 'Request'}
+                        : formatEstimateRange(inquiry.estimated_min_amount, inquiry.estimated_max_amount)
+                          ? `Est. ${formatEstimateRange(inquiry.estimated_min_amount, inquiry.estimated_max_amount)}`
+                          : inquiry.offer_count > 0
+                            ? `${inquiry.offer_count} ${Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}`
+                            : inquiry.service_title || inquiry.category_name || 'Request'}
                     </strong>
                   </div>
                   <div className="marketplace-card-footer">
@@ -1126,13 +1570,18 @@ function InquiryList() {
                   <h2>{reqItem.subject}</h2>
                   <p>{reqItem.ai_summary || reqItem.description || 'Open client gardening request.'}</p>
                   <div className="service-meta">
-                    <span>{reqItem.client_first_name ? `Client: ${reqItem.client_first_name}` : 'Local client'}</span>
+                    <span>
+                      {reqItem.client_first_name ? `Client: ${reqItem.client_first_name}` : 'Local client'}
+                      {reqItem.area_sqm ? ` · ${Number(reqItem.area_sqm)} m²` : ''}
+                    </span>
                     <strong className="card-price">
-                      {reqItem.my_quotation_status
-                        ? `Offer ${formatStatusLabel(reqItem.my_quotation_status)}`
-                        : reqItem.offer_count > 0
-                          ? `${reqItem.offer_count} offer(s)`
-                          : 'Open for offers'}
+                      {formatEstimateRange(reqItem.estimated_min_amount, reqItem.estimated_max_amount)
+                        ? `Est. ${formatEstimateRange(reqItem.estimated_min_amount, reqItem.estimated_max_amount)}`
+                        : reqItem.my_quotation_status
+                          ? `Offer ${formatStatusLabel(reqItem.my_quotation_status)}`
+                          : reqItem.offer_count > 0
+                            ? `${reqItem.offer_count} offer(s)`
+                            : 'Open for offers'}
                     </strong>
                   </div>
                   <div className="marketplace-card-footer">

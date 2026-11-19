@@ -5,6 +5,11 @@ const {
   resolveContainedPath,
   servicesDirectory,
 } = require('../middleware/upload.middleware')
+const { formatDateOnly } = require('../utils/userProfile')
+const {
+  parseWorkingDays,
+  validateGardenerSchedule,
+} = require('../utils/scheduling')
 
 function text(value) {
   return typeof value === 'string' ? value.trim() : ''
@@ -33,9 +38,23 @@ function serviceValues(body) {
 async function listCategories(req, res, next) {
   try {
     const [categories] = await pool.execute(
-      'SELECT id, name, description FROM service_categories WHERE is_active = TRUE ORDER BY name',
+      'SELECT id, name, description, rate_per_sqm_min, rate_per_sqm_max, min_base_fee FROM service_categories WHERE is_active = TRUE ORDER BY name',
     )
     return res.json({ categories })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function listPricingAddons(req, res, next) {
+  try {
+    const [addons] = await pool.execute(
+      `SELECT id, name, item_type, unit, unit_price_min, unit_price_max, description
+       FROM pricing_addons
+       WHERE is_active = TRUE
+       ORDER BY FIELD(item_type, 'plant', 'material', 'equipment', 'disposal'), name`,
+    )
+    return res.json({ addons })
   } catch (error) {
     return next(error)
   }
@@ -108,13 +127,22 @@ async function getGardener(req, res, next) {
   try {
     const [gardeners] = await pool.execute(`
       SELECT u.id, u.first_name, u.last_name, u.avatar_path, gp.business_name, gp.description,
-             gp.service_area, gp.years_of_experience
+             gp.service_area, gp.years_of_experience,
+             gp.working_days, gp.work_start_time, gp.work_end_time,
+             gp.max_concurrent_jobs, gp.availability_notes
       FROM users u
       JOIN gardener_profiles gp ON gp.user_id = u.id
       WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE AND gp.is_approved = TRUE
       LIMIT 1
     `, [gardenerId])
     if (!gardeners[0]) return res.status(404).json({ message: 'Gardener profile was not found.' })
+    const [unavailableRows] = await pool.execute(
+      `SELECT id, start_date, end_date, reason
+       FROM gardener_unavailable_dates
+       WHERE gardener_id = ? AND end_date >= CURDATE()
+       ORDER BY start_date ASC`,
+      [gardenerId],
+    )
     const [services] = await pool.execute(
       'SELECT id, title, description, indicative_price, price_unit, service_area, image_path, category_id FROM services WHERE gardener_id = ? AND is_active = TRUE ORDER BY created_at DESC',
       [gardenerId],
@@ -138,6 +166,14 @@ async function getGardener(req, res, next) {
     return res.json({
       gardener: {
         ...gardeners[0],
+        work_start_time: String(gardeners[0].work_start_time || '08:00:00').slice(0, 5),
+        work_end_time: String(gardeners[0].work_end_time || '17:00:00').slice(0, 5),
+        unavailable_dates: unavailableRows.map((row) => ({
+          id: row.id,
+          start_date: formatDateOnly(row.start_date),
+          end_date: formatDateOnly(row.end_date),
+          reason: row.reason || null,
+        })),
         average_rating: averageRating,
         review_count: reviewCount,
       },
@@ -173,8 +209,10 @@ async function getService(req, res, next) {
   }
   try {
     const [services] = await pool.execute(`
-      SELECT s.id, s.title, s.description, s.indicative_price, s.price_unit,
-             s.service_area, s.image_path, c.name AS category_name, s.gardener_id,
+      SELECT s.id, s.category_id, s.title, s.description, s.indicative_price, s.price_unit,
+             s.service_area, s.image_path, c.name AS category_name,
+             c.rate_per_sqm_min, c.rate_per_sqm_max, c.min_base_fee,
+             s.gardener_id,
              u.first_name, u.last_name, u.phone, u.avatar_path AS gardener_avatar_path, gp.business_name, gp.description AS gardener_description
       FROM services s
       JOIN users u ON u.id = s.gardener_id AND u.is_active = TRUE
@@ -321,14 +359,136 @@ async function sendServiceImage(req, res, next) {
   }
 }
 
+async function getGardenerAvailability(req, res, next) {
+  const gardenerId = Number(req.params.gardenerId)
+  if (!Number.isInteger(gardenerId) || gardenerId < 1) {
+    return res.status(400).json({ message: 'A valid gardener ID is required.' })
+  }
+  try {
+    const [rows] = await pool.execute(
+      `SELECT u.id, gp.working_days, gp.work_start_time, gp.work_end_time,
+              gp.max_concurrent_jobs, gp.availability_notes
+       FROM users u
+       JOIN gardener_profiles gp ON gp.user_id = u.id
+       WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE AND gp.is_approved = TRUE
+       LIMIT 1`,
+      [gardenerId],
+    )
+    if (!rows[0]) {
+      return res.status(404).json({ message: 'Gardener availability was not found.' })
+    }
+    const profile = rows[0]
+    const parsedDays = parseWorkingDays(profile.working_days, { fallbackToAll: true })
+
+    const [unavailableRows] = await pool.execute(
+      `SELECT id, start_date, end_date, reason
+       FROM gardener_unavailable_dates
+       WHERE gardener_id = ? AND end_date >= CURDATE()
+       ORDER BY start_date ASC`,
+      [gardenerId],
+    )
+
+    // Anonymized upcoming booked windows (no client personal info exposed)
+    const [busyRows] = await pool.execute(
+      `SELECT scheduled_start, scheduled_end, status
+       FROM bookings
+       WHERE gardener_id = ?
+         AND status IN ('pending', 'accepted', 'in_progress')
+         AND scheduled_end >= NOW()
+       ORDER BY scheduled_start ASC
+       LIMIT 60`,
+      [gardenerId],
+    )
+
+    return res.json({
+      availability: {
+        gardenerId,
+        workingDays: parsedDays.days,
+        workStartTime: String(profile.work_start_time || '08:00:00').slice(0, 5),
+        workEndTime: String(profile.work_end_time || '17:00:00').slice(0, 5),
+        maxConcurrentJobs: Math.max(1, Number(profile.max_concurrent_jobs) || 1),
+        availabilityNotes: profile.availability_notes || null,
+        unavailableDates: unavailableRows.map((row) => ({
+          id: row.id,
+          start_date: formatDateOnly(row.start_date),
+          end_date: formatDateOnly(row.end_date),
+          reason: row.reason || null,
+        })),
+        busySlots: busyRows.map((row) => ({
+          scheduled_start: row.scheduled_start,
+          scheduled_end: row.scheduled_end,
+        })),
+      },
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function checkGardenerAvailability(req, res, next) {
+  const gardenerId = Number(req.params.gardenerId)
+  if (!Number.isInteger(gardenerId) || gardenerId < 1) {
+    return res.status(400).json({ message: 'A valid gardener ID is required.' })
+  }
+  const scheduledStart = req.body?.scheduledStart ?? req.body?.scheduled_start
+  const scheduledEnd = req.body?.scheduledEnd ?? req.body?.scheduled_end
+
+  try {
+    const [exists] = await pool.execute(
+      `SELECT u.id FROM users u
+       JOIN gardener_profiles gp ON gp.user_id = u.id
+       WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE AND gp.is_approved = TRUE
+       LIMIT 1`,
+      [gardenerId],
+    )
+    if (!exists[0]) {
+      return res.status(404).json({ message: 'Gardener was not found or is not approved.' })
+    }
+
+    const result = await validateGardenerSchedule(pool, {
+      gardenerId,
+      scheduledStart,
+      scheduledEnd,
+      lockRows: false,
+    })
+
+    if (!result.ok) {
+      return res.json({
+        available: false,
+        code: result.code,
+        message: result.message,
+        peakConcurrent: result.peakConcurrent ?? null,
+        maxConcurrentJobs: result.maxConcurrentJobs ?? null,
+        remainingSlots: result.remainingSlots ?? 0,
+      })
+    }
+
+    return res.json({
+      available: true,
+      code: 'AVAILABLE',
+      message: result.maxConcurrentJobs > 1
+        ? `Available (${result.remainingSlots} of ${result.maxConcurrentJobs} simultaneous job slot${result.remainingSlots === 1 ? '' : 's'} open).`
+        : 'Schedule slot is available with no conflicts.',
+      peakConcurrent: result.peakConcurrent,
+      maxConcurrentJobs: result.maxConcurrentJobs,
+      remainingSlots: result.remainingSlots,
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 module.exports = {
+  checkGardenerAvailability,
   createService,
   deactivateService,
   deleteServiceImage,
-  getService,
   getGardener,
+  getGardenerAvailability,
+  getService,
   listCategories,
   listMyServices,
+  listPricingAddons,
   listServices,
   sendServiceImage,
   updateService,

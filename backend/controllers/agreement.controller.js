@@ -1,5 +1,6 @@
 const { pool } = require('../config/database')
 const { createNotification } = require('../services/notification.service')
+const { validateGardenerSchedule } = require('../utils/scheduling')
 
 function text(value) {
   return typeof value === 'string' ? value.trim() : ''
@@ -26,9 +27,16 @@ function validateAgreementPayload(body) {
   const scopeOfWork = text(body.scopeOfWork ?? body.scope_of_work)
   const rawAmount = body.amount
   const amount = rawAmount === '' || rawAmount === null || rawAmount === undefined ? NaN : Number(rawAmount)
+  const rawDeposit = body.requiredDepositAmount ?? body.required_deposit_amount
+  const hasExplicitDeposit = rawDeposit !== undefined && rawDeposit !== null && String(rawDeposit).trim() !== ''
+  const parsedDeposit = hasExplicitDeposit ? Number(rawDeposit) : NaN
   const priceBasis = text(body.priceBasis ?? body.price_basis) || null
   const scheduledStart = normalizeDateTime(body.scheduledStart ?? body.scheduled_start)
   const scheduledEnd = normalizeDateTime(body.scheduledEnd ?? body.scheduled_end)
+  const rawEstDays = body.estimatedWorkingDays ?? body.estimated_working_days
+  const estimatedWorkingDays = (rawEstDays === '' || rawEstDays === null || rawEstDays === undefined)
+    ? null
+    : Number(rawEstDays)
   const location = text(body.location)
   const conditions = text(body.conditions) || null
 
@@ -38,6 +46,12 @@ function validateAgreementPayload(body) {
   if (!Number.isFinite(amount) || amount < 0) {
     return { error: 'A valid non-negative agreed price is required.' }
   }
+  const requiredDepositAmount = hasExplicitDeposit
+    ? parsedDeposit
+    : Number((amount * 0.30).toFixed(2))
+  if (!Number.isFinite(requiredDepositAmount) || requiredDepositAmount < 0 || requiredDepositAmount > amount) {
+    return { error: 'Required deposit amount must be between 0 and the agreed price.' }
+  }
   if (priceBasis && priceBasis.length > 100) {
     return { error: 'Price basis must be 100 characters or fewer.' }
   }
@@ -46,6 +60,9 @@ function validateAgreementPayload(body) {
   }
   if (new Date(scheduledEnd.replace(' ', 'T')) <= new Date(scheduledStart.replace(' ', 'T'))) {
     return { error: 'The scheduled end must be after the scheduled start.' }
+  }
+  if (estimatedWorkingDays !== null && (!Number.isFinite(estimatedWorkingDays) || estimatedWorkingDays <= 0 || estimatedWorkingDays > 90)) {
+    return { error: 'Estimated working days must be a positive number up to 90.' }
   }
   if (!location || location.length > 255) {
     return { error: 'A valid service location between 1 and 255 characters is required.' }
@@ -58,9 +75,11 @@ function validateAgreementPayload(body) {
     value: {
       scopeOfWork,
       amount: Number(amount.toFixed(2)),
+      requiredDepositAmount: Number(requiredDepositAmount.toFixed(2)),
       priceBasis,
       scheduledStart,
       scheduledEnd,
+      estimatedWorkingDays: estimatedWorkingDays !== null ? Math.round(estimatedWorkingDays * 10) / 10 : null,
       location,
       conditions,
     },
@@ -354,11 +373,17 @@ async function proposeAgreement(req, res, next) {
       })
     }
 
-    // 4. Check gardener schedule conflicts
-    if (await hasGardenerScheduleConflict(connection, gardenerId, scheduledStart, scheduledEnd)) {
+    // 4. Check gardener working schedule, unavailable dates, and simultaneous capacity
+    const scheduleCheck = await validateGardenerSchedule(connection, {
+      gardenerId,
+      scheduledStart,
+      scheduledEnd,
+    })
+    if (!scheduleCheck.ok) {
       await connection.rollback()
-      return res.status(409).json({
-        message: 'The gardener already has a booking during that scheduled time.',
+      return res.status(scheduleCheck.status || 409).json({
+        code: scheduleCheck.code,
+        message: scheduleCheck.message,
       })
     }
 
@@ -374,9 +399,9 @@ async function proposeAgreement(req, res, next) {
     const [ins] = await connection.execute(
       `INSERT INTO agreements
         (inquiry_id, quotation_id, client_id, gardener_id, previous_agreement_id, version,
-         scope_of_work, amount, price_basis, scheduled_start, scheduled_end, location,
+         scope_of_work, amount, required_deposit_amount, price_basis, scheduled_start, scheduled_end, estimated_working_days, location,
          conditions, proposed_by, client_approved_at, gardener_approved_at, status)
-       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'proposed')`,
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'proposed')`,
       [
         inquiry.id,
         resolvedQuotation ? resolvedQuotation.id : null,
@@ -385,9 +410,11 @@ async function proposeAgreement(req, res, next) {
         nextVersion,
         scopeOfWork,
         amount,
+        validated.value.requiredDepositAmount,
         priceBasis,
         scheduledStart,
         scheduledEnd,
+        validated.value.estimatedWorkingDays,
         location,
         conditions,
         req.user.id,
@@ -491,9 +518,11 @@ async function proposeDirectServiceAgreement(req, res, next) {
     const payloadWithDefaults = {
       scopeOfWork: text(req.body?.scopeOfWork ?? req.body?.scope_of_work ?? req.body?.notes) || `${service.title}: ${service.description}`,
       amount: req.body?.amount !== undefined && req.body?.amount !== '' ? req.body.amount : service.indicative_price,
+      requiredDepositAmount: req.body?.requiredDepositAmount ?? req.body?.required_deposit_amount,
       priceBasis: text(req.body?.priceBasis ?? req.body?.price_basis) || service.price_unit || null,
       scheduledStart: req.body?.scheduledStart ?? req.body?.scheduled_start,
       scheduledEnd: req.body?.scheduledEnd ?? req.body?.scheduled_end,
+      estimatedWorkingDays: req.body?.estimatedWorkingDays ?? req.body?.estimated_working_days,
       location: req.body?.location,
       conditions: req.body?.conditions ?? req.body?.notes ?? null,
     }
@@ -513,10 +542,16 @@ async function proposeDirectServiceAgreement(req, res, next) {
       conditions,
     } = validated.value
 
-    if (await hasGardenerScheduleConflict(connection, service.gardener_id, scheduledStart, scheduledEnd)) {
+    const scheduleCheck = await validateGardenerSchedule(connection, {
+      gardenerId: service.gardener_id,
+      scheduledStart,
+      scheduledEnd,
+    })
+    if (!scheduleCheck.ok) {
       await connection.rollback()
-      return res.status(409).json({
-        message: 'The gardener already has a booking during that time.',
+      return res.status(scheduleCheck.status || 409).json({
+        code: scheduleCheck.code,
+        message: scheduleCheck.message,
       })
     }
 
@@ -541,18 +576,20 @@ async function proposeDirectServiceAgreement(req, res, next) {
     const [agIns] = await connection.execute(
       `INSERT INTO agreements
         (inquiry_id, quotation_id, client_id, gardener_id, previous_agreement_id, version,
-         scope_of_work, amount, price_basis, scheduled_start, scheduled_end, location,
+         scope_of_work, amount, required_deposit_amount, price_basis, scheduled_start, scheduled_end, estimated_working_days, location,
          conditions, proposed_by, client_approved_at, gardener_approved_at, status)
-       VALUES (?, NULL, ?, ?, NULL, 1, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'proposed')`,
+       VALUES (?, NULL, ?, ?, NULL, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'proposed')`,
       [
         inquiryId,
         req.user.id,
         service.gardener_id,
         scopeOfWork,
         amount,
+        validated.value.requiredDepositAmount,
         priceBasis,
         scheduledStart,
         scheduledEnd,
+        validated.value.estimatedWorkingDays,
         location,
         conditions,
         req.user.id,
@@ -679,10 +716,16 @@ async function editAgreement(req, res, next) {
       })
     }
 
-    if (await hasGardenerScheduleConflict(connection, current.gardener_id, scheduledStart, scheduledEnd)) {
+    const scheduleCheck = await validateGardenerSchedule(connection, {
+      gardenerId: current.gardener_id,
+      scheduledStart,
+      scheduledEnd,
+    })
+    if (!scheduleCheck.ok) {
       await connection.rollback()
-      return res.status(409).json({
-        message: 'The gardener already has a booking during that scheduled time.',
+      return res.status(scheduleCheck.status || 409).json({
+        code: scheduleCheck.code,
+        message: scheduleCheck.message,
       })
     }
 
@@ -698,9 +741,9 @@ async function editAgreement(req, res, next) {
     const [ins] = await connection.execute(
       `INSERT INTO agreements
         (inquiry_id, quotation_id, client_id, gardener_id, previous_agreement_id, version,
-         scope_of_work, amount, price_basis, scheduled_start, scheduled_end, location,
+         scope_of_work, amount, required_deposit_amount, price_basis, scheduled_start, scheduled_end, estimated_working_days, location,
          conditions, proposed_by, client_approved_at, gardener_approved_at, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'proposed')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'proposed')`,
       [
         current.inquiry_id,
         current.quotation_id,
@@ -710,9 +753,11 @@ async function editAgreement(req, res, next) {
         newVersion,
         scopeOfWork,
         amount,
+        validated.value.requiredDepositAmount,
         priceBasis,
         scheduledStart,
         scheduledEnd,
+        validated.value.estimatedWorkingDays,
         location,
         conditions,
         req.user.id,
@@ -894,18 +939,17 @@ async function approveAgreement(req, res, next) {
       })
     }
 
-    // Re-check gardener schedule conflicts inside the transaction before confirming
-    if (
-      await hasGardenerScheduleConflict(
-        connection,
-        agreement.gardener_id,
-        agreement.scheduled_start,
-        agreement.scheduled_end,
-      )
-    ) {
+    // Re-check gardener working schedule, unavailable dates, and simultaneous capacity inside transaction
+    const scheduleCheck = await validateGardenerSchedule(connection, {
+      gardenerId: agreement.gardener_id,
+      scheduledStart: agreement.scheduled_start,
+      scheduledEnd: agreement.scheduled_end,
+    })
+    if (!scheduleCheck.ok) {
       await connection.rollback()
-      return res.status(409).json({
-        message: 'The gardener already has an accepted booking during the agreed schedule.',
+      return res.status(scheduleCheck.status || 409).json({
+        code: scheduleCheck.code,
+        message: scheduleCheck.message,
       })
     }
 
@@ -934,11 +978,17 @@ async function approveAgreement(req, res, next) {
       agreement.conditions ? `Conditions: ${agreement.conditions}` : null,
     ].filter(Boolean).join('\n')
 
+    const requiredDeposit = Number(agreement.required_deposit_amount || 0)
+    const agreedAmount = Number(agreement.amount || 0)
+    const initialStage = (agreedAmount <= 0 || requiredDeposit <= 0) ? 'booked' : 'reserved'
+    const initialPaymentStatus = agreedAmount <= 0 ? 'fully_paid' : 'unpaid'
+
     const [bookingIns] = await connection.execute(
       `INSERT INTO bookings
         (inquiry_id, quotation_id, client_id, gardener_id, service_id,
-         scheduled_start, scheduled_end, location, notes, status, agreement_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'accepted', ?)`,
+         scheduled_start, scheduled_end, location, notes, status,
+         booking_stage, payment_status, required_deposit_amount, amount_paid, paid_at, agreement_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'accepted', ?, ?, ?, 0.00, ${initialStage === 'booked' ? 'NOW()' : 'NULL'}, ?)`,
       [
         inquiry.id,
         agreement.quotation_id,
@@ -949,6 +999,9 @@ async function approveAgreement(req, res, next) {
         agreement.scheduled_end,
         agreement.location,
         bookingNotes,
+        initialStage,
+        initialPaymentStatus,
+        requiredDeposit,
         agreement.id,
       ],
     )

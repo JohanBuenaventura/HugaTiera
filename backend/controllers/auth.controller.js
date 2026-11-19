@@ -1,12 +1,15 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/database')
+const {
+  normalizeText,
+  sanitizeUser,
+  validateDateOfBirth,
+  validateMobileNumber,
+  validateNameParts,
+} = require('../utils/userProfile')
 
 const publicRoles = new Set(['client', 'gardener'])
-
-function normalizeText(value) {
-  return typeof value === 'string' ? value.trim() : ''
-}
 
 function validateCredentials({ email, password }) {
   const normalizedEmail = normalizeText(email).toLowerCase()
@@ -27,14 +30,16 @@ function createAuthToken(user) {
     throw new Error('JWT_SECRET is not configured.')
   }
 
+  const safe = sanitizeUser(user)
   return jwt.sign(
     {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      phone: user.phone,
+      id: safe.id,
+      email: safe.email,
+      role: safe.role,
+      firstName: safe.firstName,
+      middleName: safe.middleName,
+      lastName: safe.lastName,
+      phone: safe.phone,
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
@@ -51,37 +56,79 @@ function setAuthCookie(res, token) {
   })
 }
 
-function sanitizeUser(user) {
-  return {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    firstName: user.first_name,
-    lastName: user.last_name,
-    phone: user.phone,
-  }
-}
-
 async function register(req, res, next) {
-  const firstName = normalizeText(req.body.firstName)
-  const lastName = normalizeText(req.body.lastName)
-  const phone = normalizeText(req.body.phone) || null
+  const names = validateNameParts({
+    firstName: req.body.firstName,
+    middleName: req.body.middleName,
+    lastName: req.body.lastName,
+  })
+  if (names.error) {
+    return res.status(400).json({ message: names.error })
+  }
+
+  const dobResult = validateDateOfBirth(req.body.dateOfBirth, { required: true })
+  if (dobResult.error) {
+    return res.status(400).json({ message: dobResult.error })
+  }
+
+  const phoneResult = validateMobileNumber(req.body.phone, { required: true })
+  if (phoneResult.error) {
+    return res.status(400).json({ message: phoneResult.error })
+  }
+
   const email = normalizeText(req.body.email).toLowerCase()
   const password = req.body.password
+  const confirmPassword = req.body.confirmPassword
   const role = normalizeText(req.body.role).toLowerCase()
   const validationError = validateCredentials({ email, password })
 
-  if (!firstName || firstName.length > 100 || !lastName || lastName.length > 100) {
-    return res.status(400).json({ message: 'First name and last name are required.' })
-  }
-  if (phone && phone.length > 30) {
-    return res.status(400).json({ message: 'Phone number is too long.' })
-  }
   if (validationError) {
     return res.status(400).json({ message: validationError })
   }
+  if (confirmPassword !== undefined && confirmPassword !== password) {
+    return res.status(400).json({ message: 'Passwords do not match.' })
+  }
   if (!publicRoles.has(role)) {
     return res.status(400).json({ message: 'Choose either a client or gardener account.' })
+  }
+
+  let clientDetails = null
+  let gardenerDetails = null
+
+  if (role === 'client') {
+    const address = normalizeText(req.body.address)
+    const city = req.body.city === undefined ? 'Zamboanga City' : normalizeText(req.body.city)
+    const bio = normalizeText(req.body.bio) || null
+    if (!address || address.length > 255) {
+      return res.status(400).json({ message: 'Street or barangay address is required and must be 255 characters or fewer.' })
+    }
+    if (!city || city.length > 100) {
+      return res.status(400).json({ message: 'City is required and must be 100 characters or fewer.' })
+    }
+    if (bio && bio.length > 1000) {
+      return res.status(400).json({ message: 'Bio must be 1,000 characters or fewer.' })
+    }
+    clientDetails = { address, city, bio }
+  } else {
+    const businessName = normalizeText(req.body.businessName) || null
+    const serviceArea = req.body.serviceArea === undefined ? 'Zamboanga City' : normalizeText(req.body.serviceArea)
+    const description = normalizeText(req.body.description) || null
+    const rawYears = req.body.yearsOfExperience
+    const years = rawYears === undefined || rawYears === '' || rawYears === null ? null : Number(rawYears)
+
+    if (businessName && businessName.length > 150) {
+      return res.status(400).json({ message: 'Business or display name must be 150 characters or fewer.' })
+    }
+    if (!serviceArea || serviceArea.length > 150) {
+      return res.status(400).json({ message: 'Service area is required and must be 150 characters or fewer.' })
+    }
+    if (years !== null && (!Number.isInteger(years) || years < 0 || years > 100)) {
+      return res.status(400).json({ message: 'Years of experience must be a whole number between 0 and 100.' })
+    }
+    if (description && description.length > 2000) {
+      return res.status(400).json({ message: 'Professional description must be 2,000 characters or fewer.' })
+    }
+    gardenerDetails = { businessName, serviceArea, years, description }
   }
 
   const connection = await pool.getConnection()
@@ -97,18 +144,50 @@ async function register(req, res, next) {
 
     const passwordHash = await bcrypt.hash(password, 12)
     const [result] = await connection.execute(
-      'INSERT INTO users (email, password_hash, role, first_name, last_name, phone) VALUES (?, ?, ?, ?, ?, ?)',
-      [email, passwordHash, role, firstName, lastName, phone],
+      `INSERT INTO users
+         (email, password_hash, role, first_name, middle_name, last_name, phone, date_of_birth)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        email,
+        passwordHash,
+        role,
+        names.firstName,
+        names.middleName,
+        names.lastName,
+        phoneResult.phone,
+        dobResult.dateOfBirth,
+      ],
     )
 
     if (role === 'client') {
-      await connection.execute('INSERT INTO client_profiles (user_id) VALUES (?)', [result.insertId])
+      await connection.execute(
+        'INSERT INTO client_profiles (user_id, address, city, bio) VALUES (?, ?, ?, ?)',
+        [result.insertId, clientDetails.address, clientDetails.city, clientDetails.bio],
+      )
     } else {
-      await connection.execute('INSERT INTO gardener_profiles (user_id) VALUES (?)', [result.insertId])
+      await connection.execute(
+        'INSERT INTO gardener_profiles (user_id, business_name, description, service_area, years_of_experience) VALUES (?, ?, ?, ?, ?)',
+        [
+          result.insertId,
+          gardenerDetails.businessName,
+          gardenerDetails.description,
+          gardenerDetails.serviceArea,
+          gardenerDetails.years,
+        ],
+      )
     }
 
     await connection.commit()
-    const user = { id: result.insertId, email, role, first_name: firstName, last_name: lastName, phone }
+    const user = {
+      id: result.insertId,
+      email,
+      role,
+      first_name: names.firstName,
+      middle_name: names.middleName,
+      last_name: names.lastName,
+      phone: phoneResult.phone,
+      date_of_birth: dobResult.dateOfBirth,
+    }
     setAuthCookie(res, createAuthToken(user))
     return res.status(201).json({ user: sanitizeUser(user) })
   } catch (error) {
@@ -130,7 +209,7 @@ async function login(req, res, next) {
 
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, password_hash, role, first_name, last_name, phone FROM users WHERE email = ? AND is_active = TRUE LIMIT 1',
+      'SELECT id, email, password_hash, role, first_name, middle_name, last_name, phone, date_of_birth FROM users WHERE email = ? AND is_active = TRUE LIMIT 1',
       [email],
     )
     const user = users[0]

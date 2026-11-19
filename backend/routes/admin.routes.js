@@ -1,7 +1,8 @@
 const express = require('express')
 const {
-  createCategory, deleteUser, getSummary, listActivity, listCategories, listPendingGardeners, listReports, listServices,
-  updateCategory, updateGardenerApproval, updateReport, updateServiceStatus, updateUser, updateUserStatus,
+  createCategory, createPricingAddon, deleteUser, getSummary, listActivity, listCategories, listPendingGardeners,
+  listPricingAddons, listReports, listServices,
+  updateCategory, updateGardenerApproval, updatePricingAddon, updateReport, updateServiceStatus, updateUser, updateUserStatus,
 } = require('../controllers/admin.controller')
 const { requireAuth, requireRole } = require('../middleware/auth.middleware')
 
@@ -17,6 +18,9 @@ router.patch('/gardeners/:userId/approval', updateGardenerApproval)
 router.get('/categories', listCategories)
 router.post('/categories', createCategory)
 router.patch('/categories/:categoryId', updateCategory)
+router.get('/pricing-addons', listPricingAddons)
+router.post('/pricing-addons', createPricingAddon)
+router.patch('/pricing-addons/:addonId', updatePricingAddon)
 router.get('/services', listServices)
 router.patch('/services/:serviceId/status', updateServiceStatus)
 router.get('/activity', listActivity)

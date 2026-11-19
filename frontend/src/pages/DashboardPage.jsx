@@ -3,8 +3,15 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { ImagePlus, Pencil, Save, Sparkles, Trash2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import {
+  MIN_REGISTRATION_AGE,
+  WEEKDAY_OPTIONS,
   buildProfileForm,
+  calculateAgeFromDob,
+  formatUserFullName,
+  formatWorkingDaysLabel,
+  getMaxBirthDateForAge,
   initialProfile,
+  parseWorkingDaysArray,
   profileApi,
   resolveDashboardTab,
 } from '../services/profiles'
@@ -24,8 +31,60 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [unavailableDates, setUnavailableDates] = useState(() => (Array.isArray(profile.unavailableDates) ? profile.unavailableDates : []))
+  const [blockForm, setBlockForm] = useState({ startDate: '', endDate: '', reason: '' })
+  const [blockBusy, setBlockBusy] = useState(false)
 
   const change = (field) => (event) => setForm({ ...form, [field]: event.target.value })
+
+  function toggleWorkingDay(code) {
+    const current = parseWorkingDaysArray(form.workingDays)
+    const exists = current.includes(code)
+    if (exists && current.length <= 1) {
+      setError('Select at least one working day.')
+      return
+    }
+    setError('')
+    const next = exists ? current.filter((d) => d !== code) : [...current, code]
+    setForm({ ...form, workingDays: next })
+  }
+
+  async function handleAddUnavailableDate() {
+    if (!blockForm.startDate) {
+      setError('Please pick a start date to mark unavailable.')
+      return
+    }
+    setBlockBusy(true); setMessage(''); setError('')
+    try {
+      const res = await profileApi.addUnavailableDate({
+        startDate: blockForm.startDate,
+        endDate: blockForm.endDate || blockForm.startDate,
+        reason: blockForm.reason,
+      })
+      if (res?.unavailableDate) {
+        setUnavailableDates((prev) => [...prev, res.unavailableDate].sort((a, b) => a.start_date.localeCompare(b.start_date)))
+      }
+      setBlockForm({ startDate: '', endDate: '', reason: '' })
+      setMessage('Unavailable date added to your schedule.')
+    } catch (blockErr) {
+      setError(blockErr.message)
+    } finally {
+      setBlockBusy(false)
+    }
+  }
+
+  async function handleRemoveUnavailableDate(blockId) {
+    setBlockBusy(true); setMessage(''); setError('')
+    try {
+      await profileApi.deleteUnavailableDate(blockId)
+      setUnavailableDates((prev) => prev.filter((item) => item.id !== blockId))
+      setMessage('Unavailable date removed.')
+    } catch (blockErr) {
+      setError(blockErr.message)
+    } finally {
+      setBlockBusy(false)
+    }
+  }
   async function submit(event) {
     event.preventDefault()
     setSaving(true); setMessage(''); setError('')
@@ -72,6 +131,9 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   }
 
   const initials = `${(form.firstName || 'U')[0] || ''}${(form.lastName || '')[0] || ''}`.toUpperCase()
+  const maxBirthDate = getMaxBirthDateForAge(MIN_REGISTRATION_AGE)
+  const computedAge = calculateAgeFromDob(form.dateOfBirth)
+  const isUnderage = computedAge !== null && computedAge < MIN_REGISTRATION_AGE
 
   return <form className="profile-form" onSubmit={submit}>
     {message && <div className="form-success" role="status">{message}</div>}
@@ -101,10 +163,147 @@ function ProfileForm({ role, profile, userId, onSaved }) {
         </div>
       </div>
     </div>
-    <div className="form-row"><label>First name<input required value={form.firstName} onChange={change('firstName')} /></label><label>Last name<input required value={form.lastName} onChange={change('lastName')} /></label></div>
-    <div className="form-row"><label>Phone<input value={form.phone || ''} onChange={change('phone')} /><span className="field-note">Optional</span></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
-    {role === 'client' ? <><div className="form-row"><label>Address<input value={form.address || ''} onChange={change('address')} /></label><label>City<input required value={form.city || ''} onChange={change('city')} /></label></div><label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label></> : <><div className="form-row"><label>Business or display name<input value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div><label>Service area<input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label><label>Professional description<textarea value={form.description || ''} onChange={change('description')} rows="4" /></label></>}
-    <button className="button" type="submit" disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save profile'}</button>
+    <div className="form-row form-row-3">
+      <label>First name<input required maxLength="100" value={form.firstName} onChange={change('firstName')} /></label>
+      <label>Middle name <span className="label-note">(Optional)</span><input maxLength="100" placeholder="Optional" value={form.middleName || ''} onChange={change('middleName')} /></label>
+      <label>Last name<input required maxLength="100" value={form.lastName} onChange={change('lastName')} /></label>
+    </div>
+    <div className="form-row">
+      <label>
+        Birthday <span className="label-note">(18+ required)</span>
+        <input type="date" max={maxBirthDate} value={form.dateOfBirth || ''} onChange={change('dateOfBirth')} />
+      </label>
+      <label>
+        Age <span className="label-note">(Auto-calculated)</span>
+        <div className={`age-readonly-box${isUnderage ? ' is-invalid' : computedAge !== null ? ' is-valid' : ''}`}>
+          {computedAge === null ? (
+            <span className="age-placeholder">Not set</span>
+          ) : isUnderage ? (
+            <span>{computedAge} yrs old — Must be 18 or older</span>
+          ) : (
+            <span>{computedAge} years old</span>
+          )}
+        </div>
+      </label>
+    </div>
+    <div className="form-row"><label>Mobile number<input type="tel" maxLength="30" placeholder="0917 123 4567" value={form.phone || ''} onChange={change('phone')} /></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
+    {role === 'client' ? (
+      <>
+        <div className="form-row"><label>Address<input value={form.address || ''} onChange={change('address')} /></label><label>City<input required value={form.city || ''} onChange={change('city')} /></label></div>
+        <label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label>
+      </>
+    ) : (
+      <>
+        <div className="form-row"><label>Business or display name<input value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div>
+        <label>Service area<input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label>
+        <label>Professional description<textarea value={form.description || ''} onChange={change('description')} rows="4" /></label>
+
+        <div className="schedule-settings-box">
+          <p className="auth-section-title">Working days, hours &amp; simultaneous job capacity</p>
+          <div className="weekday-toggle-grid" role="group" aria-label="Working days">
+            {WEEKDAY_OPTIONS.map((day) => {
+              const checked = parseWorkingDaysArray(form.workingDays).includes(day.code)
+              return (
+                <label className={`weekday-pill${checked ? ' is-selected' : ''}`} key={day.code}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleWorkingDay(day.code)}
+                  />
+                  <span>{day.short}</span>
+                </label>
+              )
+            })}
+          </div>
+          <div className="form-row form-row-3">
+            <label>
+              Work starts
+              <input type="time" required value={form.workStartTime || '08:00'} onChange={change('workStartTime')} />
+            </label>
+            <label>
+              Work ends
+              <input type="time" required value={form.workEndTime || '17:00'} onChange={change('workEndTime')} />
+            </label>
+            <label>
+              Simultaneous jobs allowed
+              <select
+                value={String(form.maxConcurrentJobs || 1)}
+                onChange={(e) => setForm({ ...form, maxConcurrentJobs: Number(e.target.value) })}
+              >
+                <option value="1">1 — Solo (no overlapping jobs)</option>
+                <option value="2">2 — Can work 2 jobs simultaneously</option>
+                <option value="3">3 — Can work 3 jobs simultaneously</option>
+                <option value="4">4 — Can work 4 jobs simultaneously</option>
+                <option value="5">5 — Crew / up to 5 simultaneous jobs</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Availability &amp; simultaneous-work note <span className="label-note">(Optional — shown to clients)</span>
+            <input
+              maxLength="255"
+              placeholder="e.g., 2-person crew can handle 2 simultaneous maintenance jobs; closed on holidays"
+              value={form.availabilityNotes || ''}
+              onChange={change('availabilityNotes')}
+            />
+          </label>
+
+          <div className="unavailable-dates-section">
+            <strong>Unavailable / blocked dates</strong>
+            <span className="field-note">Block specific dates when you cannot accept jobs. Clients will be prevented from booking these dates.</span>
+            <div className="form-row form-row-3">
+              <label>
+                Start date
+                <input
+                  type="date"
+                  value={blockForm.startDate}
+                  onChange={(e) => setBlockForm({ ...blockForm, startDate: e.target.value })}
+                />
+              </label>
+              <label>
+                End date <span className="label-note">(Optional)</span>
+                <input
+                  type="date"
+                  min={blockForm.startDate || undefined}
+                  value={blockForm.endDate}
+                  onChange={(e) => setBlockForm({ ...blockForm, endDate: e.target.value })}
+                />
+              </label>
+              <label>
+                Reason <span className="label-note">(Optional)</span>
+                <input
+                  maxLength="255"
+                  placeholder="e.g., Holiday, off-platform project"
+                  value={blockForm.reason}
+                  onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })}
+                />
+              </label>
+            </div>
+            <div>
+              <button className="button button-outline" type="button" disabled={blockBusy || !blockForm.startDate} onClick={handleAddUnavailableDate}>
+                {blockBusy ? 'Saving...' : 'Add unavailable date'}
+              </button>
+            </div>
+            {unavailableDates.length > 0 && (
+              <ul className="unavailable-list">
+                {unavailableDates.map((item) => (
+                  <li key={item.id}>
+                    <span>
+                      <strong>{item.start_date === item.end_date ? item.start_date : `${item.start_date} to ${item.end_date}`}</strong>
+                      {item.reason ? ` — ${item.reason}` : ''}
+                    </span>
+                    <button className="table-action" type="button" disabled={blockBusy} onClick={() => handleRemoveUnavailableDate(item.id)}>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </>
+    )}
+    <button className="button" type="submit" disabled={saving || isUnderage}><Save size={16} />{saving ? 'Saving...' : 'Save profile'}</button>
   </form>
 }
 
@@ -421,9 +620,13 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   const counts = profileData.counts || {}
   const form = profileData.form || initialProfile
   const isProfileView = activeTab === 'profile'
-  const displayName = role === 'gardener'
-    ? (form.businessName || `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim())
-    : `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim()
+  const fullPersonName = formatUserFullName({
+    firstName: form.firstName || user.firstName,
+    middleName: form.middleName ?? user.middleName,
+    lastName: form.lastName || user.lastName,
+  })
+  const displayName = role === 'gardener' ? (form.businessName || fullPersonName) : fullPersonName
+  const summaryAge = calculateAgeFromDob(form.dateOfBirth || user.dateOfBirth)
 
   return (
     <main className="dashboard-page">
@@ -561,8 +764,16 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                     <dd>{form.email || user.email}</dd>
                   </div>
                   <div>
-                    <dt>Phone</dt>
+                    <dt>Mobile</dt>
                     <dd>{form.phone || 'Not set'}</dd>
+                  </div>
+                  <div>
+                    <dt>Birthday / Age</dt>
+                    <dd>
+                      {form.dateOfBirth
+                        ? `${form.dateOfBirth}${summaryAge !== null ? ` (${summaryAge} yrs old)` : ''}`
+                        : 'Not set'}
+                    </dd>
                   </div>
                   {role === 'client' ? (
                     <div>
@@ -578,6 +789,14 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                       <div>
                         <dt>Experience</dt>
                         <dd>{form.yearsOfExperience !== '' && form.yearsOfExperience !== null ? `${form.yearsOfExperience} yr(s)` : 'Not set'}</dd>
+                      </div>
+                      <div>
+                        <dt>Working schedule</dt>
+                        <dd>{formatWorkingDaysLabel(form.workingDays)} · {form.workStartTime || '08:00'}–{form.workEndTime || '17:00'}</dd>
+                      </div>
+                      <div>
+                        <dt>Simultaneous capacity</dt>
+                        <dd>{Number(form.maxConcurrentJobs) > 1 ? `Up to ${form.maxConcurrentJobs} jobs simultaneously` : 'Solo (1 job at a time)'}</dd>
                       </div>
                     </>
                   )}
@@ -598,6 +817,18 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
 function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted, activeTab }) {
   const counts = summary.counts || {}
   const [categories, setCategories] = useState([])
+  const [pricingAddons, setPricingAddons] = useState([])
+  const [addonForm, setAddonForm] = useState({
+    name: '',
+    itemType: 'plant',
+    unit: 'per plant',
+    unitPriceMin: '',
+    unitPriceMax: '',
+    description: '',
+  })
+  const [editingCategoryRate, setEditingCategoryRate] = useState(null)
+  const [editingAddon, setEditingAddon] = useState(null)
+  const [pricingSaving, setPricingSaving] = useState(false)
   const [services, setServices] = useState([])
   const [pendingGardeners, setPendingGardeners] = useState([])
   const [activity, setActivity] = useState({ inquiries: [], bookings: [] })
@@ -616,8 +847,10 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
     try {
       const result = await profileApi.adminUpdateUser(editingAccount.id, {
         firstName: editingAccount.firstName,
+        middleName: editingAccount.middleName,
         lastName: editingAccount.lastName,
         phone: editingAccount.phone,
+        dateOfBirth: editingAccount.dateOfBirth,
         role: editingAccount.role,
         isActive: editingAccount.isActive,
       })
@@ -646,12 +879,14 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
 
   const loadAdminData = useCallback(() => Promise.all([
     profileApi.adminCategories(),
+    profileApi.adminPricingAddons(),
     profileApi.adminServices(),
     profileApi.adminActivity(),
     profileApi.adminReports(),
     profileApi.adminPendingGardeners(),
-  ]).then(([categoryData, serviceData, activityData, reportData, gardenerData]) => {
+  ]).then(([categoryData, addonData, serviceData, activityData, reportData, gardenerData]) => {
     setCategories(categoryData.categories)
+    setPricingAddons(addonData.addons || [])
     setServices(serviceData.services)
     setActivity(activityData)
     setReports(reportData.reports)
@@ -662,6 +897,89 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
 
   async function addCategory(event) { event.preventDefault(); try { await profileApi.createCategory(categoryForm); setCategoryForm({ name: '', description: '' }); loadAdminData() } catch (error) { setAdminError(error.message) } }
   async function toggleCategory(category) { try { await profileApi.updateCategory(category.id, { name: category.name, description: category.description, isActive: !category.is_active }); loadAdminData() } catch (error) { setAdminError(error.message) } }
+  async function saveCategoryRate(event) {
+    event.preventDefault()
+    if (!editingCategoryRate) return
+    setPricingSaving(true); setAdminError(''); setAdminMessage('')
+    try {
+      await profileApi.updateCategory(editingCategoryRate.id, {
+        name: editingCategoryRate.name,
+        description: editingCategoryRate.description,
+        isActive: editingCategoryRate.isActive,
+        ratePerSqmMin: Number(editingCategoryRate.ratePerSqmMin),
+        ratePerSqmMax: Number(editingCategoryRate.ratePerSqmMax),
+        minBaseFee: Number(editingCategoryRate.minBaseFee),
+      })
+      setEditingCategoryRate(null)
+      setAdminMessage('Category labor rates updated.')
+      await loadAdminData()
+    } catch (error) {
+      setAdminError(error.message)
+    } finally {
+      setPricingSaving(false)
+    }
+  }
+  async function addPricingAddon(event) {
+    event.preventDefault()
+    setPricingSaving(true); setAdminError(''); setAdminMessage('')
+    try {
+      await profileApi.createPricingAddon({
+        name: addonForm.name,
+        itemType: addonForm.itemType,
+        unit: addonForm.unit,
+        unitPriceMin: Number(addonForm.unitPriceMin),
+        unitPriceMax: Number(addonForm.unitPriceMax),
+        description: addonForm.description,
+      })
+      setAddonForm({ name: '', itemType: 'plant', unit: 'per plant', unitPriceMin: '', unitPriceMax: '', description: '' })
+      setAdminMessage('Plant/material pricing item added.')
+      await loadAdminData()
+    } catch (error) {
+      setAdminError(error.message)
+    } finally {
+      setPricingSaving(false)
+    }
+  }
+  async function savePricingAddonEdit(event) {
+    event.preventDefault()
+    if (!editingAddon) return
+    setPricingSaving(true); setAdminError(''); setAdminMessage('')
+    try {
+      await profileApi.updatePricingAddon(editingAddon.id, {
+        name: editingAddon.name,
+        itemType: editingAddon.itemType,
+        unit: editingAddon.unit,
+        unitPriceMin: Number(editingAddon.unitPriceMin),
+        unitPriceMax: Number(editingAddon.unitPriceMax),
+        description: editingAddon.description,
+        isActive: editingAddon.isActive,
+      })
+      setEditingAddon(null)
+      setAdminMessage('Pricing item updated.')
+      await loadAdminData()
+    } catch (error) {
+      setAdminError(error.message)
+    } finally {
+      setPricingSaving(false)
+    }
+  }
+  async function togglePricingAddon(addon) {
+    setAdminError(''); setAdminMessage('')
+    try {
+      await profileApi.updatePricingAddon(addon.id, {
+        name: addon.name,
+        itemType: addon.item_type,
+        unit: addon.unit,
+        unitPriceMin: Number(addon.unit_price_min),
+        unitPriceMax: Number(addon.unit_price_max),
+        description: addon.description || '',
+        isActive: !addon.is_active,
+      })
+      await loadAdminData()
+    } catch (error) {
+      setAdminError(error.message)
+    }
+  }
   async function toggleService(service) { try { await profileApi.updateServiceStatus(service.id, !service.is_active); loadAdminData() } catch (error) { setAdminError(error.message) } }
   async function updateReport(id, status) { try { await profileApi.updateReport(id, status); loadAdminData() } catch (error) { setAdminError(error.message) } }
   async function updateGardenerApproval(userId, isApproved) {
@@ -688,6 +1006,10 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
     approvals: {
       title: 'Approvals & catalog.',
       lead: 'Review pending gardener applications, manage service categories, and moderate marketplace listings.',
+    },
+    pricing: {
+      title: 'Pricing settings.',
+      lead: 'Configure per-sq.m labor rates and separate reference prices for plants, soil, turf, equipment, and hauling used by the Inquiry Amount Predictor.',
     },
     activity: {
       title: 'Platform activity.',
@@ -716,6 +1038,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
             <Link className={`dashboard-tab${activeTab === 'overview' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'overview'} to="/dashboard">Overview</Link>
             <Link className={`dashboard-tab${activeTab === 'analytics' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'analytics'} to="/dashboard?tab=analytics">Analytics</Link>
             <Link className={`dashboard-tab${activeTab === 'approvals' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'approvals'} to="/dashboard?tab=approvals">Approvals</Link>
+            <Link className={`dashboard-tab${activeTab === 'pricing' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'pricing'} to="/dashboard?tab=pricing">Pricing</Link>
             <Link className={`dashboard-tab${activeTab === 'activity' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'activity'} to="/dashboard?tab=activity">Activity</Link>
             <Link className={`dashboard-tab${activeTab === 'reports' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'reports'} to="/dashboard?tab=reports">Reports</Link>
             <Link className={`dashboard-tab${activeTab === 'accounts' ? ' is-active' : ''}`} role="tab" aria-selected={activeTab === 'accounts'} to="/dashboard?tab=accounts">Accounts</Link>
@@ -1109,6 +1432,138 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
           </section>
         )}
 
+        {activeTab === 'pricing' && (
+          <div className="dashboard-grid" id="admin-pricing">
+            <section className="dashboard-panel">
+              <p className="eyebrow">Labor baseline rates (per sq.m)</p>
+              <h2>Service category rates</h2>
+              <p className="field-note">Used by the Inquiry Amount Predictor to estimate labor separately from plants and materials.</p>
+              {editingCategoryRate && (
+                <form className="profile-form admin-account-edit-form" onSubmit={saveCategoryRate} style={{ marginBottom: '14px' }}>
+                  <div className="activity-heading">
+                    <h3>Edit {editingCategoryRate.name}</h3>
+                    <button className="table-action" type="button" onClick={() => setEditingCategoryRate(null)}>Cancel</button>
+                  </div>
+                  <div className="form-row form-row-3">
+                    <label>Min ₱/m²<input type="number" required min="1" step="0.5" value={editingCategoryRate.ratePerSqmMin} onChange={(e) => setEditingCategoryRate({ ...editingCategoryRate, ratePerSqmMin: e.target.value })} /></label>
+                    <label>Max ₱/m²<input type="number" required min="1" step="0.5" value={editingCategoryRate.ratePerSqmMax} onChange={(e) => setEditingCategoryRate({ ...editingCategoryRate, ratePerSqmMax: e.target.value })} /></label>
+                    <label>Min base fee (₱)<input type="number" required min="0" step="10" value={editingCategoryRate.minBaseFee} onChange={(e) => setEditingCategoryRate({ ...editingCategoryRate, minBaseFee: e.target.value })} /></label>
+                  </div>
+                  <button className="button" type="submit" disabled={pricingSaving}><Save size={15} /> {pricingSaving ? 'Saving...' : 'Save rates'}</button>
+                </form>
+              )}
+              <div className="manage-list">
+                {categories.map((cat) => (
+                  <div className="manage-item" key={cat.id}>
+                    <div>
+                      <strong>{cat.name}</strong>
+                      <small>₱{Number(cat.rate_per_sqm_min).toFixed(0)}–₱{Number(cat.rate_per_sqm_max).toFixed(0)} / m² · Min base ₱{Number(cat.min_base_fee).toFixed(0)}</small>
+                    </div>
+                    <button
+                      className="table-action"
+                      type="button"
+                      onClick={() => setEditingCategoryRate({
+                        id: cat.id,
+                        name: cat.name,
+                        description: cat.description || '',
+                        isActive: Boolean(cat.is_active),
+                        ratePerSqmMin: Number(cat.rate_per_sqm_min),
+                        ratePerSqmMax: Number(cat.rate_per_sqm_max),
+                        minBaseFee: Number(cat.min_base_fee),
+                      })}
+                    >
+                      Edit rates
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="dashboard-panel">
+              <p className="eyebrow">Separate plant &amp; material pricing</p>
+              <h2>Plants, soil, turf &amp; add-ons</h2>
+              <p className="field-note">Reference prices clients can add to inquiries (e.g., plants, grass turf, soil, fertilizer, equipment, or hauling).</p>
+              {editingAddon ? (
+                <form className="profile-form admin-account-edit-form" onSubmit={savePricingAddonEdit} style={{ marginBottom: '14px' }}>
+                  <div className="activity-heading">
+                    <h3>Edit {editingAddon.name}</h3>
+                    <button className="table-action" type="button" onClick={() => setEditingAddon(null)}>Cancel</button>
+                  </div>
+                  <label>Item name<input required maxLength="120" value={editingAddon.name} onChange={(e) => setEditingAddon({ ...editingAddon, name: e.target.value })} /></label>
+                  <div className="form-row">
+                    <label>Type
+                      <select value={editingAddon.itemType} onChange={(e) => setEditingAddon({ ...editingAddon, itemType: e.target.value })}>
+                        <option value="plant">Plant / Grass</option>
+                        <option value="material">Soil / Material</option>
+                        <option value="equipment">Equipment</option>
+                        <option value="disposal">Hauling / Disposal</option>
+                      </select>
+                    </label>
+                    <label>Unit<input required maxLength="40" value={editingAddon.unit} onChange={(e) => setEditingAddon({ ...editingAddon, unit: e.target.value })} /></label>
+                  </div>
+                  <div className="form-row">
+                    <label>Min price (₱)<input type="number" required min="0" step="1" value={editingAddon.unitPriceMin} onChange={(e) => setEditingAddon({ ...editingAddon, unitPriceMin: e.target.value })} /></label>
+                    <label>Max price (₱)<input type="number" required min="0" step="1" value={editingAddon.unitPriceMax} onChange={(e) => setEditingAddon({ ...editingAddon, unitPriceMax: e.target.value })} /></label>
+                  </div>
+                  <label>Description<input maxLength="255" value={editingAddon.description} onChange={(e) => setEditingAddon({ ...editingAddon, description: e.target.value })} /></label>
+                  <button className="button" type="submit" disabled={pricingSaving}><Save size={15} /> {pricingSaving ? 'Saving...' : 'Save item'}</button>
+                </form>
+              ) : (
+                <form className="profile-form" onSubmit={addPricingAddon} style={{ marginBottom: '14px' }}>
+                  <div className="form-row">
+                    <label>New item name<input required maxLength="120" placeholder="e.g., Palm tree sapling" value={addonForm.name} onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })} /></label>
+                    <label>Type
+                      <select value={addonForm.itemType} onChange={(e) => setAddonForm({ ...addonForm, itemType: e.target.value })}>
+                        <option value="plant">Plant / Grass</option>
+                        <option value="material">Soil / Material</option>
+                        <option value="equipment">Equipment</option>
+                        <option value="disposal">Hauling / Disposal</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="form-row form-row-3">
+                    <label>Unit<input required maxLength="40" placeholder="per plant" value={addonForm.unit} onChange={(e) => setAddonForm({ ...addonForm, unit: e.target.value })} /></label>
+                    <label>Min ₱<input type="number" required min="0" step="1" placeholder="100" value={addonForm.unitPriceMin} onChange={(e) => setAddonForm({ ...addonForm, unitPriceMin: e.target.value })} /></label>
+                    <label>Max ₱<input type="number" required min="0" step="1" placeholder="300" value={addonForm.unitPriceMax} onChange={(e) => setAddonForm({ ...addonForm, unitPriceMax: e.target.value })} /></label>
+                  </div>
+                  <button className="button" type="submit" disabled={pricingSaving}>Add pricing item</button>
+                </form>
+              )}
+              <div className="manage-list">
+                {pricingAddons.map((addon) => (
+                  <div className="manage-item" key={addon.id}>
+                    <div>
+                      <strong>{addon.name}</strong>
+                      <small>{addon.item_type} · ₱{Number(addon.unit_price_min).toFixed(0)}–₱{Number(addon.unit_price_max).toFixed(0)} {addon.unit} · {addon.is_active ? 'Active' : 'Inactive'}</small>
+                    </div>
+                    <div className="inline-actions">
+                      <button
+                        className="table-action"
+                        type="button"
+                        onClick={() => setEditingAddon({
+                          id: addon.id,
+                          name: addon.name,
+                          itemType: addon.item_type,
+                          unit: addon.unit,
+                          unitPriceMin: Number(addon.unit_price_min),
+                          unitPriceMax: Number(addon.unit_price_max),
+                          description: addon.description || '',
+                          isActive: Boolean(addon.is_active),
+                        })}
+                      >
+                        Edit
+                      </button>
+                      <button className="table-action" type="button" onClick={() => togglePricingAddon(addon)}>
+                        {addon.is_active ? 'Disable' : 'Enable'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+
         {activeTab === 'activity' && (
           <section className="dashboard-panel user-management" id="admin-activity">
             <p className="eyebrow">Activity</p>
@@ -1185,12 +1640,14 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                   <h3>Edit {editingAccount.email}</h3>
                   <button className="table-action" type="button" onClick={() => setEditingAccount(null)}>Cancel</button>
                 </div>
-                <div className="form-row">
-                  <label>First name<input required value={editingAccount.firstName} onChange={(e) => setEditingAccount({ ...editingAccount, firstName: e.target.value })} /></label>
-                  <label>Last name<input required value={editingAccount.lastName} onChange={(e) => setEditingAccount({ ...editingAccount, lastName: e.target.value })} /></label>
+                <div className="form-row form-row-3">
+                  <label>First name<input required maxLength="100" value={editingAccount.firstName} onChange={(e) => setEditingAccount({ ...editingAccount, firstName: e.target.value })} /></label>
+                  <label>Middle name <span className="label-note">(Optional)</span><input maxLength="100" placeholder="Optional" value={editingAccount.middleName || ''} onChange={(e) => setEditingAccount({ ...editingAccount, middleName: e.target.value })} /></label>
+                  <label>Last name<input required maxLength="100" value={editingAccount.lastName} onChange={(e) => setEditingAccount({ ...editingAccount, lastName: e.target.value })} /></label>
                 </div>
-                <div className="form-row">
-                  <label>Phone<input value={editingAccount.phone} onChange={(e) => setEditingAccount({ ...editingAccount, phone: e.target.value })} /></label>
+                <div className="form-row form-row-3">
+                  <label>Mobile number<input type="tel" maxLength="30" value={editingAccount.phone} onChange={(e) => setEditingAccount({ ...editingAccount, phone: e.target.value })} /></label>
+                  <label>Birthday <span className="label-note">(18+ if set)</span><input type="date" max={getMaxBirthDateForAge(MIN_REGISTRATION_AGE)} value={editingAccount.dateOfBirth || ''} onChange={(e) => setEditingAccount({ ...editingAccount, dateOfBirth: e.target.value })} /></label>
                   <label>
                     Role
                     <select value={editingAccount.role} onChange={(e) => setEditingAccount({ ...editingAccount, role: e.target.value })}>
@@ -1213,9 +1670,18 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                   <tr><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr>
                 </thead>
                 <tbody>
-                  {summary.users.map((account) => (
+                  {summary.users.map((account) => {
+                    const accountFullName = formatUserFullName({
+                      firstName: account.first_name,
+                      middleName: account.middle_name,
+                      lastName: account.last_name,
+                    })
+                    return (
                     <tr key={account.id}>
-                      <td>{account.first_name} {account.last_name}<small>{account.email}</small></td>
+                      <td>
+                        {accountFullName}
+                        <small>{account.email}{account.age !== null && account.age !== undefined ? ` · Age ${account.age}` : ''}</small>
+                      </td>
                       <td>{account.role}</td>
                       <td><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td>
                       <td>
@@ -1227,8 +1693,10 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                               id: account.id,
                               email: account.email,
                               firstName: account.first_name,
+                              middleName: account.middle_name || '',
                               lastName: account.last_name,
                               phone: account.phone || '',
+                              dateOfBirth: account.date_of_birth ? String(account.date_of_birth).slice(0, 10) : '',
                               role: account.role,
                               isActive: Boolean(account.is_active),
                             })}
@@ -1244,7 +1712,8 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

@@ -1,6 +1,23 @@
 const { pool } = require('../config/database')
 const { createNotification } = require('../services/notification.service')
 const { avatarsDirectory, removeFileIfExists } = require('../middleware/upload.middleware')
+const {
+  calculateAge,
+  formatDateOnly,
+  validateDateOfBirth,
+  validateMobileNumber,
+  validateNameParts,
+} = require('../utils/userProfile')
+
+function formatAdminUserRow(row) {
+  const dateOfBirth = formatDateOnly(row.date_of_birth)
+  return {
+    ...row,
+    middle_name: row.middle_name || null,
+    date_of_birth: dateOfBirth,
+    age: calculateAge(dateOfBirth),
+  }
+}
 
 async function getSummary(req, res, next) {
   try {
@@ -14,10 +31,10 @@ async function getSummary(req, res, next) {
         (SELECT COUNT(*) FROM gardener_profiles WHERE is_approved = FALSE) AS pending_gardeners
     `)
     const [users] = await pool.query(
-      'SELECT id, email, role, first_name, last_name, phone, avatar_path, is_active, created_at FROM users ORDER BY created_at DESC LIMIT 50',
+      'SELECT id, email, role, first_name, middle_name, last_name, phone, date_of_birth, avatar_path, is_active, created_at FROM users ORDER BY created_at DESC LIMIT 50',
     )
 
-    return res.json({ counts: counts[0], users })
+    return res.json({ counts: counts[0], users: users.map(formatAdminUserRow) })
   } catch (error) {
     return next(error)
   }
@@ -110,7 +127,9 @@ async function updateGardenerApproval(req, res, next) {
 
 async function listCategories(req, res, next) {
   try {
-    const [categories] = await pool.execute('SELECT id, name, description, is_active, created_at FROM service_categories ORDER BY name')
+    const [categories] = await pool.execute(
+      'SELECT id, name, description, rate_per_sqm_min, rate_per_sqm_max, min_base_fee, is_active, created_at FROM service_categories ORDER BY name',
+    )
     return res.json({ categories })
   } catch (error) { return next(error) }
 }
@@ -118,9 +137,18 @@ async function listCategories(req, res, next) {
 async function createCategory(req, res, next) {
   const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
   const description = typeof req.body.description === 'string' ? req.body.description.trim() : null
+  const rateMin = req.body.ratePerSqmMin !== undefined && req.body.ratePerSqmMin !== '' ? Number(req.body.ratePerSqmMin) : 60
+  const rateMax = req.body.ratePerSqmMax !== undefined && req.body.ratePerSqmMax !== '' ? Number(req.body.ratePerSqmMax) : Math.max(120, rateMin)
+  const minBaseFee = req.body.minBaseFee !== undefined && req.body.minBaseFee !== '' ? Number(req.body.minBaseFee) : 450
   if (!name || name.length > 100) return res.status(400).json({ message: 'Category name is required and must be 100 characters or fewer.' })
+  if (!Number.isFinite(rateMin) || rateMin <= 0 || !Number.isFinite(rateMax) || rateMax < rateMin || !Number.isFinite(minBaseFee) || minBaseFee < 0) {
+    return res.status(400).json({ message: 'Category per-sq.m rates and minimum base fee must be valid positive numbers.' })
+  }
   try {
-    const [result] = await pool.execute('INSERT INTO service_categories (name, description) VALUES (?, ?)', [name, description || null])
+    const [result] = await pool.execute(
+      'INSERT INTO service_categories (name, description, rate_per_sqm_min, rate_per_sqm_max, min_base_fee) VALUES (?, ?, ?, ?, ?)',
+      [name, description || null, rateMin, rateMax, minBaseFee],
+    )
     return res.status(201).json({ id: result.insertId })
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'A category with this name already exists.' })
@@ -133,9 +161,24 @@ async function updateCategory(req, res, next) {
   const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
   const description = typeof req.body.description === 'string' ? req.body.description.trim() : null
   const isActive = req.body.isActive === true || req.body.isActive === 'true'
+  const hasRates = req.body.ratePerSqmMin !== undefined || req.body.ratePerSqmMax !== undefined || req.body.minBaseFee !== undefined
   if (!Number.isInteger(categoryId) || categoryId < 1 || !name || name.length > 100) return res.status(400).json({ message: 'Valid category details are required.' })
   try {
-    const [result] = await pool.execute('UPDATE service_categories SET name = ?, description = ?, is_active = ? WHERE id = ?', [name, description || null, isActive, categoryId])
+    let result
+    if (hasRates) {
+      const rateMin = Number(req.body.ratePerSqmMin)
+      const rateMax = Number(req.body.ratePerSqmMax)
+      const minBaseFee = Number(req.body.minBaseFee)
+      if (!Number.isFinite(rateMin) || rateMin <= 0 || !Number.isFinite(rateMax) || rateMax < rateMin || !Number.isFinite(minBaseFee) || minBaseFee < 0) {
+        return res.status(400).json({ message: 'Category per-sq.m rates and minimum base fee must be valid positive numbers.' })
+      }
+      ;[result] = await pool.execute(
+        'UPDATE service_categories SET name = ?, description = ?, rate_per_sqm_min = ?, rate_per_sqm_max = ?, min_base_fee = ?, is_active = ? WHERE id = ?',
+        [name, description || null, rateMin, rateMax, minBaseFee, isActive, categoryId],
+      )
+    } else {
+      ;[result] = await pool.execute('UPDATE service_categories SET name = ?, description = ?, is_active = ? WHERE id = ?', [name, description || null, isActive, categoryId])
+    }
     if (!result.affectedRows) return res.status(404).json({ message: 'Category was not found.' })
     return res.json({ status: 'ok' })
   } catch (error) {
@@ -235,18 +278,34 @@ async function updateUser(req, res, next) {
     return res.status(400).json({ message: 'A valid user is required.' })
   }
 
-  const firstName = typeof req.body.firstName === 'string' ? req.body.firstName.trim() : ''
-  const lastName = typeof req.body.lastName === 'string' ? req.body.lastName.trim() : ''
-  const phone = typeof req.body.phone === 'string' && req.body.phone.trim() ? req.body.phone.trim() : null
+  const names = validateNameParts({
+    firstName: req.body.firstName,
+    middleName: req.body.middleName,
+    lastName: req.body.lastName,
+  })
+  if (names.error) {
+    return res.status(400).json({ message: names.error })
+  }
+
+  const phoneResult = validateMobileNumber(req.body.phone, { required: false })
+  if (phoneResult.error) {
+    return res.status(400).json({ message: phoneResult.error })
+  }
+
+  const hasMiddleName = req.body.middleName !== undefined
+  const hasDateOfBirth = req.body.dateOfBirth !== undefined
+  let nextDobValue = null
+  if (hasDateOfBirth) {
+    const dobResult = validateDateOfBirth(req.body.dateOfBirth, { required: false })
+    if (dobResult.error) {
+      return res.status(400).json({ message: dobResult.error })
+    }
+    nextDobValue = dobResult.dateOfBirth
+  }
+
   const role = typeof req.body.role === 'string' ? req.body.role.trim() : ''
   const isActive = req.body.isActive === undefined ? true : (req.body.isActive === true || req.body.isActive === 'true')
 
-  if (!firstName || firstName.length > 100 || !lastName || lastName.length > 100) {
-    return res.status(400).json({ message: 'First name and last name are required.' })
-  }
-  if (phone && phone.length > 30) {
-    return res.status(400).json({ message: 'Phone number must be 30 characters or fewer.' })
-  }
   if (!['client', 'gardener', 'administrator'].includes(role)) {
     return res.status(400).json({ message: 'Role must be client, gardener, or administrator.' })
   }
@@ -257,15 +316,21 @@ async function updateUser(req, res, next) {
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
-    const [existing] = await connection.execute('SELECT id FROM users WHERE id = ? LIMIT 1', [userId])
+    const [existing] = await connection.execute(
+      'SELECT id, middle_name, date_of_birth FROM users WHERE id = ? LIMIT 1',
+      [userId],
+    )
     if (!existing.length) {
       await connection.rollback()
       return res.status(404).json({ message: 'User was not found.' })
     }
 
+    const finalMiddleName = hasMiddleName ? names.middleName : existing[0].middle_name
+    const finalDateOfBirth = hasDateOfBirth ? nextDobValue : formatDateOnly(existing[0].date_of_birth)
+
     await connection.execute(
-      'UPDATE users SET first_name = ?, last_name = ?, phone = ?, role = ?, is_active = ? WHERE id = ?',
-      [firstName, lastName, phone, role, isActive, userId],
+      'UPDATE users SET first_name = ?, middle_name = ?, last_name = ?, phone = ?, date_of_birth = ?, role = ?, is_active = ? WHERE id = ?',
+      [names.firstName, finalMiddleName, names.lastName, phoneResult.phone, finalDateOfBirth, role, isActive, userId],
     )
     if (role === 'client') {
       await connection.execute('INSERT IGNORE INTO client_profiles (user_id) VALUES (?)', [userId])
@@ -274,11 +339,11 @@ async function updateUser(req, res, next) {
     }
 
     const [rows] = await connection.execute(
-      'SELECT id, email, role, first_name, last_name, phone, avatar_path, is_active, created_at FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, email, role, first_name, middle_name, last_name, phone, date_of_birth, avatar_path, is_active, created_at FROM users WHERE id = ? LIMIT 1',
       [userId],
     )
     await connection.commit()
-    return res.json({ user: rows[0] })
+    return res.json({ user: formatAdminUserRow(rows[0]) })
   } catch (error) {
     await connection.rollback()
     return next(error)
@@ -316,19 +381,99 @@ async function deleteUser(req, res, next) {
   }
 }
 
+const ALLOWED_ADDON_TYPES = new Set(['plant', 'material', 'equipment', 'disposal'])
+
+async function listPricingAddons(req, res, next) {
+  try {
+    const [addons] = await pool.execute(
+      `SELECT id, name, item_type, unit, unit_price_min, unit_price_max, description, is_active, created_at, updated_at
+       FROM pricing_addons
+       ORDER BY FIELD(item_type, 'plant', 'material', 'equipment', 'disposal'), name`,
+    )
+    return res.json({ addons })
+  } catch (error) { return next(error) }
+}
+
+async function createPricingAddon(req, res, next) {
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
+  const itemType = typeof req.body.itemType === 'string' ? req.body.itemType.trim().toLowerCase() : 'material'
+  const unit = typeof req.body.unit === 'string' && req.body.unit.trim() ? req.body.unit.trim() : 'per item'
+  const unitPriceMin = Number(req.body.unitPriceMin)
+  const unitPriceMax = Number(req.body.unitPriceMax)
+  const description = typeof req.body.description === 'string' && req.body.description.trim() ? req.body.description.trim() : null
+
+  if (!name || name.length > 120) return res.status(400).json({ message: 'Item name is required and must be 120 characters or fewer.' })
+  if (!ALLOWED_ADDON_TYPES.has(itemType)) return res.status(400).json({ message: 'Item type must be plant, material, equipment, or disposal.' })
+  if (unit.length > 40) return res.status(400).json({ message: 'Unit label must be 40 characters or fewer.' })
+  if (!Number.isFinite(unitPriceMin) || unitPriceMin < 0 || !Number.isFinite(unitPriceMax) || unitPriceMax < unitPriceMin) {
+    return res.status(400).json({ message: 'Valid min and max unit prices (max >= min) are required.' })
+  }
+  if (description && description.length > 255) return res.status(400).json({ message: 'Description must be 255 characters or fewer.' })
+
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO pricing_addons (name, item_type, unit, unit_price_min, unit_price_max, description)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [name, itemType, unit, unitPriceMin, unitPriceMax, description],
+    )
+    return res.status(201).json({ id: result.insertId })
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'A pricing item with this name already exists.' })
+    return next(error)
+  }
+}
+
+async function updatePricingAddon(req, res, next) {
+  const addonId = Number(req.params.addonId)
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
+  const itemType = typeof req.body.itemType === 'string' ? req.body.itemType.trim().toLowerCase() : 'material'
+  const unit = typeof req.body.unit === 'string' && req.body.unit.trim() ? req.body.unit.trim() : 'per item'
+  const unitPriceMin = Number(req.body.unitPriceMin)
+  const unitPriceMax = Number(req.body.unitPriceMax)
+  const description = typeof req.body.description === 'string' && req.body.description.trim() ? req.body.description.trim() : null
+  const isActive = req.body.isActive === undefined ? true : (req.body.isActive === true || req.body.isActive === 'true')
+
+  if (!Number.isInteger(addonId) || addonId < 1 || !name || name.length > 120) {
+    return res.status(400).json({ message: 'Valid pricing item details are required.' })
+  }
+  if (!ALLOWED_ADDON_TYPES.has(itemType)) return res.status(400).json({ message: 'Item type must be plant, material, equipment, or disposal.' })
+  if (unit.length > 40) return res.status(400).json({ message: 'Unit label must be 40 characters or fewer.' })
+  if (!Number.isFinite(unitPriceMin) || unitPriceMin < 0 || !Number.isFinite(unitPriceMax) || unitPriceMax < unitPriceMin) {
+    return res.status(400).json({ message: 'Valid min and max unit prices (max >= min) are required.' })
+  }
+  if (description && description.length > 255) return res.status(400).json({ message: 'Description must be 255 characters or fewer.' })
+
+  try {
+    const [result] = await pool.execute(
+      `UPDATE pricing_addons
+       SET name = ?, item_type = ?, unit = ?, unit_price_min = ?, unit_price_max = ?, description = ?, is_active = ?
+       WHERE id = ?`,
+      [name, itemType, unit, unitPriceMin, unitPriceMax, description, isActive, addonId],
+    )
+    if (!result.affectedRows) return res.status(404).json({ message: 'Pricing item was not found.' })
+    return res.json({ status: 'ok' })
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'A pricing item with this name already exists.' })
+    return next(error)
+  }
+}
+
 module.exports = {
   createCategory,
+  createPricingAddon,
   deleteUser,
   getSummary,
   listPendingGardeners,
   listActivity,
   listCategories,
+  listPricingAddons,
   listReports,
   listServices,
   updateUser,
   updateUserStatus,
   updateCategory,
   updateGardenerApproval,
+  updatePricingAddon,
   updateReport,
   updateServiceStatus,
 }

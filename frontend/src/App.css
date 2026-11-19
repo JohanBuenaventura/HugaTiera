@@ -2875,3 +2875,461 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   padding: 4px 7px 4px 2px;
   color: var(--muted);
 }
+
+/* Registration Basic Info, Optional Middle Name & Auto-Calculated Age */
+.auth-layout-register {
+  max-width: 1180px;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.35fr);
+}
+.auth-panel-register {
+  width: 100%;
+  max-width: 680px;
+  padding: 40px 44px;
+}
+.auth-panel-register h1 {
+  margin-bottom: 22px;
+}
+.auth-form-register {
+  gap: 18px;
+}
+.auth-form-section {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.auth-section-title {
+  margin: 0;
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.auth-form textarea {
+  color: var(--ink);
+  font-size: 15px;
+  border: 1px solid #C8D2C6;
+  border-radius: 10px;
+  background: #FFFFFF;
+  padding: 12px 15px;
+  resize: vertical;
+}
+.auth-form textarea::placeholder {
+  color: #7D8B80;
+  opacity: 1;
+}
+.auth-form textarea:focus {
+  border-color: var(--forest);
+  box-shadow: 0 0 0 3px rgba(36, 75, 54, .14);
+}
+.form-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.age-readonly-box {
+  display: flex;
+  align-items: center;
+  min-height: 49px;
+  margin-top: 7px;
+  padding: 12px 14px;
+  border: 1px solid #D5DDD3;
+  border-radius: 10px;
+  background: #F4F6F1;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.age-readonly-box.is-valid {
+  border-color: #B7D3C0;
+  background: #EDF6F0;
+  color: var(--forest);
+}
+.age-readonly-box.is-invalid {
+  border-color: #E2B4B4;
+  background: #FDF1F1;
+  color: #9A2C2C;
+}
+.age-placeholder {
+  color: #7D8B80;
+  font-weight: 500;
+}
+.field-error-note {
+  display: block;
+  margin-top: 5px;
+  color: #B42318;
+  font-size: 12px;
+  font-weight: 600;
+}
+@media (max-width: 900px) {
+  .auth-layout-register {
+    grid-template-columns: 1fr;
+  }
+  .auth-panel-register {
+    max-width: 640px;
+    padding: 34px 26px;
+  }
+}
+@media (max-width: 640px) {
+  .form-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Inquiry Price Estimator & On-Site Ocular Inspection UI */
+.price-predictor-box {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid #C8D6CA;
+  border-radius: 14px;
+  background: #F6F9F4;
+}
+.price-predictor-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--forest);
+}
+.price-predictor-header svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.price-predictor-header p {
+  margin: 4px 0 0;
+}
+.price-predictor-result {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px dashed #B9C8BC;
+  border-radius: 10px;
+  background: #FFFFFF;
+}
+.price-predictor-result.has-estimate {
+  border-style: solid;
+  border-color: var(--forest);
+  background: #EDF6F0;
+}
+.price-predictor-range-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.price-predictor-range {
+  display: block;
+  color: var(--forest);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+.price-predictor-breakdown {
+  margin: 0;
+  color: #374B3F;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.site-visit-checkbox {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #FFFFFF;
+  cursor: pointer;
+}
+.site-visit-checkbox input[type="checkbox"] {
+  width: 17px !important;
+  height: 17px !important;
+  min-height: 0 !important;
+  margin: 2px 0 0 !important;
+  flex-shrink: 0;
+  accent-color: var(--forest);
+}
+.site-visit-checkbox span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.45;
+}
+.estimate-summary-card {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 18px;
+  padding: 16px 18px;
+  border: 1px solid #C8D6CA;
+  border-radius: 14px;
+  background: #F6F9F4;
+}
+.estimate-meta-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.estimate-client-comment {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  background: #FFFFFF;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.site-visit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #E4F0E8;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 700;
+  margin: 4px 0;
+}
+.site-visit-pill-amber {
+  background: #FDF3DE;
+  color: #8A5A0E;
+}
+.gardener-estimate-ref {
+  padding: 10px 12px;
+  border: 1px solid #C8D6CA;
+  border-radius: 10px;
+  background: #F6F9F4;
+  font-size: 13px;
+  color: var(--forest);
+}
+
+/* Gardener Working Schedule, Unavailable Dates & Availability Validation */
+.schedule-settings-box {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid #C8D6CA;
+  border-radius: 14px;
+  background: #F6F9F4;
+}
+.weekday-toggle-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.weekday-pill {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid #C8D2C6;
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.weekday-pill input[type="checkbox"] {
+  width: 14px !important;
+  height: 14px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  accent-color: var(--forest);
+}
+.weekday-pill.is-selected {
+  border-color: var(--forest);
+  background: #E4F0E8;
+  color: var(--forest);
+}
+.unavailable-dates-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.unavailable-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.unavailable-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #FFFFFF;
+  font-size: 13px;
+}
+.availability-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.availability-banner.is-available {
+  border: 1px solid #A8CEB6;
+  background: #EDF6F0;
+  color: var(--forest);
+}
+.availability-banner.is-conflict {
+  border: 1px solid #E5B3B3;
+  background: #FDF1F1;
+  color: #9A2C2C;
+}
+
+/* Itemized Plants, Soil & Materials Pricing Picker */
+.addon-picker-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.addon-picker-heading {
+  display: grid;
+  gap: 2px;
+}
+.addon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.addon-picker-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #CFD9CF;
+  border-radius: 10px;
+  background: #FFFFFF;
+}
+.addon-picker-item.is-selected {
+  border-color: var(--forest);
+  background: #EDF6F0;
+}
+.addon-picker-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+}
+.addon-picker-check input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  min-height: 0 !important;
+  margin: 2px 0 0 !important;
+  flex-shrink: 0;
+  accent-color: var(--forest);
+}
+.addon-picker-check span {
+  display: grid;
+  gap: 2px;
+}
+.addon-picker-check strong {
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.addon-picker-check small {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.addon-qty-wrap label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.addon-qty-wrap input {
+  width: 86px !important;
+  min-height: 34px !important;
+  margin-top: 0 !important;
+  padding: 5px 8px !important;
+}
+.estimate-breakdown-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 13.5px;
+  color: var(--forest);
+}
+.estimate-items-list {
+  list-style: none;
+  margin: 2px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #D5E2D7;
+  display: grid;
+  gap: 5px;
+  font-size: 12.5px;
+}
+.estimate-items-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink);
+}
+
+/* Reservation vs. Paid Booking Payment Panel & Status Badges */
+.payment-status-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid #C8D6CA;
+  border-radius: 14px;
+  background: #F6F9F4;
+}
+.payment-submit-form {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.payment-history-list {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.payment-record-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #FFFFFF;
+}
+.status-reserved,
+.status-unpaid,
+.status-pending_verification {
+  background: #FDF3DE;
+  color: #8A5A0E;
+}
+.status-booked,
+.status-partially_paid,
+.status-fully_paid,
+.status-verified {
+  background: #E4F0E8;
+  color: var(--forest);
+}
+.status-rejected {
+  background: #FCE8E8;
+  color: #9A2C2C;
+}

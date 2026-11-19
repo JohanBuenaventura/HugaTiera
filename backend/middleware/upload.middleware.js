@@ -7,6 +7,7 @@ const sharp = require('sharp')
 const uploadDirectory = path.join(__dirname, '..', 'uploads', 'portfolios')
 const avatarsDirectory = path.join(__dirname, '..', 'uploads', 'avatars')
 const servicesDirectory = path.join(__dirname, '..', 'uploads', 'services')
+const paymentReceiptsDirectory = path.join(__dirname, '..', 'uploads', 'payment-receipts')
 const requestImageBaseDirectory = path.join(__dirname, '..', 'uploads', 'request-images')
 const requestImageOriginalsDirectory = path.join(requestImageBaseDirectory, 'originals')
 const requestImageGeneratedDirectory = path.join(requestImageBaseDirectory, 'generated')
@@ -14,6 +15,7 @@ const requestImageGeneratedDirectory = path.join(requestImageBaseDirectory, 'gen
 fs.mkdirSync(uploadDirectory, { recursive: true })
 fs.mkdirSync(avatarsDirectory, { recursive: true })
 fs.mkdirSync(servicesDirectory, { recursive: true })
+fs.mkdirSync(paymentReceiptsDirectory, { recursive: true })
 fs.mkdirSync(requestImageOriginalsDirectory, { recursive: true })
 fs.mkdirSync(requestImageGeneratedDirectory, { recursive: true })
 
@@ -277,6 +279,18 @@ function processAndSaveServiceImage(buffer, userId) {
   })
 }
 
+function processAndSavePaymentReceipt(buffer, userId) {
+  return processAndSaveImageToDir({
+    buffer,
+    baseDirectory: paymentReceiptsDirectory,
+    prefix: 'receipt',
+    ownerId: userId,
+    maxDimension: 1600,
+    missingMessage: 'A payment receipt image file is required.',
+    tooLargeMessage: 'Payment receipt image must be 5 MB or smaller.',
+  })
+}
+
 async function removeFileIfExists(baseDirectory, relativePath) {
   if (!relativePath) return
   try {
@@ -290,8 +304,10 @@ async function removeFileIfExists(baseDirectory, relativePath) {
 module.exports = {
   avatarsDirectory,
   hasValidImageMagicBytes,
+  paymentReceiptsDirectory,
   portfolioUpload,
   processAndSaveAvatar,
+  processAndSavePaymentReceipt,
   processAndSaveRequestImage,
   processAndSaveServiceImage,
   removeFileIfExists,

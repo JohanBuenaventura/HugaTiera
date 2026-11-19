@@ -20,6 +20,14 @@ export const WORKFLOW_STATUS_LABELS = {
   pending: 'Pending',
   in_progress: 'In Progress',
   completed: 'Completed',
+  reserved: 'Reservation (Unpaid)',
+  booked: 'Confirmed Booking (Paid)',
+  unpaid: 'Unpaid',
+  pending_verification: 'Pending Verification',
+  partially_paid: 'Partially Paid',
+  fully_paid: 'Fully Paid',
+  verified: 'Verified',
+  rejected: 'Rejected',
 }
 
 export function formatStatusLabel(status) {
@@ -153,11 +161,21 @@ async function request(path, options = {}) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: options.body instanceof FormData
+      ? options.headers
+      : { 'Content-Type': 'application/json', ...options.headers },
   })
-  const data = response.status === 204 ? null : await response.json()
+  const data = response.status === 204 ? null : await response.json().catch(() => null)
   if (!response.ok) throw new Error(data?.message || 'The booking request failed.')
   return data
+}
+
+export const PAYMENT_METHOD_LABELS = {
+  gcash: 'GCash',
+  maya: 'Maya',
+  bank_transfer: 'Bank Transfer',
+  cash: 'Cash (In Person)',
+  other: 'Other',
 }
 
 export const bookingsApi = {
@@ -165,4 +183,19 @@ export const bookingsApi = {
   get: (id) => request(`/bookings/${id}`),
   create: (details) => request('/bookings', { method: 'POST', body: JSON.stringify(details) }),
   status: (id, status) => request(`/bookings/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  submitPayment: (bookingId, { paymentType, paymentMethod, amount, referenceNumber, notes, receiptFile }) => {
+    const body = new FormData()
+    body.append('paymentType', paymentType)
+    body.append('paymentMethod', paymentMethod)
+    body.append('amount', String(amount))
+    if (referenceNumber) body.append('referenceNumber', referenceNumber)
+    if (notes) body.append('notes', notes)
+    if (receiptFile) body.append('receipt', receiptFile)
+    return request(`/bookings/${bookingId}/payments`, { method: 'POST', body })
+  },
+  verifyPayment: (bookingId, paymentId, payload) => request(`/bookings/${bookingId}/payments/${paymentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  }),
+  receiptUrl: (bookingId, paymentId) => `${apiBaseUrl}/bookings/${bookingId}/payments/${paymentId}/receipt`,
 }
