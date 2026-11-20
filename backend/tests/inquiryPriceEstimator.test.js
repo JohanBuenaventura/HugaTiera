@@ -316,4 +316,60 @@ describe('Inquiry Per-Sq.m Amount Predictor, Client Price Comment & On-Site Insp
       await pool.query('DELETE FROM pricing_addons WHERE id = ?', [customAddonId])
     }
   })
+
+  it('validates, persists, and returns category-specific open request specifications (landscaping plants, materials, budgets)', async () => {
+    const badSpecs = await api('/inquiries', {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: {
+        requestType: 'general',
+        categoryId: landscapingCategoryId,
+        subject: 'Invalid specs test',
+        description: 'Should reject array specs',
+        location: 'Tetuan, Zamboanga City',
+        categorySpecs: ['not', 'an', 'object'],
+      },
+    })
+    assert.equal(badSpecs.status, 400)
+
+    const createRes = await api('/inquiries', {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: {
+        requestType: 'general',
+        categoryId: landscapingCategoryId,
+        subject: 'Tropical courtyard landscaping request',
+        description: 'Full front-yard landscaping with stone pathway and bougainvillea.',
+        location: 'Tetuan, Zamboanga City',
+        areaSqm: 35,
+        workComplexity: 'moderate',
+        materialsOption: 'gardener_provides',
+        categorySpecs: {
+          landscape_style: 'Tropical / Resort style',
+          hardscape_materials: ['Stepping stones / pavers', 'Decorative gravel / pebbles'],
+          requested_plants: '10 bougainvillea, 2 dwarf palms, carabao grass turf',
+          estimated_plants_budget: 6500,
+        },
+      },
+    })
+    assert.equal(createRes.status, 201)
+    const inqId = createRes.data.id
+    createdInquiryIds.push(inqId)
+    assert.equal(createRes.data.inquiry.category_specs.landscape_style, 'Tropical / Resort style')
+    assert.deepEqual(createRes.data.inquiry.category_specs.hardscape_materials, [
+      'Stepping stones / pavers',
+      'Decorative gravel / pebbles',
+    ])
+    assert.equal(createRes.data.inquiry.category_specs.estimated_plants_budget, 6500)
+
+    const detail = await api(`/inquiries/${inqId}`, { headers: { Cookie: gardenerCookie } })
+    assert.equal(detail.status, 200)
+    assert.equal(detail.data.inquiry.category_specs.requested_plants, '10 bougainvillea, 2 dwarf palms, carabao grass turf')
+
+    const openBoard = await api('/inquiries/open', { headers: { Cookie: gardenerCookie } })
+    assert.equal(openBoard.status, 200)
+    const found = openBoard.data.requests.find((i) => i.id === inqId)
+    assert.ok(found)
+    assert.equal(found.category_specs.landscape_style, 'Tropical / Resort style')
+  })
 })

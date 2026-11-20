@@ -57,7 +57,7 @@ function validateCommonProfile(body) {
 async function getProfile(req, res, next) {
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, middle_name, last_name, phone, date_of_birth, avatar_path, created_at FROM users WHERE id = ? AND is_active = TRUE LIMIT 1',
+      'SELECT id, email, role, can_act_as_client, can_act_as_gardener, first_name, middle_name, last_name, phone, date_of_birth, avatar_path, created_at FROM users WHERE id = ? AND is_active = TRUE LIMIT 1',
       [req.user.id],
     )
     const user = users[0]
@@ -79,7 +79,7 @@ async function getProfile(req, res, next) {
     } else if (user.role === 'gardener') {
       const [profiles] = await pool.execute(
         `SELECT business_name, description, service_area, years_of_experience,
-                working_days, work_start_time, work_end_time, max_concurrent_jobs, availability_notes,
+                working_days, work_start_time, work_end_time, max_concurrent_jobs, crew_size, availability_notes,
                 is_approved
          FROM gardener_profiles WHERE user_id = ?`,
         [user.id],
@@ -122,6 +122,9 @@ async function getProfile(req, res, next) {
         id: user.id,
         email: user.email,
         role: user.role,
+        canActAsClient: Boolean(user.can_act_as_client || user.role === 'client'),
+        canActAsGardener: Boolean(user.can_act_as_gardener || user.role === 'gardener'),
+        isDualRole: Boolean(user.can_act_as_client && user.can_act_as_gardener),
         firstName: user.first_name,
         middleName: user.middle_name || null,
         lastName: user.last_name,
@@ -207,7 +210,7 @@ async function updateProfile(req, res, next) {
       }
 
       const [existingGp] = await connection.execute(
-        'SELECT working_days, work_start_time, work_end_time, max_concurrent_jobs, availability_notes FROM gardener_profiles WHERE user_id = ? LIMIT 1',
+        'SELECT working_days, work_start_time, work_end_time, max_concurrent_jobs, crew_size, availability_notes FROM gardener_profiles WHERE user_id = ? LIMIT 1',
         [req.user.id],
       )
       const currentGp = existingGp[0] || {}
@@ -251,6 +254,17 @@ async function updateProfile(req, res, next) {
         nextMaxConcurrent = parsedMax
       }
 
+      let nextCrewSize = Math.max(Number(currentGp.crew_size) || 1, nextMaxConcurrent)
+      const rawCrewSize = req.body.crewSize ?? req.body.crew_size
+      if (rawCrewSize !== undefined && rawCrewSize !== '') {
+        const parsedCrew = Number(rawCrewSize)
+        if (!Number.isInteger(parsedCrew) || parsedCrew < 1 || parsedCrew > 50) {
+          await connection.rollback()
+          return res.status(400).json({ message: 'Daily crew / worker count must be a whole number between 1 and 50.' })
+        }
+        nextCrewSize = Math.max(parsedCrew, nextMaxConcurrent)
+      }
+
       const hasAvailNotes = req.body.availabilityNotes !== undefined || req.body.availability_notes !== undefined
       const nextAvailabilityNotes = hasAvailNotes
         ? (text(req.body.availabilityNotes ?? req.body.availability_notes) || null)
@@ -263,7 +277,7 @@ async function updateProfile(req, res, next) {
       await connection.execute(
         `UPDATE gardener_profiles
          SET business_name = ?, description = ?, service_area = ?, years_of_experience = ?,
-             working_days = ?, work_start_time = ?, work_end_time = ?, max_concurrent_jobs = ?, availability_notes = ?
+             working_days = ?, work_start_time = ?, work_end_time = ?, max_concurrent_jobs = ?, crew_size = ?, availability_notes = ?
          WHERE user_id = ?`,
         [
           businessName,
@@ -274,6 +288,7 @@ async function updateProfile(req, res, next) {
           startTimeObj.sqlTime,
           endTimeObj.sqlTime,
           nextMaxConcurrent,
+          nextCrewSize,
           nextAvailabilityNotes,
           req.user.id,
         ],

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Calculator, ClipboardCheck, Leaf, MapPin, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Calculator, ClipboardCheck, Leaf, MapPin, ShieldCheck, Sparkles, Star } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
 import { formatStatusLabel, getStatusBadgeClass } from '../services/bookings'
-import { requestPhotoAnalysis, requestRequirementAssistance } from '../services/ai'
+import { fetchSmartRecommendations, requestPhotoAnalysis, requestRequirementAssistance } from '../services/ai'
 import {
   ADDON_TYPE_LABELS,
   COMPLEXITY_LABELS,
@@ -17,6 +17,10 @@ import {
   formatPeso,
   inquiriesApi,
 } from '../services/inquiries'
+import {
+  formatCategorySpecsForDisplay,
+  resolveCategoryTemplate,
+} from '../services/categorySpecs'
 import {
   deleteRequestImage,
   fetchInquiryImages,
@@ -46,6 +50,7 @@ function InquiryForm() {
   const [categories, setCategories] = useState([])
   const [pricingAddons, setPricingAddons] = useState([])
   const [selectedAddonsMap, setSelectedAddonsMap] = useState({})
+  const [categorySpecs, setCategorySpecs] = useState({})
   const validServiceId = Boolean(serviceId && /^\d+$/.test(serviceId))
   const validGardenerId = Boolean(gardenerId && /^\d+$/.test(gardenerId))
   const isGeneralRequest = typeParam === 'general' || (!validServiceId && !validGardenerId)
@@ -121,6 +126,28 @@ function InquiryForm() {
     .map((addon) => ({ ...addon, quantity: Number(selectedAddonsMap[addon.id]) }))
 
   const selectedCategory = categories.find((cat) => String(cat.id) === String(form.categoryId || service?.category_id || '')) || null
+  const activeCategoryTemplate = resolveCategoryTemplate(selectedCategory?.name || service?.category_name || '')
+  const orderedPricingAddons = [...pricingAddons].sort((a, b) => {
+    const aRec = activeCategoryTemplate.recommendedAddonTypes?.includes(a.item_type) ? 0 : 1
+    const bRec = activeCategoryTemplate.recommendedAddonTypes?.includes(b.item_type) ? 0 : 1
+    return aRec - bRec
+  })
+
+  function handleSpecChange(fieldKey, value) {
+    setCategorySpecs((prev) => ({ ...prev, [fieldKey]: value }))
+  }
+
+  function toggleSpecOption(fieldKey, optionLabel) {
+    setCategorySpecs((prev) => {
+      const current = Array.isArray(prev[fieldKey]) ? prev[fieldKey] : []
+      const exists = current.includes(optionLabel)
+      return {
+        ...prev,
+        [fieldKey]: exists ? current.filter((v) => v !== optionLabel) : [...current, optionLabel],
+      }
+    })
+  }
+
   const liveEstimate = computeLocalPriceEstimate({
     areaSqm: form.areaSqm,
     workComplexity: form.workComplexity,
@@ -251,6 +278,19 @@ function InquiryForm() {
     setSaving(true)
     setError('')
     try {
+      const cleanedSpecs = {}
+      for (const field of activeCategoryTemplate.fields) {
+        const raw = categorySpecs[field.key]
+        if (raw === undefined || raw === null || raw === '') continue
+        if (field.type === 'number') {
+          const num = Number(raw)
+          if (Number.isFinite(num) && num > 0) cleanedSpecs[field.key] = num
+        } else if (field.type === 'multiselect') {
+          if (Array.isArray(raw) && raw.length > 0) cleanedSpecs[field.key] = raw
+        } else if (typeof raw === 'string' && raw.trim()) {
+          cleanedSpecs[field.key] = raw.trim()
+        }
+      }
       const payload = {
         subject: form.subject,
         description: form.description,
@@ -262,6 +302,7 @@ function InquiryForm() {
         materialsOption: form.materialsOption,
         siteVisitRequested: Boolean(form.siteVisitRequested),
         priceComment: form.priceComment,
+        categorySpecs: Object.keys(cleanedSpecs).length > 0 ? cleanedSpecs : null,
         addonItems: selectedAddonsForEstimate.map((item) => ({
           addonId: item.id,
           quantity: item.quantity,
@@ -349,6 +390,102 @@ function InquiryForm() {
           </label>
         ))}
 
+        <div className="category-specs-panel" role="region" aria-label={activeCategoryTemplate.title}>
+          <div className="category-specs-header">
+            <div>
+              <p className="eyebrow" style={{ margin: '0 0 2px' }}>
+                {selectedCategory ? `Tailored for ${selectedCategory.name}` : 'Project options'}
+              </p>
+              <strong>{activeCategoryTemplate.title}</strong>
+              <p className="field-note" style={{ margin: '2px 0 0' }}>{activeCategoryTemplate.subtitle}</p>
+            </div>
+          </div>
+          <div className="category-specs-grid">
+            {activeCategoryTemplate.fields.map((field) => {
+              const val = categorySpecs[field.key]
+              if (field.type === 'select') {
+                return (
+                  <label key={field.key}>
+                    {field.label}
+                    <select
+                      value={typeof val === 'string' ? val : ''}
+                      onChange={(e) => handleSpecChange(field.key, e.target.value)}
+                    >
+                      <option value="">Select an option (optional)</option>
+                      {field.options.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </label>
+                )
+              }
+              if (field.type === 'multiselect') {
+                const selectedList = Array.isArray(val) ? val : []
+                return (
+                  <div className="category-spec-multiselect" key={field.key}>
+                    <span className="category-spec-label">{field.label}</span>
+                    <div className="category-spec-chips">
+                      {field.options.map((opt) => {
+                        const active = selectedList.includes(opt)
+                        return (
+                          <label className={`ai-toggle-chip${active ? ' is-checked' : ''}`} key={opt}>
+                            <input
+                              type="checkbox"
+                              checked={active}
+                              onChange={() => toggleSpecOption(field.key, opt)}
+                            />
+                            <span>{opt}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              }
+              if (field.type === 'textarea') {
+                return (
+                  <label className="category-spec-wide" key={field.key}>
+                    {field.label}
+                    <textarea
+                      rows="2"
+                      maxLength="500"
+                      placeholder={field.placeholder || ''}
+                      value={typeof val === 'string' ? val : ''}
+                      onChange={(e) => handleSpecChange(field.key, e.target.value)}
+                    />
+                  </label>
+                )
+              }
+              if (field.type === 'number') {
+                return (
+                  <label key={field.key}>
+                    {field.label}
+                    <input
+                      type="number"
+                      min="1"
+                      step={field.isCurrency ? '50' : '1'}
+                      placeholder={field.placeholder || ''}
+                      value={val ?? ''}
+                      onChange={(e) => handleSpecChange(field.key, e.target.value)}
+                    />
+                  </label>
+                )
+              }
+              return (
+                <label className="category-spec-wide" key={field.key}>
+                  {field.label}
+                  <input
+                    maxLength="500"
+                    placeholder={field.placeholder || ''}
+                    value={typeof val === 'string' ? val : ''}
+                    onChange={(e) => handleSpecChange(field.key, e.target.value)}
+                  />
+                </label>
+              )
+            })}
+          </div>
+        </div>
+
         <div className="price-predictor-box">
           <div className="price-predictor-header">
             <Calculator size={18} />
@@ -360,14 +497,14 @@ function InquiryForm() {
 
           <div className="form-row form-row-3">
             <label>
-              Estimated area (sq. meters)
+              {activeCategoryTemplate.areaLabel}
               <input
                 type="number"
                 required
                 min="0.5"
                 max="50000"
                 step="0.5"
-                placeholder="e.g., 25"
+                placeholder={activeCategoryTemplate.areaPlaceholder}
                 value={form.areaSqm}
                 onChange={change('areaSqm')}
               />
@@ -422,8 +559,9 @@ function InquiryForm() {
                 <span className="field-note">Select any plants, turf, soil, equipment, or hauling needed so the estimator prices them separately from per-sq.m labor.</span>
               </div>
               <div className="addon-picker-grid">
-                {pricingAddons.map((addon) => {
+                {orderedPricingAddons.map((addon) => {
                   const isChecked = selectedAddonsMap[addon.id] !== undefined
+                  const isRecommendedForCat = Boolean(selectedCategory && activeCategoryTemplate.recommendedAddonTypes?.includes(addon.item_type))
                   return (
                     <div className={`addon-picker-item${isChecked ? ' is-selected' : ''}`} key={addon.id}>
                       <label className="addon-picker-check">
@@ -433,7 +571,10 @@ function InquiryForm() {
                           onChange={(e) => toggleAddonItem(addon.id, e.target.checked)}
                         />
                         <span>
-                          <strong>{addon.name}</strong>
+                          <strong>
+                            {addon.name}
+                            {isRecommendedForCat && <span className="addon-rec-tag">Common for {selectedCategory.name}</span>}
+                          </strong>
                           <small>
                             {ADDON_TYPE_LABELS[addon.item_type] || addon.item_type} · {formatEstimateRange(addon.unit_price_min, addon.unit_price_max)} {addon.unit}
                           </small>
@@ -527,7 +668,7 @@ function InquiryForm() {
           </label>
         </div>
         <label>What are you looking for?
-          <textarea required rows="5" maxLength="5000" value={form.description} onChange={change('description')} placeholder="Describe your outdoor space, goals, and any details that may help gardeners prepare an offer." />
+          <textarea required rows="5" maxLength="5000" value={form.description} onChange={change('description')} placeholder={activeCategoryTemplate.descriptionPlaceholder} />
         </label>
         <div className="inline-actions" style={{ marginBottom: '6px' }}>
           <button
@@ -693,6 +834,10 @@ function InquiryDetails({ id }) {
   const [renewDays, setRenewDays] = useState('14')
   const [submittingQuote, setSubmittingQuote] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [offerSortBy, setOfferSortBy] = useState('smart_ai')
+  const [offerNearbyOnly, setOfferNearbyOnly] = useState(false)
+  const [offerGoodConductOnly, setOfferGoodConductOnly] = useState(false)
+  const [offerAiRanking, setOfferAiRanking] = useState(null)
   const load = useCallback(() => inquiriesApi.get(id).then((res) => {
     setData(res)
     if (res?.activeAgreement) {
@@ -710,6 +855,26 @@ function InquiryDetails({ id }) {
   useEffect(() => {
     load()
   }, [load])
+  useEffect(() => {
+    if (user.role !== 'client' || !data?.inquiry?.id || !Array.isArray(data?.quotations) || data.quotations.length === 0) {
+      return undefined
+    }
+    let active = true
+    fetchSmartRecommendations({
+      mode: 'offers',
+      inquiryId: data.inquiry.id,
+      sortBy: offerSortBy,
+      nearbyOnly: offerNearbyOnly,
+      goodConductOnly: offerGoodConductOnly,
+    })
+      .then((res) => {
+        if (active) setOfferAiRanking(res?.recommendations || [])
+      })
+      .catch(() => {
+        if (active) setOfferAiRanking(null)
+      })
+    return () => { active = false }
+  }, [user.role, data?.inquiry?.id, data?.quotations, offerSortBy, offerNearbyOnly, offerGoodConductOnly])
   function startReviseQuote(quote) {
     setEditingQuoteId(quote.id)
     setForm({
@@ -944,6 +1109,25 @@ function InquiryDetails({ id }) {
             )}
             {inquiry.expires_at && <span><strong>Expires</strong>{formatDate(inquiry.expires_at)}</span>}
           </div>
+          {(() => {
+            const specRows = formatCategorySpecsForDisplay(inquiry.category_specs, inquiry.category_name)
+            if (specRows.length === 0) return null
+            return (
+              <div className="category-specs-summary">
+                <p className="eyebrow" style={{ margin: '0 0 8px' }}>
+                  {inquiry.category_name ? `${inquiry.category_name} specifications` : 'Project specifications'}
+                </p>
+                <div className="detail-facts" style={{ margin: 0, padding: 0, border: 0 }}>
+                  {specRows.map((row) => (
+                    <span key={row.key}>
+                      <strong>{row.label}</strong>
+                      {row.value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
           {(inquiry.estimated_min_amount || inquiry.area_sqm || inquiry.price_comment || inquiry.site_visit_requested) && (
             <div className="estimate-summary-card">
               <div className="price-predictor-range-row">
@@ -1033,16 +1217,89 @@ function InquiryDetails({ id }) {
             </div>
           )}
           <h2>Quotations and provider responses</h2>
+          {user.role === 'client' && quotations.length > 0 && (
+            <div className="ai-filter-bar ai-offer-filter-bar" role="region" aria-label="AI offer comparison filter">
+              <div className="ai-filter-controls">
+                <div className="ai-filter-pills" role="group" aria-label="Rank received offers">
+                  {[
+                    { key: 'smart_ai', label: 'AI Best Match' },
+                    { key: 'nearby', label: 'Nearest Location' },
+                    { key: 'top_rated', label: 'Highest Rated' },
+                    { key: 'best_conduct', label: 'Best Conduct' },
+                    { key: 'lowest_price', label: 'Lowest Price' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      className={`booking-filter-pill${offerSortBy === opt.key ? ' is-active' : ''}`}
+                      onClick={() => setOfferSortBy(opt.key)}
+                    >
+                      {opt.key === 'smart_ai' && <Sparkles size={13} />}
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="ai-filter-toggles">
+                  <label className="ai-toggle-chip">
+                    <input type="checkbox" checked={offerNearbyOnly} onChange={(e) => setOfferNearbyOnly(e.target.checked)} />
+                    <span>Nearby only</span>
+                  </label>
+                  <label className="ai-toggle-chip">
+                    <input type="checkbox" checked={offerGoodConductOnly} onChange={(e) => setOfferGoodConductOnly(e.target.checked)} />
+                    <span>Clean conduct only</span>
+                  </label>
+                </div>
+              </div>
+              <span className="field-note">
+                Advisory AI ranking based on proximity to {inquiry.location || 'your area'}, verified review scores, service conduct, and budget alignment.
+              </span>
+            </div>
+          )}
           {quotations.length === 0 && <p className="form-note">No quotation has been sent yet.</p>}
-          {quotations.map((quote) => (
+          {(() => {
+            if (user.role !== 'client' || !Array.isArray(offerAiRanking)) return quotations
+            const aiById = new Map(offerAiRanking.map((item, idx) => [item.id, { ai_match: item.ai_match, rank: idx }]))
+            const filtered = (offerNearbyOnly || offerGoodConductOnly)
+              ? quotations.filter((q) => aiById.has(q.id))
+              : quotations
+            return [...filtered]
+              .map((q) => ({ ...q, ai_match: aiById.get(q.id)?.ai_match || null, _aiRank: aiById.get(q.id)?.rank ?? 999 }))
+              .sort((a, b) => a._aiRank - b._aiRank)
+          })().map((quote) => (
             <div className="quotation-card" key={quote.id}>
               <div>
                 <strong>
                   {quote.amount !== null && quote.amount !== undefined && quote.amount !== '' ? `₱${quote.amount}` : 'Indicative response'}
                   {quote.revision_number > 1 ? ` (v${quote.revision_number})` : ''}
                 </strong>
-                <span className={getStatusBadgeClass(quote.status)}>{formatStatusLabel(quote.status)}</span>
+                <div className="inline-actions" style={{ gap: '6px' }}>
+                  {quote.ai_match && (
+                    <span className="ai-match-inline-pill">
+                      <Sparkles size={12} /> {quote.ai_match.matchScore}% AI Match
+                    </span>
+                  )}
+                  <span className={getStatusBadgeClass(quote.status)}>{formatStatusLabel(quote.status)}</span>
+                </div>
               </div>
+              {quote.ai_match && (
+                <div className="ai-card-badges" style={{ marginTop: '6px' }}>
+                  {quote.ai_match.conduct?.cleanConduct && (
+                    <span className="conduct-pill">
+                      <ShieldCheck size={12} /> {quote.ai_match.conduct.tierLabel}
+                    </span>
+                  )}
+                  {quote.ai_match.proximity?.label && (
+                    <span className="rating-inline-pill">
+                      <MapPin size={12} /> {quote.ai_match.proximity.label}
+                    </span>
+                  )}
+                  {Number(quote.gardener_review_count || 0) > 0 && (
+                    <span className="rating-inline-pill">
+                      <Star size={12} fill="currentColor" /> {Number(quote.gardener_rating || 0).toFixed(1)} ({quote.gardener_review_count})
+                    </span>
+                  )}
+                </div>
+              )}
               <p className="form-note" style={{ margin: '4px 0' }}>
                 <strong>Assessment:</strong> {RESPONSE_TYPE_LABELS[quote.response_type] || quote.response_type}
                 {quote.gardener_name ? ` · ${quote.gardener_name}` : ''}

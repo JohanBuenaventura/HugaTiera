@@ -183,6 +183,15 @@ export function getDashboardNavLinks(role, unreadCounts = {}) {
       { to: '/services', label: 'Marketplace', type: 'route' },
     ]
   }
+  if (role === 'clerk') {
+    return [
+      { to: '/dashboard', label: 'Overview', type: 'route' },
+      { to: '/dashboard?tab=schedules', label: 'Schedules', type: 'route' },
+      { to: '/dashboard?tab=payments', label: 'Payments', type: 'route' },
+      { to: '/dashboard?tab=services', label: 'Services', type: 'route' },
+      { to: '/services', label: 'Marketplace', type: 'route' },
+    ]
+  }
   return [
     { to: '/dashboard', label: 'Overview', type: 'route' },
     ...(role === 'client' ? [{ to: '/services', label: 'Marketplace', type: 'route' }] : []),
@@ -198,7 +207,7 @@ export function resolveDashboardTab(tabParam, profileView = false) {
   if (profileView || tabParam === 'profile' || tabParam === 'settings') {
     return 'profile'
   }
-  if (['services', 'portfolio', 'analytics', 'approvals', 'pricing', 'activity', 'reports', 'accounts'].includes(tabParam)) {
+  if (['services', 'portfolio', 'analytics', 'approvals', 'pricing', 'activity', 'reports', 'accounts', 'schedules', 'payments'].includes(tabParam)) {
     return tabParam
   }
   return 'overview'
@@ -230,6 +239,10 @@ export function buildProfileForm(result, baseForm = initialProfile) {
     workStartTime: String(profilePart.workStartTime ?? profilePart.work_start_time ?? baseForm.workStartTime ?? '08:00').slice(0, 5),
     workEndTime: String(profilePart.workEndTime ?? profilePart.work_end_time ?? baseForm.workEndTime ?? '17:00').slice(0, 5),
     maxConcurrentJobs: Number(profilePart.maxConcurrentJobs ?? profilePart.max_concurrent_jobs ?? baseForm.maxConcurrentJobs ?? 1) || 1,
+    crewSize: Math.max(
+      Number(profilePart.crewSize ?? profilePart.crew_size ?? baseForm.crewSize ?? 1) || 1,
+      Number(profilePart.maxConcurrentJobs ?? profilePart.max_concurrent_jobs ?? baseForm.maxConcurrentJobs ?? 1) || 1,
+    ),
     availabilityNotes: profilePart.availabilityNotes ?? profilePart.availability_notes ?? baseForm.availabilityNotes ?? '',
     unavailableDates: Array.isArray(profilePart.unavailableDates ?? profilePart.unavailable_dates)
       ? (profilePart.unavailableDates ?? profilePart.unavailable_dates)
@@ -287,5 +300,13 @@ export const profileApi = {
   adminActivity: () => request('/admin/activity'),
   adminReports: () => request('/admin/reports'),
   updateReport: (id, status) => request(`/admin/reports/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  adminClerkAssignments: () => request('/admin/clerk-assignments'),
+  adminCreateClerkAssignment: (payload) => request('/admin/clerk-assignments', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  adminDeleteClerkAssignment: (assignmentId) => request(`/admin/clerk-assignments/${assignmentId}`, {
+    method: 'DELETE',
+  }),
   createReport: (details) => request('/profiles/reports', { method: 'POST', body: JSON.stringify(details) }),
 }

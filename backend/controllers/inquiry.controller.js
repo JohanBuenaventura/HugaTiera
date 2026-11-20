@@ -46,6 +46,65 @@ function text(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function parseCategorySpecsInput(raw) {
+  if (raw === undefined || raw === null || raw === '') return { value: null }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: 'Category specifications must be an object.' }
+  }
+  const entries = Object.entries(raw)
+  if (entries.length > 20) {
+    return { error: 'Too many category specification fields (maximum 20).' }
+  }
+  const cleaned = {}
+  for (const [key, val] of entries) {
+    if (!/^[a-zA-Z0-9_]{1,50}$/.test(key)) {
+      return { error: `Invalid specification key "${key}".` }
+    }
+    if (val === undefined || val === null || val === '') continue
+    if (typeof val === 'boolean') {
+      cleaned[key] = val
+    } else if (typeof val === 'number') {
+      if (!Number.isFinite(val) || val < 0 || val > 10000000) {
+        return { error: `Invalid numeric value for "${key}".` }
+      }
+      cleaned[key] = Math.round(val * 100) / 100
+    } else if (typeof val === 'string') {
+      const trimmed = val.trim()
+      if (!trimmed) continue
+      if (trimmed.length > 500) {
+        return { error: `Specification "${key}" must be 500 characters or fewer.` }
+      }
+      cleaned[key] = trimmed
+    } else if (Array.isArray(val)) {
+      const items = val
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+      if (items.length === 0) continue
+      if (items.length > 20 || items.some((item) => item.length > 120)) {
+        return { error: `Specification list "${key}" contains invalid or overly long entries.` }
+      }
+      cleaned[key] = [...new Set(items)]
+    } else {
+      return { error: `Unsupported value type for specification "${key}".` }
+    }
+  }
+  return { value: Object.keys(cleaned).length > 0 ? cleaned : null }
+}
+
+function deserializeCategorySpecs(raw) {
+  if (!raw) return null
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 function parsePositiveInt(value) {
   const num = Number(value)
   return Number.isInteger(num) && num > 0 ? num : null
@@ -261,7 +320,7 @@ async function listOpenRequests(req, res, next) {
       `SELECT i.id, i.request_type, i.category_id,
               i.subject, i.description, i.ai_summary, i.requested_date, i.location,
               i.area_sqm, i.work_complexity, i.materials_option, i.site_visit_requested,
-              i.estimated_min_amount, i.estimated_max_amount, i.price_comment,
+              i.estimated_min_amount, i.estimated_max_amount, i.price_comment, i.category_specs,
               i.status, i.expires_at, i.created_at, i.updated_at,
               sc.name AS category_name,
               u.first_name AS client_first_name,
@@ -302,6 +361,7 @@ async function listOpenRequests(req, res, next) {
       }
       for (const row of rows) {
         row.images = imagesByInquiry.get(row.id) || []
+        row.category_specs = deserializeCategorySpecs(row.category_specs)
       }
     }
 
@@ -323,7 +383,7 @@ async function getInquiry(req, res, next) {
               i.subject, i.description, i.ai_summary, i.requested_date, i.location,
               i.area_sqm, i.work_complexity, i.materials_option, i.site_visit_requested,
               i.estimated_labor_min, i.estimated_labor_max, i.estimated_materials_min, i.estimated_materials_max,
-              i.estimated_min_amount, i.estimated_max_amount, i.price_comment,
+              i.estimated_min_amount, i.estimated_max_amount, i.price_comment, i.category_specs,
               i.status, i.expires_at, i.created_at, i.updated_at,
               CASE WHEN i.expires_at IS NOT NULL AND i.expires_at <= NOW() THEN 1 ELSE 0 END AS is_expired,
               s.title AS service_title,
@@ -345,6 +405,7 @@ async function getInquiry(req, res, next) {
     if (!inquiry) {
       return res.status(404).json({ message: 'Inquiry was not found.' })
     }
+    inquiry.category_specs = deserializeCategorySpecs(inquiry.category_specs)
 
     if (
       (inquiry.status === 'open' || inquiry.status === 'responded')
@@ -669,6 +730,10 @@ async function createInquiry(req, res, next) {
   if (addonParse.error) {
     return res.status(400).json({ message: addonParse.error })
   }
+  const categorySpecsParse = parseCategorySpecsInput(req.body?.categorySpecs ?? req.body?.category_specs)
+  if (categorySpecsParse.error) {
+    return res.status(400).json({ message: categorySpecsParse.error })
+  }
 
   let expiresInDays = requestType === 'general' ? 14 : null
   if (rawExpiresInDays !== undefined && rawExpiresInDays !== null && String(rawExpiresInDays).trim() !== '') {
@@ -714,7 +779,7 @@ async function createInquiry(req, res, next) {
           `SELECT u.id
            FROM users u
            JOIN gardener_profiles gp ON gp.user_id = u.id AND gp.is_approved = TRUE
-           WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE
+           WHERE u.id = ? AND (u.role = 'gardener' OR u.can_act_as_gardener = TRUE) AND u.is_active = TRUE
            LIMIT 1
            FOR UPDATE`,
           [resolvedGardenerId],
@@ -723,6 +788,13 @@ async function createInquiry(req, res, next) {
           await connection.rollback()
           return res.status(404).json({ message: 'Selected gardener is unavailable or not approved.' })
         }
+      }
+      if (resolvedGardenerId && resolvedGardenerId === req.user.id) {
+        await connection.rollback()
+        return res.status(409).json({
+          code: 'SELF_INQUIRY_FORBIDDEN',
+          message: 'You cannot send a service inquiry to your own gardener profile or service.',
+        })
       }
     }
 
@@ -774,6 +846,7 @@ async function createInquiry(req, res, next) {
       estimate ? estimate.estimatedMinAmount : null,
       estimate ? estimate.estimatedMaxAmount : null,
       estimatorInputs.priceComment,
+      categorySpecsParse.value ? JSON.stringify(categorySpecsParse.value) : null,
       ...(expiresInDays ? [expiresInDays] : []),
     ]
 
@@ -782,8 +855,8 @@ async function createInquiry(req, res, next) {
         (request_type, client_id, gardener_id, service_id, category_id, subject, description, ai_summary,
          requested_date, location, area_sqm, work_complexity, materials_option, site_visit_requested,
          estimated_labor_min, estimated_labor_max, estimated_materials_min, estimated_materials_max,
-         estimated_min_amount, estimated_max_amount, price_comment, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${expiresSql})`,
+         estimated_min_amount, estimated_max_amount, price_comment, category_specs, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${expiresSql})`,
       insertParams,
     )
     const inquiryId = result.insertId
@@ -844,6 +917,10 @@ async function createInquiry(req, res, next) {
       'SELECT * FROM inquiries WHERE id = ? LIMIT 1',
       [inquiryId],
     )
+    const createdInquiry = createdInquiryRows[0]
+    if (createdInquiry) {
+      createdInquiry.category_specs = deserializeCategorySpecs(createdInquiry.category_specs)
+    }
     const [attachedImageRows] = attachedImageIds.length > 0
       ? await connection.execute(
           `SELECT id, inquiry_id, uploaded_by, kind, parent_image_id, mime_type, file_size, ai_description, created_at
@@ -862,7 +939,7 @@ async function createInquiry(req, res, next) {
       status: 'open',
       attachedImageIds,
       estimate,
-      inquiry: createdInquiryRows[0],
+      inquiry: createdInquiry,
       images: attachedImageRows.map(serializeRequestImage),
     })
   } catch (error) {
@@ -1010,6 +1087,14 @@ async function createQuotation(req, res, next) {
       await connection.rollback()
       return res.status(409).json({
         message: 'You already have an active quotation for this inquiry. Revise your existing quotation instead.',
+      })
+    }
+
+    if (inquiry.client_id === req.user.id) {
+      await connection.rollback()
+      return res.status(409).json({
+        code: 'SELF_OFFER_FORBIDDEN',
+        message: 'You cannot submit a quotation on your own service request.',
       })
     }
 

@@ -95,23 +95,27 @@ describe('Reservation vs. Paid Booking Lifecycle (Deposit Gate, Proof Upload & G
   })
 
   after(async () => {
-    for (const rel of createdReceiptPaths) {
-      await removeFileIfExists(paymentReceiptsDirectory, rel)
+    try {
+      for (const rel of createdReceiptPaths) {
+        await removeFileIfExists(paymentReceiptsDirectory, rel)
+      }
+      if (createdInquiryIds.length > 0) {
+        await pool.query('UPDATE agreements SET previous_agreement_id = NULL WHERE inquiry_id IN (?)', [createdInquiryIds])
+        await pool.query('DELETE FROM reviews WHERE booking_id IN (SELECT id FROM bookings WHERE inquiry_id IN (?))', [createdInquiryIds])
+        await pool.query('DELETE FROM bookings WHERE inquiry_id IN (?)', [createdInquiryIds])
+        await pool.query('DELETE FROM agreements WHERE inquiry_id IN (?)', [createdInquiryIds])
+        await pool.query('DELETE FROM request_events WHERE inquiry_id IN (?)', [createdInquiryIds])
+        await pool.query('DELETE FROM inquiries WHERE id IN (?)', [createdInquiryIds])
+      }
+      if (serviceId) await pool.query('DELETE FROM services WHERE id = ?', [serviceId])
+      if (createdUserIds.length > 0) {
+        await pool.query('DELETE FROM notifications WHERE user_id IN (?)', [createdUserIds])
+        await pool.query('DELETE FROM users WHERE id IN (?)', [createdUserIds])
+      }
+    } finally {
+      if (server) await new Promise((resolve) => server.close(resolve))
+      await pool.end()
     }
-    if (createdInquiryIds.length > 0) {
-      await pool.query('UPDATE agreements SET previous_agreement_id = NULL WHERE inquiry_id IN (?)', [createdInquiryIds])
-      await pool.query('DELETE FROM bookings WHERE inquiry_id IN (?)', [createdInquiryIds])
-      await pool.query('DELETE FROM agreements WHERE inquiry_id IN (?)', [createdInquiryIds])
-      await pool.query('DELETE FROM request_events WHERE inquiry_id IN (?)', [createdInquiryIds])
-      await pool.query('DELETE FROM inquiries WHERE id IN (?)', [createdInquiryIds])
-    }
-    if (serviceId) await pool.query('DELETE FROM services WHERE id = ?', [serviceId])
-    if (createdUserIds.length > 0) {
-      await pool.query('DELETE FROM notifications WHERE user_id IN (?)', [createdUserIds])
-      await pool.query('DELETE FROM users WHERE id IN (?)', [createdUserIds])
-    }
-    if (server) await new Promise((resolve) => server.close(resolve))
-    await pool.end()
   })
 
   it('creates an unpaid reservation on mutual agreement, blocks in_progress until deposit is verified, protects receipt privacy, and tracks partial -> full payment', async () => {
@@ -168,6 +172,7 @@ describe('Reservation vs. Paid Booking Lifecycle (Deposit Gate, Proof Upload & G
       body: form1,
     })
     assert.equal(pay1.status, 201)
+    assert.match(pay1.data.payment.transaction_code, /^TXN-\d{8}-[A-Z0-9]{6}$/)
     assert.ok(pay1.data.payment.receipt_path)
     createdReceiptPaths.push(pay1.data.payment.receipt_path)
 
@@ -241,13 +246,49 @@ describe('Reservation vs. Paid Booking Lifecycle (Deposit Gate, Proof Upload & G
     })
     assert.equal(startOk.status, 200)
 
-    // 4. Client pays remaining PHP 1400 balance -> gardener verifies -> fully_paid & remaining_balance = 0
+    // Cannot sign Transaction Completion Agreement before work is completed -> 409 WORK_NOT_COMPLETED
+    const earlyClose = await api(`/bookings/${bookingId}/complete-transaction`, {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: { note: 'Too early' },
+    })
+    assert.equal(earlyClose.status, 409)
+    assert.equal(earlyClose.data.code, 'WORK_NOT_COMPLETED')
+
+    // Gardener marks physical work completed while remaining PHP 1400 balance is still unpaid
+    const completeWork = await api(`/bookings/${bookingId}/status`, {
+      method: 'PATCH',
+      headers: { Cookie: gardenerCookie },
+      body: { status: 'completed' },
+    })
+    assert.equal(completeWork.status, 200)
+
+    // Cannot sign Transaction Completion Agreement before full payment -> 409 FULL_PAYMENT_REQUIRED
+    const unpaidClose = await api(`/bookings/${bookingId}/complete-transaction`, {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: { note: 'Not yet paid in full' },
+    })
+    assert.equal(unpaidClose.status, 409)
+    assert.equal(unpaidClose.data.code, 'FULL_PAYMENT_REQUIRED')
+
+    // Cannot submit rating before full payment -> 409 FULL_PAYMENT_REQUIRED
+    const unpaidReview = await api('/reviews', {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: { bookingId, rating: 5, reviewText: 'Trying to rate before paying balance' },
+    })
+    assert.equal(unpaidReview.status, 409)
+    assert.equal(unpaidReview.data.code, 'FULL_PAYMENT_REQUIRED')
+
+    // 4. Client pays remaining PHP 1400 balance AFTER work completion -> gardener verifies -> fully_paid & pending_closure
     const pay3 = await api(`/bookings/${bookingId}/payments`, {
       method: 'POST',
       headers: { Cookie: clientCookie },
       body: { paymentType: 'balance', paymentMethod: 'cash', amount: 1400, notes: 'Paid balance in cash on site' },
     })
     assert.equal(pay3.status, 201)
+    assert.match(pay3.data.payment.transaction_code, /^TXN-\d{8}-[A-Z0-9]{6}$/)
     const ver3 = await api(`/bookings/${bookingId}/payments/${pay3.data.id}`, {
       method: 'PATCH',
       headers: { Cookie: gardenerCookie },
@@ -255,6 +296,8 @@ describe('Reservation vs. Paid Booking Lifecycle (Deposit Gate, Proof Upload & G
     })
     assert.equal(ver3.status, 200)
     assert.equal(ver3.data.booking.payment_status, 'fully_paid')
+    assert.equal(ver3.data.booking.transaction_status, 'pending_closure')
+    assert.equal(ver3.data.booking.can_review, false)
     assert.equal(Number(ver3.data.booking.remaining_balance), 0)
 
     // Extra payment after fully_paid is rejected with 409
@@ -264,5 +307,62 @@ describe('Reservation vs. Paid Booking Lifecycle (Deposit Gate, Proof Upload & G
       body: { paymentType: 'balance', paymentMethod: 'cash', amount: 100 },
     })
     assert.equal(extraPay.status, 409)
+
+    // 5. Transaction Completion Agreement: client signs first (still pending_closure, review still blocked)
+    const clientSign = await api(`/bookings/${bookingId}/complete-transaction`, {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: { note: 'Garden looks great and paid in full.' },
+    })
+    assert.equal(clientSign.status, 200)
+    assert.equal(clientSign.data.closed, false)
+    assert.equal(clientSign.data.transaction_status, 'pending_closure')
+
+    // Duplicate sign-off by client returns 409 ALREADY_CONFIRMED
+    const dupClientSign = await api(`/bookings/${bookingId}/complete-transaction`, {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: {},
+    })
+    assert.equal(dupClientSign.status, 409)
+    assert.equal(dupClientSign.data.code, 'ALREADY_CONFIRMED')
+
+    // Review still blocked until gardener also signs closing agreement -> 409 TRANSACTION_NOT_CLOSED
+    const unclosedReview = await api('/reviews', {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: { bookingId, rating: 5, reviewText: 'Waiting on gardener sign-off' },
+    })
+    assert.equal(unclosedReview.status, 409)
+    assert.equal(unclosedReview.data.code, 'TRANSACTION_NOT_CLOSED')
+
+    // Gardener signs closing agreement -> transaction closes & can_review becomes true
+    const gardenerSign = await api(`/bookings/${bookingId}/complete-transaction`, {
+      method: 'POST',
+      headers: { Cookie: gardenerCookie },
+      body: { note: 'Full payment confirmed. Pleasure working with you!' },
+    })
+    assert.equal(gardenerSign.status, 200)
+    assert.equal(gardenerSign.data.closed, true)
+    assert.equal(gardenerSign.data.transaction_status, 'closed')
+    assert.equal(gardenerSign.data.booking.can_review, true)
+    assert.ok(gardenerSign.data.booking.transaction_closed_at)
+
+    // Already-closed transaction rejects further closing calls -> 409 TRANSACTION_ALREADY_CLOSED
+    const closedAgain = await api(`/bookings/${bookingId}/complete-transaction`, {
+      method: 'POST',
+      headers: { Cookie: gardenerCookie },
+      body: {},
+    })
+    assert.equal(closedAgain.status, 409)
+    assert.equal(closedAgain.data.code, 'TRANSACTION_ALREADY_CLOSED')
+
+    // 6. Client can now rate & review!
+    const okReview = await api('/reviews', {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: { bookingId, rating: 5, reviewText: 'Great service and smooth closing agreement!' },
+    })
+    assert.equal(okReview.status, 201)
   })
 })

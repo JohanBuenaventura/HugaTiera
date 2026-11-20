@@ -3,6 +3,11 @@ const { pool } = require('../config/database')
 const { resolveRequestImagePath } = require('../middleware/upload.middleware')
 const { serializeRequestImage } = require('./requestImage.controller')
 const {
+  scoreOfferForClient,
+  scoreOpenLeadForGardener,
+  scoreServiceForClient,
+} = require('../utils/smartMatching')
+const {
   AI_SAFETY_DISCLAIMER,
   MAX_INPUT_LENGTH,
   executeWithModelFallback,
@@ -496,9 +501,372 @@ async function analyzeUploadedPhoto(req, res, next) {
   }
 }
 
+function parseBoolQuery(value) {
+  return value === true || value === 'true' || value === '1'
+}
+
+async function getSmartRecommendations(req, res, next) {
+  const mode = text(req.query.mode).toLowerCase() || (req.user.role === 'gardener' ? 'leads' : 'services')
+  const sortBy = text(req.query.sortBy || req.query.sort).toLowerCase() || 'smart_ai'
+  const nearbyOnly = parseBoolQuery(req.query.nearbyOnly)
+  const goodConductOnly = parseBoolQuery(req.query.goodConductOnly)
+  const minRating = req.query.minRating !== undefined && req.query.minRating !== '' ? Number(req.query.minRating) : 0
+  const keyword = text(req.query.keyword || req.query.q)
+  const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 30)
+
+  try {
+    if (mode === 'services') {
+      let userLocation = text(req.query.location)
+      if (!userLocation && req.user.role === 'client') {
+        const [cp] = await pool.execute(
+          'SELECT address, city FROM client_profiles WHERE user_id = ? LIMIT 1',
+          [req.user.id],
+        )
+        if (cp[0]) {
+          userLocation = [cp[0].address, cp[0].city].filter(Boolean).join(', ')
+        }
+      }
+      if (!userLocation) userLocation = 'Zamboanga City'
+
+      const [rows] = await pool.execute(
+        `SELECT s.id, s.title, s.description, s.indicative_price, s.price_unit,
+                s.service_area, s.image_path, s.category_id, c.name AS category_name,
+                s.gardener_id, u.first_name, u.last_name, u.avatar_path AS gardener_avatar_path,
+                gp.business_name, gp.service_area AS gardener_service_area, gp.years_of_experience,
+                (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.gardener_id = s.gardener_id AND r.is_visible = TRUE) AS average_rating,
+                (SELECT COUNT(*) FROM reviews r WHERE r.gardener_id = s.gardener_id AND r.is_visible = TRUE) AS review_count,
+                (SELECT COUNT(*) FROM bookings b WHERE b.gardener_id = s.gardener_id AND b.status = 'completed') AS completed_jobs,
+                (SELECT COUNT(*) FROM bookings b WHERE b.gardener_id = s.gardener_id AND b.status = 'completed' AND b.transaction_status = 'closed') AS closed_jobs,
+                (SELECT COUNT(*) FROM bookings b WHERE b.gardener_id = s.gardener_id) AS total_bookings,
+                (SELECT COUNT(*) FROM bookings b WHERE b.gardener_id = s.gardener_id AND b.status = 'cancelled' AND b.cancelled_by = s.gardener_id AND (b.cancellation_reason_type IS NULL OR b.cancellation_reason_type NOT IN ('typhoon_weather', 'accident_emergency'))) AS avoidable_cancellations,
+                (SELECT COUNT(*) FROM reports rep WHERE rep.reported_user_id = s.gardener_id AND rep.status = 'resolved') AS substantiated_reports
+         FROM services s
+         JOIN users u ON u.id = s.gardener_id
+         JOIN gardener_profiles gp ON gp.user_id = u.id
+         JOIN service_categories c ON c.id = s.category_id
+         WHERE s.is_active = TRUE AND u.is_active = TRUE AND gp.is_approved = TRUE AND c.is_active = TRUE`,
+      )
+
+      let scored = rows.map((service) => scoreServiceForClient({
+        service,
+        clientLocation: userLocation,
+        queryText: keyword,
+        sortBy,
+      }))
+
+      if (nearbyOnly) {
+        scored = scored.filter((item) => item.ai_match.proximity.isNearby)
+      }
+      if (Number.isFinite(minRating) && minRating > 0) {
+        scored = scored.filter((item) => item.average_rating != null && Number(item.average_rating) >= minRating)
+      }
+      if (goodConductOnly) {
+        scored = scored.filter((item) => item.ai_match.conduct.cleanConduct)
+      }
+      if (keyword) {
+        const kwMatched = scored.filter((item) => item.ai_match.keywordScore > 0)
+        if (kwMatched.length > 0) scored = kwMatched
+      }
+
+      scored.sort((a, b) => {
+        if (b.ai_match.matchScore !== a.ai_match.matchScore) {
+          return b.ai_match.matchScore - a.ai_match.matchScore
+        }
+        return (Number(b.average_rating) || 0) - (Number(a.average_rating) || 0)
+      })
+
+      return res.json({
+        mode: 'services',
+        referenceLocation: userLocation,
+        sortBy,
+        filters: { nearbyOnly, goodConductOnly, minRating: minRating || 0, keyword },
+        totalCandidates: rows.length,
+        recommendations: scored.slice(0, limit),
+        disclaimer: AI_SAFETY_DISCLAIMER,
+      })
+    }
+
+    if (mode === 'offers') {
+      const inquiryId = parsePositiveInt(req.query.inquiryId)
+      if (!inquiryId) {
+        return res.status(400).json({ message: 'A valid inquiryId is required to rank offers.' })
+      }
+      const [inqRows] = await pool.execute(
+        `SELECT id, client_id, location, estimated_min_amount, estimated_max_amount, subject
+         FROM inquiries WHERE id = ? LIMIT 1`,
+        [inquiryId],
+      )
+      const inquiry = inqRows[0]
+      if (!inquiry) return res.status(404).json({ message: 'Inquiry was not found.' })
+      if (req.user.role !== 'administrator' && inquiry.client_id !== req.user.id) {
+        return res.status(403).json({ message: 'Only the client who submitted this inquiry can filter its offers.' })
+      }
+
+      const [offerRows] = await pool.execute(
+        `SELECT q.id, q.inquiry_id, q.gardener_id, q.revision_number, q.response_type,
+                q.amount, q.labor_amount, q.materials_amount, q.details, q.estimated_working_days,
+                q.requires_site_visit, q.availability_start, q.availability_end, q.valid_until,
+                q.status, q.created_at,
+                CONCAT(u.first_name, ' ', u.last_name) AS gardener_name,
+                gp.business_name, gp.service_area AS gardener_service_area, gp.years_of_experience,
+                (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.gardener_id = q.gardener_id AND r.is_visible = TRUE) AS average_rating,
+                (SELECT COUNT(*) FROM reviews r WHERE r.gardener_id = q.gardener_id AND r.is_visible = TRUE) AS review_count,
+                (SELECT COUNT(*) FROM bookings b WHERE b.gardener_id = q.gardener_id AND b.status = 'completed') AS completed_jobs,
+                (SELECT COUNT(*) FROM bookings b WHERE b.gardener_id = q.gardener_id AND b.status = 'completed' AND b.transaction_status = 'closed') AS closed_jobs,
+                (SELECT COUNT(*) FROM bookings b WHERE b.gardener_id = q.gardener_id) AS total_bookings,
+                (SELECT COUNT(*) FROM bookings b WHERE b.gardener_id = q.gardener_id AND b.status = 'cancelled' AND b.cancelled_by = q.gardener_id AND (b.cancellation_reason_type IS NULL OR b.cancellation_reason_type NOT IN ('typhoon_weather', 'accident_emergency'))) AS avoidable_cancellations,
+                (SELECT COUNT(*) FROM reports rep WHERE rep.reported_user_id = q.gardener_id AND rep.status = 'resolved') AS substantiated_reports
+         FROM quotations q
+         JOIN users u ON u.id = q.gardener_id
+         LEFT JOIN gardener_profiles gp ON gp.user_id = q.gardener_id
+         WHERE q.inquiry_id = ? AND q.status IN ('sent', 'accepted')`,
+        [inquiryId],
+      )
+
+      const refLocation = text(req.query.location) || inquiry.location || 'Zamboanga City'
+      let scored = offerRows.map((offer) => scoreOfferForClient({
+        offer,
+        inquiryLocation: refLocation,
+        estimatedMin: inquiry.estimated_min_amount,
+        estimatedMax: inquiry.estimated_max_amount,
+        sortBy,
+      }))
+
+      if (nearbyOnly) {
+        scored = scored.filter((item) => item.ai_match.proximity.isNearby)
+      }
+      if (Number.isFinite(minRating) && minRating > 0) {
+        scored = scored.filter((item) => item.average_rating != null && Number(item.average_rating) >= minRating)
+      }
+      if (goodConductOnly) {
+        scored = scored.filter((item) => item.ai_match.conduct.cleanConduct)
+      }
+
+      scored.sort((a, b) => {
+        if (sortBy === 'lowest_price') {
+          const pa = a.amount != null ? Number(a.amount) : Number.POSITIVE_INFINITY
+          const pb = b.amount != null ? Number(b.amount) : Number.POSITIVE_INFINITY
+          if (pa !== pb) return pa - pb
+        }
+        return b.ai_match.matchScore - a.ai_match.matchScore
+      })
+
+      return res.json({
+        mode: 'offers',
+        inquiryId,
+        referenceLocation: refLocation,
+        sortBy,
+        totalCandidates: offerRows.length,
+        recommendations: scored,
+        disclaimer: AI_SAFETY_DISCLAIMER,
+      })
+    }
+
+    if (mode === 'leads') {
+      if (req.user.role !== 'gardener' && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: 'Only approved gardeners can filter open client service leads.' })
+      }
+      let gardenerArea = text(req.query.location)
+      let gardenerCategoryIds = []
+      if (req.user.role === 'gardener') {
+        const [gpRows] = await pool.execute(
+          'SELECT is_approved, service_area FROM gardener_profiles WHERE user_id = ? LIMIT 1',
+          [req.user.id],
+        )
+        if (!gpRows[0] || !gpRows[0].is_approved) {
+          return res.status(403).json({ message: 'Your gardener profile must be approved before viewing open client leads.' })
+        }
+        if (!gardenerArea) gardenerArea = gpRows[0].service_area || 'Zamboanga City'
+        const [catRows] = await pool.execute(
+          'SELECT DISTINCT category_id FROM services WHERE gardener_id = ? AND is_active = TRUE',
+          [req.user.id],
+        )
+        gardenerCategoryIds = catRows.map((c) => Number(c.category_id))
+      }
+      if (!gardenerArea) gardenerArea = 'Zamboanga City'
+
+      const [leadRows] = await pool.execute(
+        `SELECT i.id, i.request_type, i.category_id, i.subject, i.description, i.ai_summary,
+                i.requested_date, i.location, i.area_sqm, i.work_complexity, i.materials_option,
+                i.site_visit_requested, i.estimated_min_amount, i.estimated_max_amount, i.category_specs,
+                i.status, i.expires_at, i.created_at,
+                sc.name AS category_name,
+                u.first_name AS client_first_name,
+                (SELECT COUNT(*) FROM quotations q WHERE q.inquiry_id = i.id AND q.status IN ('sent', 'accepted')) AS offer_count,
+                (SELECT COUNT(*) FROM bookings b WHERE b.client_id = i.client_id AND b.status = 'completed' AND b.transaction_status = 'closed') AS client_closed_jobs,
+                (SELECT COUNT(*) FROM reports rep WHERE rep.reported_user_id = i.client_id AND rep.status = 'resolved') AS client_substantiated_reports,
+                my_q.id AS my_quotation_id,
+                my_q.status AS my_quotation_status,
+                my_q.amount AS my_quotation_amount
+         FROM inquiries i
+         LEFT JOIN service_categories sc ON sc.id = i.category_id
+         JOIN users u ON u.id = i.client_id AND u.is_active = TRUE
+         LEFT JOIN quotations my_q ON my_q.id = (
+           SELECT q2.id FROM quotations q2
+           WHERE q2.inquiry_id = i.id AND q2.gardener_id = ?
+           ORDER BY q2.created_at DESC, q2.id DESC
+           LIMIT 1
+         )
+         WHERE i.request_type = 'general'
+           AND i.status IN ('open', 'responded')
+           AND (i.expires_at IS NULL OR i.expires_at > NOW())`,
+        [req.user.id],
+      )
+
+      if (leadRows.length > 0) {
+        const ids = leadRows.map((r) => r.id)
+        const [imgRows] = await pool.execute(
+          `SELECT id, inquiry_id, uploaded_by, kind, parent_image_id, mime_type, file_size, ai_description, created_at
+           FROM request_images WHERE inquiry_id IN (${ids.map(() => '?').join(', ')})
+           ORDER BY created_at ASC, id ASC`,
+          ids,
+        )
+        const imgMap = new Map()
+        for (const img of imgRows) {
+          if (!imgMap.has(img.inquiry_id)) imgMap.set(img.inquiry_id, [])
+          imgMap.get(img.inquiry_id).push(serializeRequestImage(img))
+        }
+        for (const row of leadRows) {
+          row.images = imgMap.get(row.id) || []
+          if (typeof row.category_specs === 'string') {
+            try { row.category_specs = JSON.parse(row.category_specs) } catch { row.category_specs = null }
+          }
+        }
+      }
+
+      let scored = leadRows.map((lead) => scoreOpenLeadForGardener({
+        lead,
+        gardenerArea,
+        gardenerCategoryIds,
+        queryText: keyword,
+        sortBy,
+      }))
+
+      if (nearbyOnly) {
+        scored = scored.filter((item) => item.ai_match.proximity.isNearby)
+      }
+      if (goodConductOnly) {
+        scored = scored.filter((item) => item.ai_match.clientCleanConduct)
+      }
+      if (keyword) {
+        const q = keyword.toLowerCase()
+        const matched = scored.filter((item) =>
+          `${item.subject} ${item.description} ${item.category_name || ''} ${item.location || ''}`.toLowerCase().includes(q),
+        )
+        if (matched.length > 0) scored = matched
+      }
+
+      scored.sort((a, b) => b.ai_match.matchScore - a.ai_match.matchScore)
+
+      return res.json({
+        mode: 'leads',
+        referenceLocation: gardenerArea,
+        sortBy,
+        totalCandidates: leadRows.length,
+        recommendations: scored.slice(0, limit),
+        disclaimer: AI_SAFETY_DISCLAIMER,
+      })
+    }
+
+    return res.status(400).json({ message: 'Invalid recommendation mode. Use services, offers, or leads.' })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function createRecommendationSummary(req, res, next) {
+  const mode = text(req.body?.mode).toLowerCase() || 'services'
+  const referenceLocation = text(req.body?.referenceLocation) || 'Zamboanga City'
+  const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 5) : []
+  if (items.length === 0) {
+    return res.status(400).json({ message: 'At least one candidate item is required to generate an AI summary.' })
+  }
+
+  const buildFallbackSummary = () => {
+    const lines = items.slice(0, 3).map((item, idx) => {
+      const title = text(item.title || item.subject || item.gardenerName) || `Option #${idx + 1}`
+      const score = item.matchScore != null ? `${item.matchScore}% match` : 'recommended'
+      const reasons = Array.isArray(item.reasons) && item.reasons.length > 0 ? item.reasons.join(', ') : 'matches your criteria'
+      return `${idx + 1}. ${title} (${score}) — ${reasons}.`
+    })
+    return `Top advisory picks near ${referenceLocation}:\n${lines.join('\n')}\n\nNote: Review profiles, quotes, and schedules directly before deciding.`
+  }
+
+  if (!process.env.GEMINI_API_KEY) {
+    return res.json({
+      summary: buildFallbackSummary(),
+      source: 'smart_ranking',
+      disclaimer: AI_SAFETY_DISCLAIMER,
+    })
+  }
+
+  let reservedUsageId = null
+  const primaryModel = getModelName()
+  try {
+    const rateCheck = await reserveAiUsageSlot({
+      userId: req.user.id,
+      feature: 'requirements',
+      model: primaryModel,
+    })
+    if (!rateCheck.allowed) {
+      return res.json({
+        summary: buildFallbackSummary(),
+        source: 'smart_ranking',
+        disclaimer: AI_SAFETY_DISCLAIMER,
+      })
+    }
+    reservedUsageId = rateCheck.usageId
+
+    const compactItems = items.map((item, idx) => ({
+      rank: idx + 1,
+      title: text(item.title || item.subject || item.gardenerName).slice(0, 120),
+      provider: text(item.gardenerName || item.providerName).slice(0, 100),
+      matchScore: item.matchScore,
+      price: item.price ?? null,
+      reasons: Array.isArray(item.reasons) ? item.reasons.slice(0, 4) : [],
+    }))
+    const prompt = [
+      `You are HugaTiera's advisory assistant for Zamboanga City gardening services (${mode}).`,
+      `Reference location: ${referenceLocation}.`,
+      `Write a concise, friendly 3-bullet comparison (under 110 words) highlighting why the top candidates stand out on nearby location, verified reviews, and good conduct of service.`,
+      `Never auto-select a provider, never guarantee outcomes, and never quote binding prices.`,
+      `Candidates: ${JSON.stringify(compactItems)}`,
+    ].join('\n')
+
+    const execution = await executeWithModelFallback('generateGardenPlan', prompt)
+    await finalizeAiUsageSlot(reservedUsageId, {
+      outcome: 'success',
+      errorCode: execution.fallbackUsed ? `FALLBACK_FROM_${execution.primaryErrorCode}` : null,
+      model: execution.model,
+    })
+    return res.json({
+      summary: execution.result,
+      source: 'gemini',
+      model: execution.model,
+      disclaimer: AI_SAFETY_DISCLAIMER,
+    })
+  } catch (error) {
+    const classified = classifyAiError(error)
+    const auditMeta = buildFailureAuditMetadata(error, primaryModel, classified)
+    await finalizeAiUsageSlot(reservedUsageId, {
+      outcome: 'error',
+      errorCode: auditMeta.errorCode,
+      model: auditMeta.model,
+    }).catch(() => {})
+    // Graceful non-blocking fallback to deterministic smart summary
+    return res.json({
+      summary: buildFallbackSummary(),
+      source: 'smart_ranking',
+      disclaimer: AI_SAFETY_DISCLAIMER,
+    })
+  }
+}
+
 module.exports = {
   analyzeUploadedPhoto,
   createGardenPlan,
+  createRecommendationSummary,
   createRequirementAssistance,
   getAiUsageStatus,
+  getSmartRecommendations,
 }

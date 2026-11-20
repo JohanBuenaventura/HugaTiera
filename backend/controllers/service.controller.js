@@ -7,6 +7,8 @@ const {
 } = require('../middleware/upload.middleware')
 const { formatDateOnly } = require('../utils/userProfile')
 const {
+  computeFullyBookedDates,
+  normalizeTimeOfDay,
   parseWorkingDays,
   validateGardenerSchedule,
 } = require('../utils/scheduling')
@@ -24,6 +26,10 @@ function serviceValues(body) {
     : Number(body.indicativePrice)
   const priceUnit = text(body.priceUnit) || null
   const serviceArea = text(body.serviceArea) || 'Zamboanga City'
+  const rawWorkers = body.workersRequired ?? body.workers_required
+  const workersRequired = rawWorkers === '' || rawWorkers === null || rawWorkers === undefined
+    ? 1
+    : Number(rawWorkers)
 
   if (!title || title.length > 150) return { error: 'A service title between 1 and 150 characters is required.' }
   if (!description) return { error: 'A service description is required.' }
@@ -31,8 +37,11 @@ function serviceValues(body) {
   if (indicativePrice !== null && (!Number.isFinite(indicativePrice) || indicativePrice < 0)) return { error: 'Indicative price must be a positive number.' }
   if (priceUnit && priceUnit.length > 50) return { error: 'Price unit is too long.' }
   if (serviceArea.length > 150) return { error: 'Service area is too long.' }
+  if (!Number.isInteger(workersRequired) || workersRequired < 1 || workersRequired > 20) {
+    return { error: 'Workers required per job must be a whole number between 1 and 20.' }
+  }
 
-  return { title, description, categoryId, indicativePrice, priceUnit, serviceArea }
+  return { title, description, categoryId, indicativePrice, priceUnit, serviceArea, workersRequired }
 }
 
 async function listCategories(req, res, next) {
@@ -94,8 +103,11 @@ async function listServices(req, res, next) {
   try {
     const [services] = await pool.execute(`
       SELECT s.id, s.title, s.description, s.indicative_price, s.price_unit,
-             s.service_area, s.image_path, s.category_id, c.name AS category_name,
-             s.gardener_id, u.first_name, u.last_name, u.avatar_path AS gardener_avatar_path, gp.business_name
+             s.service_area, s.workers_required, s.image_path, s.category_id, c.name AS category_name,
+             s.gardener_id, u.first_name, u.last_name, u.avatar_path AS gardener_avatar_path,
+             gp.business_name, gp.years_of_experience, gp.crew_size, gp.max_concurrent_jobs,
+             (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.gardener_id = s.gardener_id AND r.is_visible = TRUE) AS average_rating,
+             (SELECT COUNT(*) FROM reviews r WHERE r.gardener_id = s.gardener_id AND r.is_visible = TRUE) AS review_count
       FROM services s
       JOIN users u ON u.id = s.gardener_id
       JOIN gardener_profiles gp ON gp.user_id = u.id
@@ -132,7 +144,7 @@ async function getGardener(req, res, next) {
              gp.max_concurrent_jobs, gp.availability_notes
       FROM users u
       JOIN gardener_profiles gp ON gp.user_id = u.id
-      WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE AND gp.is_approved = TRUE
+      WHERE u.id = ? AND (u.role = 'gardener' OR u.can_act_as_gardener = TRUE) AND u.is_active = TRUE AND gp.is_approved = TRUE
       LIMIT 1
     `, [gardenerId])
     if (!gardeners[0]) return res.status(404).json({ message: 'Gardener profile was not found.' })
@@ -190,7 +202,7 @@ async function listMyServices(req, res, next) {
   try {
     const [services] = await pool.execute(`
       SELECT s.id, s.title, s.description, s.indicative_price, s.price_unit,
-             s.service_area, s.image_path, s.category_id, c.name AS category_name, s.is_active
+             s.service_area, s.workers_required, s.image_path, s.category_id, c.name AS category_name, s.is_active
       FROM services s
       JOIN service_categories c ON c.id = s.category_id
       WHERE s.gardener_id = ?
@@ -210,10 +222,11 @@ async function getService(req, res, next) {
   try {
     const [services] = await pool.execute(`
       SELECT s.id, s.category_id, s.title, s.description, s.indicative_price, s.price_unit,
-             s.service_area, s.image_path, c.name AS category_name,
+             s.service_area, s.workers_required, s.image_path, c.name AS category_name,
              c.rate_per_sqm_min, c.rate_per_sqm_max, c.min_base_fee,
              s.gardener_id,
-             u.first_name, u.last_name, u.phone, u.avatar_path AS gardener_avatar_path, gp.business_name, gp.description AS gardener_description
+             u.first_name, u.last_name, u.phone, u.avatar_path AS gardener_avatar_path,
+             gp.business_name, gp.description AS gardener_description, gp.crew_size, gp.max_concurrent_jobs
       FROM services s
       JOIN users u ON u.id = s.gardener_id AND u.is_active = TRUE
       JOIN gardener_profiles gp ON gp.user_id = u.id AND gp.is_approved = TRUE
@@ -241,8 +254,8 @@ async function createService(req, res, next) {
     const [categories] = await pool.execute('SELECT id FROM service_categories WHERE id = ? AND is_active = TRUE', [values.categoryId])
     if (!categories[0]) return res.status(400).json({ message: 'The selected category is not available.' })
     const [result] = await pool.execute(
-      'INSERT INTO services (gardener_id, category_id, title, description, indicative_price, price_unit, service_area) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [req.user.id, values.categoryId, values.title, values.description, values.indicativePrice, values.priceUnit, values.serviceArea],
+      'INSERT INTO services (gardener_id, category_id, title, description, indicative_price, price_unit, service_area, workers_required) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.user.id, values.categoryId, values.title, values.description, values.indicativePrice, values.priceUnit, values.serviceArea, values.workersRequired],
     )
     return res.status(201).json({ id: result.insertId })
   } catch (error) {
@@ -256,8 +269,8 @@ async function updateService(req, res, next) {
 
   try {
     const [result] = await pool.execute(
-      'UPDATE services SET category_id = ?, title = ?, description = ?, indicative_price = ?, price_unit = ?, service_area = ? WHERE id = ? AND gardener_id = ? AND is_active = TRUE',
-      [values.categoryId, values.title, values.description, values.indicativePrice, values.priceUnit, values.serviceArea, Number(req.params.serviceId), req.user.id],
+      'UPDATE services SET category_id = ?, title = ?, description = ?, indicative_price = ?, price_unit = ?, service_area = ?, workers_required = ? WHERE id = ? AND gardener_id = ? AND is_active = TRUE',
+      [values.categoryId, values.title, values.description, values.indicativePrice, values.priceUnit, values.serviceArea, values.workersRequired, Number(req.params.serviceId), req.user.id],
     )
     if (!result.affectedRows) return res.status(404).json({ message: 'Service was not found or is not owned by you.' })
     return res.json({ status: 'ok' })
@@ -367,10 +380,10 @@ async function getGardenerAvailability(req, res, next) {
   try {
     const [rows] = await pool.execute(
       `SELECT u.id, gp.working_days, gp.work_start_time, gp.work_end_time,
-              gp.max_concurrent_jobs, gp.availability_notes
+              gp.max_concurrent_jobs, gp.crew_size, gp.availability_notes
        FROM users u
        JOIN gardener_profiles gp ON gp.user_id = u.id
-       WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE AND gp.is_approved = TRUE
+       WHERE u.id = ? AND (u.role = 'gardener' OR u.can_act_as_gardener = TRUE) AND u.is_active = TRUE AND gp.is_approved = TRUE
        LIMIT 1`,
       [gardenerId],
     )
@@ -379,6 +392,10 @@ async function getGardenerAvailability(req, res, next) {
     }
     const profile = rows[0]
     const parsedDays = parseWorkingDays(profile.working_days, { fallbackToAll: true })
+    const workStart = normalizeTimeOfDay(profile.work_start_time, '08:00:00')
+    const workEnd = normalizeTimeOfDay(profile.work_end_time, '17:00:00')
+    const maxConcurrentJobs = Math.max(1, Number(profile.max_concurrent_jobs) || 1)
+    const crewSize = Math.max(1, Number(profile.crew_size) || 1, maxConcurrentJobs)
 
     const [unavailableRows] = await pool.execute(
       `SELECT id, start_date, end_date, reason
@@ -390,24 +407,35 @@ async function getGardenerAvailability(req, res, next) {
 
     // Anonymized upcoming booked windows (no client personal info exposed)
     const [busyRows] = await pool.execute(
-      `SELECT scheduled_start, scheduled_end, status
-       FROM bookings
-       WHERE gardener_id = ?
-         AND status IN ('pending', 'accepted', 'in_progress')
-         AND scheduled_end >= NOW()
-       ORDER BY scheduled_start ASC
+      `SELECT b.scheduled_start, b.scheduled_end, b.status, COALESCE(s.workers_required, 1) AS workers_required
+       FROM bookings b
+       LEFT JOIN services s ON s.id = b.service_id
+       WHERE b.gardener_id = ?
+         AND b.status IN ('pending', 'accepted', 'in_progress')
+         AND b.scheduled_end >= NOW()
+       ORDER BY b.scheduled_start ASC
        LIMIT 60`,
       [gardenerId],
     )
+
+    const fullyBookedDates = computeFullyBookedDates({
+      busyRows,
+      workStartMinutes: workStart.minutes,
+      workEndMinutes: workEnd.minutes,
+      maxConcurrentJobs,
+      crewSize,
+    })
 
     return res.json({
       availability: {
         gardenerId,
         workingDays: parsedDays.days,
-        workStartTime: String(profile.work_start_time || '08:00:00').slice(0, 5),
-        workEndTime: String(profile.work_end_time || '17:00:00').slice(0, 5),
-        maxConcurrentJobs: Math.max(1, Number(profile.max_concurrent_jobs) || 1),
+        workStartTime: workStart.hhmm,
+        workEndTime: workEnd.hhmm,
+        maxConcurrentJobs,
+        crewSize,
         availabilityNotes: profile.availability_notes || null,
+        fullyBookedDates,
         unavailableDates: unavailableRows.map((row) => ({
           id: row.id,
           start_date: formatDateOnly(row.start_date),
@@ -417,6 +445,7 @@ async function getGardenerAvailability(req, res, next) {
         busySlots: busyRows.map((row) => ({
           scheduled_start: row.scheduled_start,
           scheduled_end: row.scheduled_end,
+          workers_required: Math.max(1, Number(row.workers_required) || 1),
         })),
       },
     })
@@ -432,12 +461,18 @@ async function checkGardenerAvailability(req, res, next) {
   }
   const scheduledStart = req.body?.scheduledStart ?? req.body?.scheduled_start
   const scheduledEnd = req.body?.scheduledEnd ?? req.body?.scheduled_end
+  const rawExclude = Number(req.body?.excludeBookingId ?? req.body?.exclude_booking_id)
+  const excludeBookingId = Number.isInteger(rawExclude) && rawExclude > 0 ? rawExclude : null
+  const rawServiceId = Number(req.body?.serviceId ?? req.body?.service_id)
+  const serviceId = Number.isInteger(rawServiceId) && rawServiceId > 0 ? rawServiceId : null
+  const rawWorkers = Number(req.body?.workersRequired ?? req.body?.workers_required)
+  const workersRequired = Number.isInteger(rawWorkers) && rawWorkers > 0 ? rawWorkers : null
 
   try {
     const [exists] = await pool.execute(
       `SELECT u.id FROM users u
        JOIN gardener_profiles gp ON gp.user_id = u.id
-       WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE AND gp.is_approved = TRUE
+       WHERE u.id = ? AND (u.role = 'gardener' OR u.can_act_as_gardener = TRUE) AND u.is_active = TRUE AND gp.is_approved = TRUE
        LIMIT 1`,
       [gardenerId],
     )
@@ -449,6 +484,9 @@ async function checkGardenerAvailability(req, res, next) {
       gardenerId,
       scheduledStart,
       scheduledEnd,
+      serviceId,
+      workersRequired,
+      excludeBookingId,
       lockRows: false,
     })
 
@@ -460,18 +498,26 @@ async function checkGardenerAvailability(req, res, next) {
         peakConcurrent: result.peakConcurrent ?? null,
         maxConcurrentJobs: result.maxConcurrentJobs ?? null,
         remainingSlots: result.remainingSlots ?? 0,
+        crewSize: result.crewSize ?? null,
+        peakWorkers: result.peakWorkers ?? null,
+        remainingWorkers: result.remainingWorkers ?? 0,
+        requestedWorkers: result.requestedWorkers ?? 1,
       })
     }
 
     return res.json({
       available: true,
       code: 'AVAILABLE',
-      message: result.maxConcurrentJobs > 1
-        ? `Available (${result.remainingSlots} of ${result.maxConcurrentJobs} simultaneous job slot${result.remainingSlots === 1 ? '' : 's'} open).`
+      message: result.crewSize > 1
+        ? `Available (${result.remainingWorkers} of ${result.crewSize} worker${result.crewSize === 1 ? '' : 's'} & ${result.remainingSlots} of ${result.maxConcurrentJobs} slot${result.maxConcurrentJobs === 1 ? '' : 's'} open).`
         : 'Schedule slot is available with no conflicts.',
       peakConcurrent: result.peakConcurrent,
       maxConcurrentJobs: result.maxConcurrentJobs,
       remainingSlots: result.remainingSlots,
+      crewSize: result.crewSize,
+      peakWorkers: result.peakWorkers,
+      remainingWorkers: result.remainingWorkers,
+      requestedWorkers: result.requestedWorkers,
     })
   } catch (error) {
     return next(error)

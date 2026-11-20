@@ -215,6 +215,9 @@ export function RegisterPage() {
       return
     }
 
+    const includeClientFields = form.role === 'client' || form.role === 'both'
+    const includeGardenerFields = form.role === 'gardener' || form.role === 'both'
+
     const payload = {
       role: form.role,
       firstName: form.firstName,
@@ -225,17 +228,20 @@ export function RegisterPage() {
       email: form.email,
       password: form.password,
       confirmPassword: form.confirmPassword,
-      ...(form.role === 'client'
+      ...(includeClientFields
         ? {
           address: form.address,
           city: form.city,
         }
-        : {
+        : {}),
+      ...(includeGardenerFields
+        ? {
           businessName: form.businessName,
           serviceArea: form.serviceArea,
           yearsOfExperience: form.yearsOfExperience === '' ? null : Number(form.yearsOfExperience),
           description: form.description,
-        }),
+        }
+        : {}),
     }
 
     setSubmitting(true)
@@ -261,7 +267,7 @@ export function RegisterPage() {
 
         <fieldset>
           <legend>I want to...</legend>
-          <div className="role-options">
+          <div className="role-options role-options-3">
             <label className={form.role === 'client' ? 'selected' : ''}>
               <input type="radio" name="role" value="client" checked={form.role === 'client'} onChange={updateField('role')} />
               Find a gardener
@@ -270,7 +276,16 @@ export function RegisterPage() {
               <input type="radio" name="role" value="gardener" checked={form.role === 'gardener'} onChange={updateField('role')} />
               Offer services
             </label>
+            <label className={form.role === 'both' ? 'selected' : ''}>
+              <input type="radio" name="role" value="both" checked={form.role === 'both'} onChange={updateField('role')} />
+              Both (Client &amp; Gardener)
+            </label>
           </div>
+          {form.role === 'both' && (
+            <p className="field-note" style={{ marginTop: '6px' }}>
+              Switch anytime between Client Mode and Gardener Mode with one click inside your dashboard.
+            </p>
+          )}
         </fieldset>
 
         <div className="auth-form-section">
@@ -358,11 +373,9 @@ export function RegisterPage() {
           </label>
         </div>
 
-        <div className="auth-form-section">
-          <p className="auth-section-title">
-            {form.role === 'client' ? 'Location details' : 'Gardener details'}
-          </p>
-          {form.role === 'client' ? (
+        {(form.role === 'client' || form.role === 'both') && (
+          <div className="auth-form-section">
+            <p className="auth-section-title">Client location details</p>
             <div className="form-row">
               <label>
                 Street / Barangay address
@@ -389,57 +402,60 @@ export function RegisterPage() {
                 />
               </label>
             </div>
-          ) : (
-            <>
-              <div className="form-row">
-                <label>
-                  Business or display name <span className="label-note">(Optional)</span>
-                  <input
-                    name="businessName"
-                    maxLength="150"
-                    placeholder="Leave blank to use your full name"
-                    value={form.businessName}
-                    onChange={updateField('businessName')}
-                  />
-                </label>
-                <label>
-                  Years of experience <span className="label-note">(Optional)</span>
-                  <input
-                    name="yearsOfExperience"
-                    type="number"
-                    min="0"
-                    max="100"
-                    placeholder="e.g., 3"
-                    value={form.yearsOfExperience}
-                    onChange={updateField('yearsOfExperience')}
-                  />
-                </label>
-              </div>
+          </div>
+        )}
+
+        {(form.role === 'gardener' || form.role === 'both') && (
+          <div className="auth-form-section">
+            <p className="auth-section-title">Gardener details</p>
+            <div className="form-row">
               <label>
-                Service area
+                Business or display name <span className="label-note">(Optional)</span>
                 <input
-                  name="serviceArea"
-                  required
+                  name="businessName"
                   maxLength="150"
-                  placeholder="e.g., Zamboanga City"
-                  value={form.serviceArea}
-                  onChange={updateField('serviceArea')}
+                  placeholder="Leave blank to use your full name"
+                  value={form.businessName}
+                  onChange={updateField('businessName')}
                 />
               </label>
               <label>
-                Short bio / specialties <span className="label-note">(Optional)</span>
-                <textarea
-                  name="description"
-                  rows="2"
-                  maxLength="2000"
-                  placeholder="Briefly describe your gardening, lawn care, or landscaping experience"
-                  value={form.description}
-                  onChange={updateField('description')}
+                Years of experience <span className="label-note">(Optional)</span>
+                <input
+                  name="yearsOfExperience"
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="e.g., 3"
+                  value={form.yearsOfExperience}
+                  onChange={updateField('yearsOfExperience')}
                 />
               </label>
-            </>
-          )}
-        </div>
+            </div>
+            <label>
+              Service area
+              <input
+                name="serviceArea"
+                required
+                maxLength="150"
+                placeholder="e.g., Zamboanga City"
+                value={form.serviceArea}
+                onChange={updateField('serviceArea')}
+              />
+            </label>
+            <label>
+              Short bio / specialties <span className="label-note">(Optional)</span>
+              <textarea
+                name="description"
+                rows="2"
+                maxLength="2000"
+                placeholder="Briefly describe your gardening, lawn care, or landscaping experience"
+                value={form.description}
+                onChange={updateField('description')}
+              />
+            </label>
+          </div>
+        )}
 
         <div className="auth-form-section">
           <p className="auth-section-title">Account credentials</p>

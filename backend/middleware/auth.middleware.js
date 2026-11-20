@@ -26,7 +26,7 @@ async function requireAuth(req, res, next) {
 
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, role, first_name, middle_name, last_name, phone, date_of_birth, is_active FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, email, role, can_act_as_client, can_act_as_gardener, first_name, middle_name, last_name, phone, date_of_birth, is_active FROM users WHERE id = ? LIMIT 1',
       [payload.id],
     )
     const user = users[0]

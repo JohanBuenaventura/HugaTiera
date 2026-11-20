@@ -1,6 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { ImagePlus, Pencil, Save, Sparkles, Trash2 } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  ArrowRight,
+  Award,
+  Briefcase,
+  CalendarDays,
+  CheckCircle2,
+  ImagePlus,
+  Leaf,
+  MapPin,
+  Pencil,
+  Save,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Trash2,
+  UserPlus,
+} from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import {
   MIN_REGISTRATION_AGE,
@@ -16,13 +33,18 @@ import {
   resolveDashboardTab,
 } from '../services/profiles'
 import { servicesApi } from '../services/services'
-import { inquiriesApi } from '../services/inquiries'
+import { formatEstimateRange, inquiriesApi } from '../services/inquiries'
 import {
   bookingsApi,
   formatStatusLabel,
   getStatusBadgeClass,
 } from '../services/bookings'
+import { reviewsApi } from '../services/reviews'
+import { fetchSmartRecommendations, requestRecommendationSummary } from '../services/ai'
+import { getRequestImageUrl } from '../services/requestImages'
 import AppSidebar from '../components/AppSidebar'
+import ClerkDashboard from '../components/ClerkDashboard'
+import GardenerScheduleCalendar from '../components/GardenerScheduleCalendar'
 
 function ProfileForm({ role, profile, userId, onSaved }) {
   const [form, setForm] = useState(profile)
@@ -215,7 +237,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
               )
             })}
           </div>
-          <div className="form-row form-row-3">
+          <div className="form-row">
             <label>
               Work starts
               <input type="time" required value={form.workStartTime || '08:00'} onChange={change('workStartTime')} />
@@ -224,11 +246,28 @@ function ProfileForm({ role, profile, userId, onSaved }) {
               Work ends
               <input type="time" required value={form.workEndTime || '17:00'} onChange={change('workEndTime')} />
             </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Total workers / crew available per day
+              <input
+                type="number"
+                min="1"
+                max="50"
+                required
+                value={form.crewSize ?? form.maxConcurrentJobs ?? 1}
+                onChange={(e) => setForm({ ...form, crewSize: Number(e.target.value) })}
+              />
+              <span className="field-note">When all workers are assigned on a day, it is marked Fully Booked.</span>
+            </label>
             <label>
               Simultaneous jobs allowed
               <select
                 value={String(form.maxConcurrentJobs || 1)}
-                onChange={(e) => setForm({ ...form, maxConcurrentJobs: Number(e.target.value) })}
+                onChange={(e) => {
+                  const nextMax = Number(e.target.value)
+                  setForm({ ...form, maxConcurrentJobs: nextMax, crewSize: Math.max(Number(form.crewSize || 1), nextMax) })
+                }}
               >
                 <option value="1">1 — Solo (no overlapping jobs)</option>
                 <option value="2">2 — Can work 2 jobs simultaneously</option>
@@ -315,7 +354,7 @@ function Stats({ role, counts }) {
 }
 
 function GardenerTools({ isApproved, section = 'services' }) {
-  const emptyService = { title: '', description: '', categoryId: '', indicativePrice: '', priceUnit: '', serviceArea: 'Zamboanga City' }
+  const emptyService = { title: '', description: '', categoryId: '', indicativePrice: '', priceUnit: '', serviceArea: 'Zamboanga City', workersRequired: 1 }
   const [serviceForm, setServiceForm] = useState(emptyService)
   const [serviceImageFile, setServiceImageFile] = useState(null)
   const [serviceImageVersion, setServiceImageVersion] = useState(0)
@@ -460,7 +499,14 @@ function GardenerTools({ isApproved, section = 'services' }) {
             <label>Indicative price<input type="number" min="0" step="0.01" placeholder="Optional" value={serviceForm.indicativePrice} onChange={serviceChange('indicativePrice')} /><span className="field-note">Optional</span></label>
             <label>Price unit<input placeholder="per visit, per sqm..." value={serviceForm.priceUnit} onChange={serviceChange('priceUnit')} /></label>
           </div>
-          <label>Service area<input required value={serviceForm.serviceArea} onChange={serviceChange('serviceArea')} /></label>
+          <div className="form-row">
+            <label>Service area<input required value={serviceForm.serviceArea} onChange={serviceChange('serviceArea')} /></label>
+            <label>
+              Workers needed for this service
+              <input type="number" required min="1" max="20" value={serviceForm.workersRequired ?? 1} onChange={serviceChange('workersRequired')} />
+              <span className="field-note">Counts toward your daily crew limit (e.g., 1 for lawn care, 3 for landscaping).</span>
+            </label>
+          </div>
           <label>
             Cover / business design photo
             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setServiceImageFile(event.target.files?.[0] || null)} />
@@ -485,7 +531,7 @@ function GardenerTools({ isApproved, section = 'services' }) {
                 )}
                 <div>
                   <strong>{service.title}</strong>
-                  <span>{service.category_name} · {service.is_active ? 'Active' : 'Inactive'}{service.is_active && !isApproved ? ' · Pending approval' : ''}</span>
+                  <span>{service.category_name} · {service.workers_required || 1} worker{(service.workers_required || 1) === 1 ? '' : 's'} · {service.is_active ? 'Active' : 'Inactive'}{service.is_active && !isApproved ? ' · Pending approval' : ''}</span>
                 </div>
               </div>
               {service.is_active && (
@@ -493,7 +539,7 @@ function GardenerTools({ isApproved, section = 'services' }) {
                   {service.image_path && (
                     <button type="button" className="table-action" onClick={() => removeServiceImage(service.id)}>Remove photo</button>
                   )}
-                  <button type="button" aria-label={`Edit ${service.title}`} onClick={() => { setEditId(service.id); setServiceImageFile(null); setServiceForm({ title: service.title, description: service.description, categoryId: service.category_id, indicativePrice: service.indicative_price || '', priceUnit: service.price_unit || '', serviceArea: service.service_area }) }}><Pencil size={15} /></button>
+                  <button type="button" aria-label={`Edit ${service.title}`} onClick={() => { setEditId(service.id); setServiceImageFile(null); setServiceForm({ title: service.title, description: service.description, categoryId: service.category_id, indicativePrice: service.indicative_price || '', priceUnit: service.price_unit || '', serviceArea: service.service_area, workersRequired: service.workers_required || 1 }) }}><Pencil size={15} /></button>
                   <button type="button" aria-label={`Deactivate ${service.title}`} onClick={() => removeService(service.id)}><Trash2 size={15} /></button>
                 </div>
               )}
@@ -531,6 +577,591 @@ function formatInquirySubtitle(inquiry, role) {
   return parts.join(' · ')
 }
 
+function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
+  const [services, setServices] = useState([])
+  const [reviews, setReviews] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [referenceLocation, setReferenceLocation] = useState(defaultLocation || 'Zamboanga City')
+  const [locationInput, setLocationInput] = useState(defaultLocation || '')
+  const [keywordInput, setKeywordInput] = useState('')
+  const [sortBy, setSortBy] = useState('smart_ai')
+  const [nearbyOnly, setNearbyOnly] = useState(false)
+  const [minRating, setMinRating] = useState(0)
+  const [goodConductOnly, setGoodConductOnly] = useState(false)
+  const [aiSummary, setAiSummary] = useState('')
+  const [aiSummarySource, setAiSummarySource] = useState('')
+  const [loadingSummary, setLoadingSummary] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    reviewsApi.recent(4)
+      .then((revRes) => {
+        if (active) setReviews(revRes?.reviews || [])
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    const timer = setTimeout(() => {
+      if (!active) return
+      setLoading(true)
+      fetchSmartRecommendations({
+        mode: 'services',
+        location: locationInput.trim() || defaultLocation || 'Zamboanga City',
+        keyword: keywordInput.trim(),
+        sortBy,
+        nearbyOnly,
+        minRating: minRating || undefined,
+        goodConductOnly,
+        limit: 6,
+      })
+        .then((res) => {
+          if (!active) return
+          setServices(res?.recommendations || [])
+          if (res?.referenceLocation) setReferenceLocation(res.referenceLocation)
+        })
+        .catch(() => {
+          if (!active) return
+          servicesApi.list({ limit: 6 }).then((fallback) => {
+            if (active) setServices(fallback?.services || [])
+          }).catch(() => {})
+        })
+        .finally(() => {
+          if (active) setLoading(false)
+        })
+    }, 180)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [defaultLocation, locationInput, keywordInput, sortBy, nearbyOnly, minRating, goodConductOnly])
+
+  async function handleExplainTopPicks() {
+    if (services.length === 0) return
+    setLoadingSummary(true)
+    try {
+      const res = await requestRecommendationSummary({
+        mode: 'services',
+        referenceLocation,
+        items: services.slice(0, 3).map((s) => ({
+          title: s.title,
+          gardenerName: s.business_name || `${s.first_name || ''} ${s.last_name || ''}`.trim(),
+          matchScore: s.ai_match?.matchScore,
+          price: s.indicative_price,
+          reasons: s.ai_match?.reasons || [],
+        })),
+      })
+      setAiSummary(res?.summary || '')
+      setAiSummarySource(res?.source || 'smart_ranking')
+    } catch {
+      setAiSummary('')
+    } finally {
+      setLoadingSummary(false)
+    }
+  }
+
+  return (
+    <section className="dashboard-showcase-stack" aria-label="AI recommended gardening services and verified reviews">
+      <div className="dashboard-panel showcase-panel">
+        <div className="showcase-header">
+          <div>
+            <p className="eyebrow" style={{ marginBottom: '6px' }}>AI smart recommendations · nearby &amp; high conduct</p>
+            <h2 style={{ marginBottom: '4px' }}>Recommended gardening services near you</h2>
+            <p className="field-note" style={{ margin: 0 }}>
+              Ranked by Zamboanga City barangay proximity ({referenceLocation}), verified review scores, and clean service conduct. Advisory only—you always choose who to inquire or book.
+            </p>
+          </div>
+          <div className="inline-actions">
+            {services.length > 0 && (
+              <button
+                type="button"
+                className="table-action"
+                disabled={loadingSummary}
+                onClick={handleExplainTopPicks}
+              >
+                <Sparkles size={14} /> {loadingSummary ? 'Summarizing...' : 'AI Explain Top Picks'}
+              </button>
+            )}
+            <Link className="button button-outline" to="/services">
+              View all services <ArrowRight size={15} />
+            </Link>
+          </div>
+        </div>
+
+        <div className="ai-filter-bar" role="region" aria-label="AI service filters">
+          <div className="ai-filter-inputs">
+            <label>
+              Your barangay / area
+              <input
+                maxLength="120"
+                placeholder="e.g., Tetuan, Sta. Maria, Pasonanca"
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+              />
+            </label>
+            <label>
+              What do you need? <span className="label-note">(Optional)</span>
+              <input
+                maxLength="120"
+                placeholder="e.g., lawn mowing, landscaping, pruning"
+                value={keywordInput}
+                onChange={(e) => setKeywordInput(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="ai-filter-controls">
+            <div className="ai-filter-pills" role="group" aria-label="Sort recommendations">
+              {[
+                { key: 'smart_ai', label: 'AI Smart Match' },
+                { key: 'nearby', label: 'Nearest First' },
+                { key: 'top_rated', label: 'Highest Rated' },
+                { key: 'best_conduct', label: 'Best Service Conduct' },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  className={`booking-filter-pill${sortBy === opt.key ? ' is-active' : ''}`}
+                  onClick={() => setSortBy(opt.key)}
+                >
+                  {opt.key === 'smart_ai' && <Sparkles size={13} />}
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="ai-filter-toggles">
+              <label className="ai-toggle-chip">
+                <input type="checkbox" checked={nearbyOnly} onChange={(e) => setNearbyOnly(e.target.checked)} />
+                <span>Nearby only</span>
+              </label>
+              <label className="ai-toggle-chip">
+                <input type="checkbox" checked={minRating >= 4} onChange={(e) => setMinRating(e.target.checked ? 4 : 0)} />
+                <span>4.0★+ rated</span>
+              </label>
+              <label className="ai-toggle-chip">
+                <input type="checkbox" checked={goodConductOnly} onChange={(e) => setGoodConductOnly(e.target.checked)} />
+                <span>Clean conduct only</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {aiSummary && (
+          <div className="ai-summary-callout" role="status">
+            <div className="ai-summary-head">
+              <strong><Sparkles size={15} /> AI Advisory Comparison {aiSummarySource === 'gemini' ? '(Gemini)' : '(Smart Match)'}</strong>
+              <button type="button" className="table-action" onClick={() => setAiSummary('')}>Dismiss</button>
+            </div>
+            <p style={{ whiteSpace: 'pre-line', margin: 0 }}>{aiSummary}</p>
+          </div>
+        )}
+
+        {loading ? (
+          <p className="field-note">Finding top-rated and nearby gardening services...</p>
+        ) : services.length === 0 ? (
+          <div className="empty-state">
+            No services match your active AI filters right now. Try turning off &ldquo;4.0★+ rated&rdquo; or &ldquo;Nearby only&rdquo;, or post an open general request with your garden photos.
+          </div>
+        ) : (
+          <div className="marketplace-card-grid dashboard-service-grid">
+            {services.map((service) => {
+              const providerName = service.business_name || `${service.first_name || ''} ${service.last_name || ''}`.trim()
+              const ratingCount = Number(service.review_count || 0)
+              const avgRating = service.average_rating != null ? Number(service.average_rating).toFixed(1) : null
+              const hasPrice = service.indicative_price !== null && service.indicative_price !== undefined
+              const ai = service.ai_match
+              return (
+                <article className="marketplace-card visual-market-card showcase-card" key={service.id}>
+                  <div className="marketplace-card-media">
+                    {service.image_path ? (
+                      <img src={servicesApi.serviceImageUrl(service.id)} alt={service.title} loading="lazy" />
+                    ) : (
+                      <div className="marketplace-card-placeholder" aria-hidden="true">
+                        <Leaf size={28} />
+                        <span>{service.category_name || 'Gardening service'}</span>
+                      </div>
+                    )}
+                    <span className="category-pill media-badge">{service.category_name || 'Gardening'}</span>
+                    <span className="showcase-rating-pill" aria-label={ai ? `${ai.matchScore}% AI match` : 'Verified gardener'}>
+                      {ai ? (
+                        <><Sparkles size={12} /> {ai.matchScore}% Match</>
+                      ) : ratingCount > 0 ? (
+                        <><Star size={12} fill="currentColor" /> {avgRating} ({ratingCount})</>
+                      ) : (
+                        <><CheckCircle2 size={12} /> Verified</>
+                      )}
+                    </span>
+                  </div>
+                  <div className="marketplace-card-body">
+                    <div className="ai-card-badges">
+                      {ai?.conduct?.cleanConduct && (
+                        <span className="conduct-pill">
+                          <ShieldCheck size={12} /> {ai.conduct.tierLabel}
+                        </span>
+                      )}
+                      {ratingCount > 0 && (
+                        <span className="rating-inline-pill">
+                          <Star size={12} fill="currentColor" /> {avgRating} ({ratingCount})
+                        </span>
+                      )}
+                    </div>
+                    <h3>{service.title}</h3>
+                    <p>{service.description}</p>
+                    {ai?.reasons?.length > 0 && (
+                      <div className="ai-reason-chips">
+                        {ai.reasons.slice(0, 3).map((reason) => (
+                          <span key={reason}>{reason}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="service-meta">
+                      <Link className="showcase-provider-link" to={`/gardeners/${service.gardener_id}`}>
+                        {providerName}
+                        {service.years_of_experience ? ` · ${service.years_of_experience} yr exp` : ''}
+                      </Link>
+                      <strong className="card-price">
+                        {hasPrice
+                          ? `₱${Number(service.indicative_price).toLocaleString()}${service.price_unit ? ` ${service.price_unit}` : ''}`
+                          : 'Quote on request'}
+                      </strong>
+                    </div>
+                    <div className="marketplace-card-footer showcase-card-footer">
+                      <span className="card-area">
+                        <MapPin size={13} /> {ai?.proximity?.label || service.service_area || 'Zamboanga City'}
+                      </span>
+                      <div className="showcase-card-actions">
+                        <Link className="table-action" to={`/inquiries/new?serviceId=${service.id}`}>
+                          Inquire
+                        </Link>
+                        <Link className="button button-sm" to={`/services/${service.id}`}>
+                          View &amp; Book
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="showcase-cta-strip">
+          <div>
+            <strong>Not sure which gardener to pick?</strong>
+            <p>Upload a photo of your yard, get an instant estimate, and let nearby verified gardeners compete with offers.</p>
+          </div>
+          <div className="inline-actions">
+            <Link className="button" to="/inquiries/new?type=general">
+              Post a General Request <ArrowRight size={15} />
+            </Link>
+            <Link className="button button-outline" to="/assistant">
+              <Sparkles size={15} /> Plan with AI
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-panel showcase-reviews-panel">
+        <div className="showcase-header">
+          <div>
+            <p className="eyebrow" style={{ marginBottom: '6px' }}>Trusted by Zamboanga homeowners</p>
+            <h2 style={{ marginBottom: '4px' }}>Recent verified client reviews</h2>
+          </div>
+          <Link className="text-link" to="/services">
+            Browse top gardeners <ArrowRight size={15} />
+          </Link>
+        </div>
+
+        {reviews.length === 0 ? (
+          <div className="trust-highlights-grid">
+            <div className="trust-highlight-card">
+              <Award size={20} />
+              <strong>Verified Local Gardeners</strong>
+              <p>Every public gardener profile is reviewed and approved by the administrator before listing services.</p>
+            </div>
+            <div className="trust-highlight-card">
+              <CheckCircle2 size={20} />
+              <strong>Mutual Service Agreements</strong>
+              <p>Lock in scope, price, schedule, and deposit terms together before work begins—no surprise fees.</p>
+            </div>
+            <div className="trust-highlight-card">
+              <Star size={20} />
+              <strong>Verified Completed-Job Ratings</strong>
+              <p>Reviews come strictly from clients whose gardening project was completed, paid, and mutually closed.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="showcase-reviews-grid">
+            {reviews.map((rev) => (
+              <article className="showcase-review-card" key={rev.id}>
+                <div className="showcase-review-top">
+                  <span className="showcase-stars" aria-label={`${rev.rating} out of 5 stars`}>
+                    {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
+                  </span>
+                  <small>{new Date(rev.created_at).toLocaleDateString()}</small>
+                </div>
+                <p className="showcase-review-quote">
+                  &ldquo;{rev.review_text || 'Great gardening work and smooth transaction!'}&rdquo;
+                </p>
+                <div className="showcase-review-footer">
+                  <div>
+                    <strong>{rev.client_name}</strong>
+                    <small>
+                      for {rev.gardener_name}{rev.service_title ? ` · ${rev.service_title}` : ''}
+                    </small>
+                  </div>
+                  <Link className="table-action" to={rev.service_id ? `/services/${rev.service_id}` : `/gardeners/${rev.gardener_id}`}>
+                    View provider
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboanga City' }) {
+  const [openRequests, setOpenRequests] = useState([])
+  const [reviews, setReviews] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [areaInput, setAreaInput] = useState(defaultArea || '')
+  const [sortBy, setSortBy] = useState('smart_ai')
+  const [nearbyOnly, setNearbyOnly] = useState(false)
+  const [goodConductOnly, setGoodConductOnly] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    reviewsApi.gardener(userId)
+      .then((revRes) => {
+        if (active) setReviews(revRes?.reviews || [])
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [userId])
+
+  useEffect(() => {
+    if (!isApproved) {
+      return undefined
+    }
+    let active = true
+    const timer = setTimeout(() => {
+      if (!active) return
+      setLoading(true)
+      fetchSmartRecommendations({
+        mode: 'leads',
+        location: areaInput.trim() || defaultArea || 'Zamboanga City',
+        sortBy,
+        nearbyOnly,
+        goodConductOnly,
+        limit: 6,
+      })
+        .then((res) => {
+          if (active) setOpenRequests(res?.recommendations || [])
+        })
+        .catch(() => {
+          if (!active) return
+          inquiriesApi.listOpen().then((fallback) => {
+            if (active) setOpenRequests((fallback?.requests || fallback?.inquiries || []).slice(0, 6))
+          }).catch(() => {})
+        })
+        .finally(() => {
+          if (active) setLoading(false)
+        })
+    }, 180)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [isApproved, defaultArea, areaInput, sortBy, nearbyOnly, goodConductOnly])
+
+  const avgRating = reviews.length > 0
+    ? (reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length).toFixed(1)
+    : null
+
+  return (
+    <section className="dashboard-showcase-stack" aria-label="AI filtered open client leads and gardener reviews">
+      <div className="dashboard-panel showcase-panel">
+        <div className="showcase-header">
+          <div>
+            <p className="eyebrow" style={{ marginBottom: '6px' }}>AI nearby client lead matching</p>
+            <h2 style={{ marginBottom: '4px' }}>Open client service requests near your area</h2>
+            <p className="field-note" style={{ margin: 0 }}>
+              Automatically ranked by proximity to your Zamboanga City service area, matching service categories, low competition, and client conduct.
+            </p>
+          </div>
+          <Link className="button button-outline" to="/inquiries?tab=open">
+            Open full requests board <ArrowRight size={15} />
+          </Link>
+        </div>
+
+        {isApproved && (
+          <div className="ai-filter-bar" role="region" aria-label="AI open lead filters">
+            <div className="ai-filter-inputs">
+              <label>
+                Filter near barangay / service area
+                <input
+                  maxLength="120"
+                  placeholder="e.g., Tetuan, Guiwan, Zamboanga City"
+                  value={areaInput}
+                  onChange={(e) => setAreaInput(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="ai-filter-controls">
+              <div className="ai-filter-pills" role="group" aria-label="Sort client leads">
+                {[
+                  { key: 'smart_ai', label: 'AI Best Lead' },
+                  { key: 'nearby', label: 'Nearest First' },
+                  { key: 'category_match', label: 'Matches My Services' },
+                  { key: 'low_competition', label: 'Low Competition' },
+                ].map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    className={`booking-filter-pill${sortBy === opt.key ? ' is-active' : ''}`}
+                    onClick={() => setSortBy(opt.key)}
+                  >
+                    {opt.key === 'smart_ai' && <Sparkles size={13} />}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="ai-filter-toggles">
+                <label className="ai-toggle-chip">
+                  <input type="checkbox" checked={nearbyOnly} onChange={(e) => setNearbyOnly(e.target.checked)} />
+                  <span>Nearby only</span>
+                </label>
+                <label className="ai-toggle-chip">
+                  <input type="checkbox" checked={goodConductOnly} onChange={(e) => setGoodConductOnly(e.target.checked)} />
+                  <span>Clean client record</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isApproved ? (
+          <div className="empty-state">
+            Your gardener account is awaiting administrator approval. Once approved, AI-matched nearby client requests in Zamboanga City will appear right here so you can submit offers.
+          </div>
+        ) : loading ? (
+          <p className="field-note">Scanning open client requests near your service area...</p>
+        ) : openRequests.length === 0 ? (
+          <div className="empty-state">
+            No open general client requests match your current filter. Try turning off &ldquo;Nearby only&rdquo; or clearing the area filter.
+          </div>
+        ) : (
+          <div className="marketplace-card-grid dashboard-service-grid">
+            {openRequests.map((req) => {
+              const firstImg = req.images?.[0]
+              const estRange = formatEstimateRange(req.estimated_min_amount, req.estimated_max_amount)
+              const hasMyOffer = Boolean(req.my_quotation_id)
+              const ai = req.ai_match
+              return (
+                <article className="marketplace-card visual-market-card showcase-card" key={req.id}>
+                  <div className="marketplace-card-media">
+                    {firstImg ? (
+                      <img src={getRequestImageUrl(firstImg.id)} alt={req.subject} loading="lazy" />
+                    ) : (
+                      <div className="marketplace-card-placeholder" aria-hidden="true">
+                        <Briefcase size={26} />
+                        <span>{req.category_name || 'Client service request'}</span>
+                      </div>
+                    )}
+                    <span className="category-pill media-badge">{req.category_name || 'General request'}</span>
+                    <span className="showcase-rating-pill">
+                      {ai ? <><Sparkles size={12} /> {ai.matchScore}% Fit</> : (hasMyOffer ? 'Offer Sent' : 'Open Lead')}
+                    </span>
+                  </div>
+                  <div className="marketplace-card-body">
+                    <div className="ai-card-badges">
+                      {ai?.clientConductLabel && (
+                        <span className="conduct-pill">
+                          <ShieldCheck size={12} /> {ai.clientConductLabel}
+                        </span>
+                      )}
+                      {hasMyOffer && <span className="inquiry-status status-accepted">Offer Sent</span>}
+                    </div>
+                    <h3>{req.subject}</h3>
+                    <p>{req.ai_summary || req.description}</p>
+                    {ai?.reasons?.length > 0 && (
+                      <div className="ai-reason-chips">
+                        {ai.reasons.slice(0, 3).map((reason) => (
+                          <span key={reason}>{reason}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="service-meta">
+                      <span>
+                        {req.client_first_name || 'Client'}
+                        {req.area_sqm ? ` · ${Number(req.area_sqm)} m²` : ''}
+                      </span>
+                      <strong className="card-price">
+                        {estRange ? `Est. ${estRange}` : 'Send quote'}
+                      </strong>
+                    </div>
+                    <div className="marketplace-card-footer showcase-card-footer">
+                      <span className="card-area">
+                        <MapPin size={13} /> {ai?.proximity?.label || req.location || 'Zamboanga City'}
+                      </span>
+                      <Link className="button button-sm" to={`/inquiries/${req.id}`}>
+                        {hasMyOffer ? 'Manage Offer' : 'Send Offer'} <ArrowRight size={14} />
+                      </Link>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="dashboard-panel showcase-reviews-panel">
+        <div className="showcase-header">
+          <div>
+            <p className="eyebrow" style={{ marginBottom: '6px' }}>Your reputation &amp; social proof</p>
+            <h2 style={{ marginBottom: '4px' }}>
+              Client reviews {avgRating ? `· ★ ${avgRating} (${reviews.length})` : ''}
+            </h2>
+          </div>
+          <Link className="text-link" to={`/gardeners/${userId}`}>
+            View public profile <ArrowRight size={15} />
+          </Link>
+        </div>
+        {reviews.length === 0 ? (
+          <p className="field-note" style={{ margin: 0 }}>
+            No client reviews yet. Once you complete a paid booking and close the Transaction Completion Agreement, your client&apos;s rating and testimonial will appear here and boost your AI recommendation rank!
+          </p>
+        ) : (
+          <div className="showcase-reviews-grid">
+            {reviews.slice(0, 4).map((rev) => (
+              <article className="showcase-review-card" key={rev.id}>
+                <div className="showcase-review-top">
+                  <span className="showcase-stars" aria-label={`${rev.rating} out of 5 stars`}>
+                    {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
+                  </span>
+                  <small>{new Date(rev.created_at).toLocaleDateString()}</small>
+                </div>
+                <p className="showcase-review-quote">
+                  &ldquo;{rev.review_text || 'Rated 5 stars by client.'}&rdquo;
+                </p>
+                <div className="showcase-review-footer">
+                  <strong>{rev.client_name}</strong>
+                  <small>Verified completed booking</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function DashboardActivity({ role }) {
   const [inquiries, setInquiries] = useState([])
   const [bookings, setBookings] = useState([])
@@ -545,27 +1176,38 @@ function DashboardActivity({ role }) {
       .catch((loadError) => setError(loadError.message))
   }, [])
 
+  const offersWaitingCount = role === 'client'
+    ? inquiries.filter((inq) => Number(inq.offer_count || 0) > 0 && ['open', 'responded', 'provider_selected', 'in_agreement'].includes(inq.status)).length
+    : inquiries.filter((inq) => inq.status === 'open' && !inq.my_quotation_id).length
+
   return (
     <section className="dashboard-activity">
       <div className="dashboard-panel">
         <div className="activity-heading">
           <div>
-            <p className="eyebrow">{role === 'gardener' ? 'Requests & offers' : 'Requests, offers & agreements'}</p>
-            <h2>{role === 'gardener' ? 'Client inquiries & offers.' : 'Your service requests.'}</h2>
+            <p className="eyebrow">{role === 'gardener' ? 'Direct inquiries & submitted offers' : 'Incoming offers & requests'}</p>
+            <h2>{role === 'gardener' ? 'Client inquiries & offers.' : 'Your offers & service requests.'}</h2>
           </div>
           <div className="inline-actions">
             {role === 'gardener' && (
-              <Link className="text-link" to="/inquiries?tab=open">Open board</Link>
+              <Link className="table-action" to="/inquiries?tab=open">Open board</Link>
             )}
             <Link className="text-link" to="/inquiries">View all</Link>
           </div>
         </div>
+        {offersWaitingCount > 0 && (
+          <div className="dashboard-highlight-pill">
+            {role === 'client'
+              ? `You have ${offersWaitingCount} active request${offersWaitingCount === 1 ? '' : 's'} with gardener offers ready to compare!`
+              : `${offersWaitingCount} direct client inquir${offersWaitingCount === 1 ? 'y is' : 'ies are'} waiting for your response!`}
+          </div>
+        )}
         {error && <div className="form-error" role="alert">{error}</div>}
         {!error && inquiries.length === 0 && (
           <p className="form-note">
             {role === 'gardener'
-              ? 'No inquiries or submitted offers yet. Browse the open requests board to submit offers.'
-              : 'No service requests yet. Start by exploring local services or posting a general request.'}
+              ? 'No direct inquiries or submitted offers yet. Send an offer on an open client request above to get started.'
+              : 'No service requests yet. Click "View & Book" on any featured service above or post a general request.'}
           </p>
         )}
         {inquiries.map((inquiry) => (
@@ -583,38 +1225,57 @@ function DashboardActivity({ role }) {
       <div className="dashboard-panel">
         <div className="activity-heading">
           <div>
-            <p className="eyebrow">Schedule</p>
-            <h2>{role === 'gardener' ? 'Booking requests.' : 'Upcoming bookings.'}</h2>
+            <p className="eyebrow">Schedule &amp; payments</p>
+            <h2>{role === 'gardener' ? 'Reservations & bookings.' : 'Your reservations & bookings.'}</h2>
           </div>
           <Link className="text-link" to="/bookings">View all</Link>
         </div>
         {!error && bookings.length === 0 && (
           <p className="form-note">
-            No confirmed bookings yet. Bookings are created when both parties approve a mutual service agreement.
+            No reservations or bookings yet. Reservations are created automatically when both parties approve a mutual service agreement.
           </p>
         )}
-        {bookings.map((booking) => (
-          <Link className="activity-row" to={`/bookings/${booking.id}`} key={booking.id}>
-            <span>
-              <strong>{booking.service_title || 'Gardening service'}</strong>
-              <small>
-                {[
-                  role === 'gardener' ? booking.client_name : booking.gardener_name,
-                  booking.scheduled_start ? new Date(booking.scheduled_start).toLocaleString() : 'Schedule to be confirmed',
-                ].filter(Boolean).join(' · ')}
-              </small>
-            </span>
-            <span className={getStatusBadgeClass(booking.status)}>
-              {formatStatusLabel(booking.status)}
-            </span>
-          </Link>
-        ))}
+        {bookings.map((booking) => {
+          const badgeKey = booking.transaction_status === 'closed'
+            ? 'closed'
+            : booking.transaction_status === 'pending_closure'
+              ? 'pending_closure'
+              : (booking.status === 'completed' || booking.status === 'cancelled'
+                ? booking.status
+                : (booking.booking_stage || 'reserved'))
+          const badgeLabel = booking.transaction_status === 'closed'
+            ? 'Transaction Closed'
+            : formatStatusLabel(badgeKey)
+          return (
+            <Link className="activity-row" to={`/bookings/${booking.id}`} key={booking.id}>
+              <span>
+                <strong>{booking.service_title || 'Gardening service'}</strong>
+                <small>
+                  <CalendarDays size={12} style={{ verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                  {[
+                    role === 'gardener' ? booking.client_name : booking.gardener_name,
+                    booking.scheduled_start ? new Date(booking.scheduled_start).toLocaleDateString() : 'Schedule TBD',
+                    formatStatusLabel(booking.payment_status),
+                    Number(booking.pending_reschedule_count) > 0 ? 'Reschedule Pending' : null,
+                  ].filter(Boolean).join(' · ')}
+                </small>
+              </span>
+              <span className={getStatusBadgeClass(badgeKey)}>
+                {badgeLabel}
+              </span>
+            </Link>
+          )
+        })}
       </div>
     </section>
   )
 }
 
 function UserDashboard({ user, profileData, onSaved, activeTab }) {
+  const { switchRole, enableDualRole } = useAuth()
+  const [roleBusy, setRoleBusy] = useState(false)
+  const [roleNotice, setRoleNotice] = useState('')
+  const [roleError, setRoleError] = useState('')
   const role = user.role
   const roleLabel = role === 'gardener' ? 'Gardener' : 'Client'
   const counts = profileData.counts || {}
@@ -627,6 +1288,38 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   })
   const displayName = role === 'gardener' ? (form.businessName || fullPersonName) : fullPersonName
   const summaryAge = calculateAgeFromDob(form.dateOfBirth || user.dateOfBirth)
+
+  async function handleQuickSwitchRole() {
+    if (!user.isDualRole || roleBusy) return
+    setRoleBusy(true); setRoleError(''); setRoleNotice('')
+    try {
+      const nextRole = role === 'client' ? 'gardener' : 'client'
+      await switchRole(nextRole)
+      setRoleNotice(`Switched workspace to ${nextRole === 'gardener' ? 'Gardener' : 'Client'} Mode.`)
+    } catch (err) {
+      setRoleError(err.message)
+    } finally {
+      setRoleBusy(false)
+    }
+  }
+
+  async function handleEnableDualRole() {
+    if (roleBusy) return
+    setRoleBusy(true); setRoleError(''); setRoleNotice('')
+    try {
+      await enableDualRole({
+        address: form.address || '',
+        city: form.city || 'Zamboanga City',
+        businessName: form.businessName || '',
+        serviceArea: form.serviceArea || 'Zamboanga City',
+      })
+      setRoleNotice('Dual Role enabled! You can now switch anytime between Client Mode and Gardener Mode.')
+    } catch (err) {
+      setRoleError(err.message)
+    } finally {
+      setRoleBusy(false)
+    }
+  }
 
   return (
     <main className="dashboard-page">
@@ -690,6 +1383,17 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
           </div>
           {activeTab === 'overview' && (
             <div className="inline-actions dashboard-hero-actions">
+              {user.isDualRole && (
+                <button
+                  className="button button-outline dual-role-switch-btn"
+                  type="button"
+                  disabled={roleBusy}
+                  onClick={handleQuickSwitchRole}
+                >
+                  <ArrowLeftRight size={15} />
+                  {roleBusy ? 'Switching...' : `Switch to ${role === 'client' ? 'Gardener' : 'Client'} Mode`}
+                </button>
+              )}
               {role === 'client' ? (
                 <>
                   <Link className="button" to="/services">Explore services</Link>
@@ -706,6 +1410,8 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
             </div>
           )}
         </div>
+        {roleError && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{roleError}</div>}
+        {roleNotice && <div className="form-success" role="status" style={{ marginBottom: '12px' }}>{roleNotice}</div>}
         {role === 'gardener' && (
           <div className={`form-note ${form.is_approved ? 'form-success' : 'form-error'}`}>
             {form.is_approved
@@ -715,22 +1421,74 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
         )}
 
         {isProfileView ? (
-          <section className="dashboard-panel profile-settings-panel">
-            <div className="activity-heading">
-              <div>
-                <p className="eyebrow">Your profile</p>
-                <h2>Update your {roleLabel.toLowerCase()} information.</h2>
+          <>
+            <section className="dashboard-panel dual-role-card" style={{ marginBottom: '20px' }}>
+              <div className="activity-heading">
+                <div>
+                  <p className="eyebrow">Account capabilities</p>
+                  <h2>{user.isDualRole ? 'Dual Role Active (Client & Gardener)' : 'Use HugaTiera as Both Client & Gardener'}</h2>
+                </div>
+                {user.isDualRole ? (
+                  <button
+                    className="button"
+                    type="button"
+                    disabled={roleBusy}
+                    onClick={handleQuickSwitchRole}
+                  >
+                    <ArrowLeftRight size={15} />
+                    {roleBusy ? 'Switching...' : `Switch to ${role === 'client' ? 'Gardener' : 'Client'} Mode`}
+                  </button>
+                ) : (
+                  <button
+                    className="button"
+                    type="button"
+                    disabled={roleBusy}
+                    onClick={handleEnableDualRole}
+                  >
+                    <UserPlus size={15} />
+                    {roleBusy ? 'Enabling...' : 'Enable Dual Role'}
+                  </button>
+                )}
               </div>
-              <Link className="text-link" to="/dashboard">Back to overview</Link>
-            </div>
-            <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
-          </section>
+              <p className="field-note" style={{ margin: 0 }}>
+                {user.isDualRole
+                  ? `You are currently in ${roleLabel} Mode. Switch anytime from the sidebar or here. Your approved gardener services remain visible publicly even while browsing in Client Mode, and self-booking your own service is automatically prevented.`
+                  : 'Want to both hire gardeners for your own property and offer gardening services on one account? Enable Dual Role to unlock instant Client ⇄ Gardener switching (new gardener profiles still require administrator approval before appearing publicly).'}
+              </p>
+            </section>
+            <section className="dashboard-panel profile-settings-panel">
+              <div className="activity-heading">
+                <div>
+                  <p className="eyebrow">Your profile</p>
+                  <h2>Update your {roleLabel.toLowerCase()} information.</h2>
+                </div>
+                <Link className="text-link" to="/dashboard">Back to overview</Link>
+              </div>
+              <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
+            </section>
+          </>
         ) : role === 'gardener' && (activeTab === 'services' || activeTab === 'portfolio') ? (
           <GardenerTools isApproved={form.is_approved} section={activeTab} />
         ) : (
           <>
             <Stats role={role} counts={counts} />
-            <div className="dashboard-grid dashboard-overview-grid" style={{ marginBottom: '20px' }}>
+            {role === 'gardener' && (
+              <GardenerScheduleCalendar
+                profileForm={form}
+                onUnavailableDatesChange={(nextDates) => onSaved({ profile: { ...form, unavailableDates: nextDates } })}
+              />
+            )}
+            {role === 'client' ? (
+              <ClientDiscoveryShowcase defaultLocation={[form.address, form.city].filter(Boolean).join(', ') || 'Zamboanga City'} />
+            ) : (
+              <GardenerOpportunityShowcase
+                userId={user.id}
+                isApproved={Boolean(form.is_approved)}
+                defaultArea={form.serviceArea || 'Zamboanga City'}
+              />
+            )}
+            <DashboardActivity role={role} />
+            <div className="dashboard-grid dashboard-overview-grid" style={{ marginTop: '22px' }}>
               <section className="dashboard-panel dashboard-next">
                 <p className="eyebrow">{role === 'gardener' ? 'Provider workspace' : 'Quick actions'}</p>
                 <h2>{role === 'gardener' ? 'Respond to requests and grow your profile.' : 'Start or manage a garden project.'}</h2>
@@ -806,7 +1564,6 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                 </Link>
               </aside>
             </div>
-            <DashboardActivity role={role} />
           </>
         )}
       </section>
@@ -833,6 +1590,9 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
   const [pendingGardeners, setPendingGardeners] = useState([])
   const [activity, setActivity] = useState({ inquiries: [], bookings: [] })
   const [reports, setReports] = useState([])
+  const [clerkAssignments, setClerkAssignments] = useState([])
+  const [clerkAssignForm, setClerkAssignForm] = useState({ clerkId: '', gardenerId: '', notes: '' })
+  const [clerkAssignBusy, setClerkAssignBusy] = useState(false)
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' })
   const [editingAccount, setEditingAccount] = useState(null)
   const [accountSaving, setAccountSaving] = useState(false)
@@ -884,14 +1644,52 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
     profileApi.adminActivity(),
     profileApi.adminReports(),
     profileApi.adminPendingGardeners(),
-  ]).then(([categoryData, addonData, serviceData, activityData, reportData, gardenerData]) => {
+    profileApi.adminClerkAssignments().catch(() => ({ assignments: [] })),
+  ]).then(([categoryData, addonData, serviceData, activityData, reportData, gardenerData, clerkData]) => {
     setCategories(categoryData.categories)
     setPricingAddons(addonData.addons || [])
     setServices(serviceData.services)
     setActivity(activityData)
     setReports(reportData.reports)
     setPendingGardeners(gardenerData.gardeners)
+    setClerkAssignments(clerkData.assignments || [])
   }).catch((error) => setAdminError(error.message)), [])
+
+  async function handleAssignClerk(event) {
+    event.preventDefault()
+    if (!clerkAssignForm.clerkId || !clerkAssignForm.gardenerId) {
+      setAdminError('Please choose both a clerk account and a gardener account.')
+      return
+    }
+    setClerkAssignBusy(true); setAdminError(''); setAdminMessage('')
+    try {
+      await profileApi.adminCreateClerkAssignment({
+        clerkId: Number(clerkAssignForm.clerkId),
+        gardenerId: Number(clerkAssignForm.gardenerId),
+        notes: clerkAssignForm.notes,
+      })
+      setClerkAssignForm({ clerkId: '', gardenerId: '', notes: '' })
+      setAdminMessage('Clerk assigned to gardener successfully.')
+      await loadAdminData()
+    } catch (assignErr) {
+      setAdminError(assignErr.message)
+    } finally {
+      setClerkAssignBusy(false)
+    }
+  }
+
+  async function handleRemoveClerkAssignment(assignmentId) {
+    setClerkAssignBusy(true); setAdminError(''); setAdminMessage('')
+    try {
+      await profileApi.adminDeleteClerkAssignment(assignmentId)
+      setAdminMessage('Clerk assignment removed.')
+      await loadAdminData()
+    } catch (delErr) {
+      setAdminError(delErr.message)
+    } finally {
+      setClerkAssignBusy(false)
+    }
+  }
 
   useEffect(() => { loadAdminData() }, [loadAdminData])
 
@@ -1653,6 +2451,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                     <select value={editingAccount.role} onChange={(e) => setEditingAccount({ ...editingAccount, role: e.target.value })}>
                       <option value="client">Client</option>
                       <option value="gardener">Gardener</option>
+                      <option value="clerk">Clerk (Assigned Gardener Manager)</option>
                       <option value="administrator">Administrator</option>
                     </select>
                   </label>
@@ -1682,7 +2481,12 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                         {accountFullName}
                         <small>{account.email}{account.age !== null && account.age !== undefined ? ` · Age ${account.age}` : ''}</small>
                       </td>
-                      <td>{account.role}</td>
+                      <td>
+                        {account.role}
+                        {Boolean(account.can_act_as_client) && Boolean(account.can_act_as_gardener) && (
+                          <small>Dual role (Client + Gardener)</small>
+                        )}
+                      </td>
                       <td><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td>
                       <td>
                         <div className="inline-actions">
@@ -1717,6 +2521,99 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                 </tbody>
               </table>
             </div>
+
+            <div className="admin-clerk-assignments" style={{ marginTop: '28px', paddingTop: '22px', borderTop: '1px solid var(--border-subtle, #e2e8f0)' }}>
+              <p className="eyebrow">Assigned clerks</p>
+              <h2>Link clerks to specific gardeners</h2>
+              <p className="field-note">
+                First set a user&apos;s role to <strong>Clerk</strong> above, then assign them to one or more gardener accounts they are authorized to manage (schedules, blocked dates, services, and payment verifications).
+              </p>
+              {(() => {
+                const clerkUsers = summary.users.filter((u) => u.role === 'clerk' && u.is_active)
+                const gardenerUsers = summary.users.filter((u) => (u.role === 'gardener' || Boolean(u.can_act_as_gardener)) && u.is_active)
+                return (
+                  <form className="profile-form" onSubmit={handleAssignClerk} style={{ marginBottom: '16px' }}>
+                    <div className="form-row form-row-3">
+                      <label>
+                        Clerk account
+                        <select
+                          required
+                          value={clerkAssignForm.clerkId}
+                          onChange={(e) => setClerkAssignForm({ ...clerkAssignForm, clerkId: e.target.value })}
+                        >
+                          <option value="">Select clerk...</option>
+                          {clerkUsers.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.first_name} {c.last_name} ({c.email})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Gardener to manage
+                        <select
+                          required
+                          value={clerkAssignForm.gardenerId}
+                          onChange={(e) => setClerkAssignForm({ ...clerkAssignForm, gardenerId: e.target.value })}
+                        >
+                          <option value="">Select gardener...</option>
+                          {gardenerUsers.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.first_name} {g.last_name} ({g.email})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Assignment note <span className="label-note">(Optional)</span>
+                        <input
+                          maxLength="255"
+                          placeholder="e.g., Handles weekday schedules & GCash checks"
+                          value={clerkAssignForm.notes}
+                          onChange={(e) => setClerkAssignForm({ ...clerkAssignForm, notes: e.target.value })}
+                        />
+                      </label>
+                    </div>
+                    <button className="button" type="submit" disabled={clerkAssignBusy || clerkUsers.length === 0 || gardenerUsers.length === 0}>
+                      <UserPlus size={15} /> {clerkAssignBusy ? 'Assigning...' : 'Assign clerk to gardener'}
+                    </button>
+                    {clerkUsers.length === 0 && (
+                      <span className="field-note" style={{ marginLeft: '10px' }}>
+                        Tip: Click &ldquo;Edit&rdquo; on any account above and set its Role to &ldquo;Clerk&rdquo; first.
+                      </span>
+                    )}
+                  </form>
+                )
+              })()}
+              <div className="managed-list">
+                {clerkAssignments.length === 0 ? (
+                  <p className="form-note">No clerk-to-gardener assignments created yet.</p>
+                ) : (
+                  clerkAssignments.map((item) => (
+                    <div className="managed-item" key={item.id}>
+                      <div>
+                        <strong>
+                          Clerk: {item.clerk_first_name} {item.clerk_last_name} ({item.clerk_email})
+                          {' → '}
+                          Gardener: {item.gardener_business_name || `${item.gardener_first_name} ${item.gardener_last_name}`}
+                        </strong>
+                        <span>
+                          {item.notes || 'Authorized for schedule, crew capacity, services, and payment verifications.'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="table-action table-action-danger"
+                        disabled={clerkAssignBusy}
+                        onClick={() => handleRemoveClerkAssignment(item.id)}
+                      >
+                        Unassign
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </section>
         )}
       </section>
@@ -1748,7 +2645,7 @@ export default function DashboardPage({ profileView = false }) {
   useEffect(() => {
     if (user.role === 'administrator') {
       profileApi.adminSummary().then(setSummary).catch((loadError) => setError(loadError.message))
-    } else {
+    } else if (user.role !== 'clerk') {
       profileApi.get().then((result) => {
         setProfileData({
           form: buildProfileForm(result, initialProfile),
@@ -1781,5 +2678,6 @@ export default function DashboardPage({ profileView = false }) {
 
   if (error) return <main className="dashboard-page"><AppSidebar /><section className="container dashboard-content"><div className="form-error" role="alert">{error}</div></section></main>
   if (user.role === 'administrator') return <AdminDashboard summary={summary} onStatusChange={changeStatus} onUserUpdated={handleUserUpdated} onUserDeleted={handleUserDeleted} activeTab={activeTab} />
+  if (user.role === 'clerk') return <ClerkDashboard activeTab={activeTab} />
   return <UserDashboard user={user} profileData={profileData} activeTab={activeTab} onSaved={(result) => setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))} />
 }

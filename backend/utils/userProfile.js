@@ -117,10 +117,19 @@ function sanitizeUser(user) {
   const middleName = user.middle_name ?? user.middleName ?? null
   const lastName = user.last_name ?? user.lastName ?? ''
   const dateOfBirth = formatDateOnly(user.date_of_birth ?? user.dateOfBirth)
+  const canActAsClient = user.can_act_as_client !== undefined
+    ? Boolean(user.can_act_as_client)
+    : (user.canActAsClient !== undefined ? Boolean(user.canActAsClient) : user.role === 'client')
+  const canActAsGardener = user.can_act_as_gardener !== undefined
+    ? Boolean(user.can_act_as_gardener)
+    : (user.canActAsGardener !== undefined ? Boolean(user.canActAsGardener) : user.role === 'gardener')
   return {
     id: user.id,
     email: user.email,
     role: user.role,
+    canActAsClient,
+    canActAsGardener,
+    isDualRole: canActAsClient && canActAsGardener,
     firstName,
     middleName,
     lastName,

@@ -1,6 +1,6 @@
 const express = require('express')
 const {
-  createCategory, createPricingAddon, deleteUser, getSummary, listActivity, listCategories, listPendingGardeners,
+  createCategory, createClerkAssignment, createPricingAddon, deleteClerkAssignment, deleteUser, getSummary, listActivity, listCategories, listClerkAssignments, listPendingGardeners,
   listPricingAddons, listReports, listServices,
   updateCategory, updateGardenerApproval, updatePricingAddon, updateReport, updateServiceStatus, updateUser, updateUserStatus,
 } = require('../controllers/admin.controller')
@@ -13,6 +13,9 @@ router.get('/summary', getSummary)
 router.patch('/users/:userId', updateUser)
 router.patch('/users/:userId/status', updateUserStatus)
 router.delete('/users/:userId', deleteUser)
+router.get('/clerk-assignments', listClerkAssignments)
+router.post('/clerk-assignments', createClerkAssignment)
+router.delete('/clerk-assignments/:assignmentId', deleteClerkAssignment)
 router.get('/gardeners/pending', listPendingGardeners)
 router.patch('/gardeners/:userId/approval', updateGardenerApproval)
 router.get('/categories', listCategories)

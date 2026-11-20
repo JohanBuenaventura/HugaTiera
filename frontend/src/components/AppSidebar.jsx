@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
+  ArrowLeftRight,
   BarChart3,
   Bell,
+  Briefcase,
   CalendarDays,
   ClipboardList,
+  CreditCard,
   Leaf,
   LogOut,
   Menu,
@@ -24,9 +27,11 @@ import { getDashboardNavLinks } from '../services/profiles'
 import AiAssistantWidget from './AiAssistantWidget'
 
 export default function AppSidebar() {
-  const { user, logout } = useAuth()
+  const { user, logout, switchRole } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const [unreadCounts, setUnreadCounts] = useState({})
+  const [switchingRole, setSwitchingRole] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('hugatiera.sidebar.collapsed') === 'true')
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -78,6 +83,9 @@ export default function AppSidebar() {
     Messages: MessageCircle,
     Notifications: Bell,
     Bookings: CalendarDays,
+    Schedules: CalendarDays,
+    Payments: CreditCard,
+    Services: Briefcase,
     Profile: Settings,
     Approvals: ShieldCheck,
     Activity: BarChart3,
@@ -85,6 +93,21 @@ export default function AppSidebar() {
     Accounts: Users,
     Marketplace: Store,
   }[label] || ClipboardList)
+
+  async function handleRoleSwitch() {
+    if (!user?.isDualRole || switchingRole) return
+    const nextRole = user.role === 'client' ? 'gardener' : 'client'
+    setSwitchingRole(true)
+    try {
+      await switchRole(nextRole)
+      closeMobile()
+      navigate('/dashboard')
+    } catch {
+      // ignore; user stays in current mode
+    } finally {
+      setSwitchingRole(false)
+    }
+  }
 
   const toggleCollapsed = () => {
     setCollapsed((current) => {
@@ -159,9 +182,25 @@ export default function AppSidebar() {
             <span className="app-sidebar-avatar" aria-hidden="true">{user.firstName?.slice(0, 1) || 'H'}</span>
             <span className="app-sidebar-role-copy">
               <strong>{user.firstName || 'Account'}</strong>
-              <small>{user.role}</small>
+              <small>{user.role}{user.isDualRole ? ' · Dual role' : ''}</small>
             </span>
           </div>
+          {user.isDualRole && (
+            <button
+              className="app-sidebar-switch-role"
+              type="button"
+              disabled={switchingRole}
+              onClick={handleRoleSwitch}
+              title={collapsed ? `Switch to ${user.role === 'client' ? 'Gardener' : 'Client'} mode` : undefined}
+            >
+              <ArrowLeftRight size={15} />
+              <span className="app-sidebar-link-label">
+                {switchingRole
+                  ? 'Switching...'
+                  : `Switch to ${user.role === 'client' ? 'Gardener' : 'Client'}`}
+              </span>
+            </button>
+          )}
           <button
             className="app-sidebar-logout"
             type="button"
@@ -173,7 +212,7 @@ export default function AppSidebar() {
           </button>
         </div>
       </aside>
-      {user.role !== 'administrator' && location.pathname !== '/assistant' && <AiAssistantWidget />}
+      {!['administrator', 'clerk'].includes(user.role) && location.pathname !== '/assistant' && <AiAssistantWidget />}
     </>
   )
 }

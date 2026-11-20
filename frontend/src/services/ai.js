@@ -49,3 +49,21 @@ export async function requestPhotoAnalysis({ imageId, notes = '' }) {
 export async function fetchAiUsage() {
   return aiRequest('/ai/usage')
 }
+
+export async function fetchSmartRecommendations(params = {}) {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '' && value !== false) {
+      query.set(key, String(value))
+    }
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return aiRequest(`/ai/recommendations${suffix}`)
+}
+
+export async function requestRecommendationSummary(payload) {
+  return aiRequest('/ai/recommendations/summary', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}

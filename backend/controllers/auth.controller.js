@@ -9,7 +9,7 @@ const {
   validateNameParts,
 } = require('../utils/userProfile')
 
-const publicRoles = new Set(['client', 'gardener'])
+const publicRoles = new Set(['client', 'gardener', 'both'])
 
 function validateCredentials({ email, password }) {
   const normalizedEmail = normalizeText(email).toLowerCase()
@@ -89,13 +89,18 @@ async function register(req, res, next) {
     return res.status(400).json({ message: 'Passwords do not match.' })
   }
   if (!publicRoles.has(role)) {
-    return res.status(400).json({ message: 'Choose either a client or gardener account.' })
+    return res.status(400).json({ message: 'Choose a client, gardener, or dual (client & gardener) account.' })
   }
+
+  const isDual = role === 'both'
+  const activeRole = isDual ? 'client' : role
+  const canActAsClient = role === 'client' || isDual
+  const canActAsGardener = role === 'gardener' || isDual
 
   let clientDetails = null
   let gardenerDetails = null
 
-  if (role === 'client') {
+  if (canActAsClient) {
     const address = normalizeText(req.body.address)
     const city = req.body.city === undefined ? 'Zamboanga City' : normalizeText(req.body.city)
     const bio = normalizeText(req.body.bio) || null
@@ -109,7 +114,8 @@ async function register(req, res, next) {
       return res.status(400).json({ message: 'Bio must be 1,000 characters or fewer.' })
     }
     clientDetails = { address, city, bio }
-  } else {
+  }
+  if (canActAsGardener) {
     const businessName = normalizeText(req.body.businessName) || null
     const serviceArea = req.body.serviceArea === undefined ? 'Zamboanga City' : normalizeText(req.body.serviceArea)
     const description = normalizeText(req.body.description) || null
@@ -145,12 +151,14 @@ async function register(req, res, next) {
     const passwordHash = await bcrypt.hash(password, 12)
     const [result] = await connection.execute(
       `INSERT INTO users
-         (email, password_hash, role, first_name, middle_name, last_name, phone, date_of_birth)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (email, password_hash, role, can_act_as_client, can_act_as_gardener, first_name, middle_name, last_name, phone, date_of_birth)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         email,
         passwordHash,
-        role,
+        activeRole,
+        canActAsClient ? 1 : 0,
+        canActAsGardener ? 1 : 0,
         names.firstName,
         names.middleName,
         names.lastName,
@@ -159,12 +167,13 @@ async function register(req, res, next) {
       ],
     )
 
-    if (role === 'client') {
+    if (canActAsClient) {
       await connection.execute(
         'INSERT INTO client_profiles (user_id, address, city, bio) VALUES (?, ?, ?, ?)',
         [result.insertId, clientDetails.address, clientDetails.city, clientDetails.bio],
       )
-    } else {
+    }
+    if (canActAsGardener) {
       await connection.execute(
         'INSERT INTO gardener_profiles (user_id, business_name, description, service_area, years_of_experience) VALUES (?, ?, ?, ?, ?)',
         [
@@ -181,7 +190,9 @@ async function register(req, res, next) {
     const user = {
       id: result.insertId,
       email,
-      role,
+      role: activeRole,
+      can_act_as_client: canActAsClient,
+      can_act_as_gardener: canActAsGardener,
       first_name: names.firstName,
       middle_name: names.middleName,
       last_name: names.lastName,
@@ -209,7 +220,7 @@ async function login(req, res, next) {
 
   try {
     const [users] = await pool.execute(
-      'SELECT id, email, password_hash, role, first_name, middle_name, last_name, phone, date_of_birth FROM users WHERE email = ? AND is_active = TRUE LIMIT 1',
+      'SELECT id, email, password_hash, role, can_act_as_client, can_act_as_gardener, first_name, middle_name, last_name, phone, date_of_birth FROM users WHERE email = ? AND is_active = TRUE LIMIT 1',
       [email],
     )
     const user = users[0]
@@ -226,6 +237,103 @@ async function login(req, res, next) {
   }
 }
 
+async function switchRole(req, res, next) {
+  const targetRole = normalizeText(req.body?.targetRole ?? req.body?.role).toLowerCase()
+  if (!['client', 'gardener'].includes(targetRole)) {
+    return res.status(400).json({ message: 'Target mode must be client or gardener.' })
+  }
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [rows] = await connection.execute(
+      'SELECT id, email, role, can_act_as_client, can_act_as_gardener, first_name, middle_name, last_name, phone, date_of_birth FROM users WHERE id = ? AND is_active = TRUE LIMIT 1 FOR UPDATE',
+      [req.user.id],
+    )
+    const user = rows[0]
+    if (!user) {
+      await connection.rollback()
+      return res.status(404).json({ message: 'Account not found.' })
+    }
+    const allowed = targetRole === 'client' ? Boolean(user.can_act_as_client) : Boolean(user.can_act_as_gardener)
+    if (!allowed) {
+      await connection.rollback()
+      return res.status(403).json({
+        code: 'ROLE_NOT_ENABLED',
+        message: `Your account does not have ${targetRole} mode enabled yet. Enable dual role in Profile & Settings first.`,
+      })
+    }
+
+    await connection.execute('UPDATE users SET role = ? WHERE id = ?', [targetRole, req.user.id])
+    if (targetRole === 'client') {
+      await connection.execute('INSERT IGNORE INTO client_profiles (user_id, city) VALUES (?, "Zamboanga City")', [req.user.id])
+    } else {
+      await connection.execute('INSERT IGNORE INTO gardener_profiles (user_id, service_area) VALUES (?, "Zamboanga City")', [req.user.id])
+    }
+
+    await connection.commit()
+    const updatedUser = { ...user, role: targetRole }
+    setAuthCookie(res, createAuthToken(updatedUser))
+    return res.json({ user: sanitizeUser(updatedUser) })
+  } catch (error) {
+    await connection.rollback().catch(() => {})
+    return next(error)
+  } finally {
+    connection.release()
+  }
+}
+
+async function enableDualRole(req, res, next) {
+  if (!['client', 'gardener'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'Only client and gardener accounts can enable dual client/gardener mode.' })
+  }
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [rows] = await connection.execute(
+      'SELECT id, email, role, can_act_as_client, can_act_as_gardener, first_name, middle_name, last_name, phone, date_of_birth FROM users WHERE id = ? AND is_active = TRUE LIMIT 1 FOR UPDATE',
+      [req.user.id],
+    )
+    const user = rows[0]
+    if (!user) {
+      await connection.rollback()
+      return res.status(404).json({ message: 'Account not found.' })
+    }
+
+    const address = normalizeText(req.body?.address) || null
+    const city = normalizeText(req.body?.city) || 'Zamboanga City'
+    const businessName = normalizeText(req.body?.businessName) || null
+    const serviceArea = normalizeText(req.body?.serviceArea) || 'Zamboanga City'
+
+    await connection.execute(
+      'UPDATE users SET can_act_as_client = TRUE, can_act_as_gardener = TRUE WHERE id = ?',
+      [req.user.id],
+    )
+    await connection.execute(
+      'INSERT IGNORE INTO client_profiles (user_id, address, city) VALUES (?, ?, ?)',
+      [req.user.id, address, city],
+    )
+    await connection.execute(
+      'INSERT IGNORE INTO gardener_profiles (user_id, business_name, service_area, is_approved) VALUES (?, ?, ?, FALSE)',
+      [req.user.id, businessName, serviceArea],
+    )
+
+    await connection.commit()
+    const updatedUser = { ...user, can_act_as_client: true, can_act_as_gardener: true }
+    setAuthCookie(res, createAuthToken(updatedUser))
+    return res.json({
+      user: sanitizeUser(updatedUser),
+      message: 'Dual role enabled! You can now switch between Client and Gardener modes anytime.',
+    })
+  } catch (error) {
+    await connection.rollback().catch(() => {})
+    return next(error)
+  } finally {
+    connection.release()
+  }
+}
+
 function logout(req, res) {
   res.clearCookie('auth_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/' })
   return res.status(204).send()
@@ -237,7 +345,9 @@ function currentUser(req, res) {
 
 module.exports = {
   currentUser,
+  enableDualRole,
   login,
   logout,
   register,
+  switchRole,
 }

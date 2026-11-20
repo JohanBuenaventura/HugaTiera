@@ -28,6 +28,8 @@ export const WORKFLOW_STATUS_LABELS = {
   fully_paid: 'Fully Paid',
   verified: 'Verified',
   rejected: 'Rejected',
+  approved: 'Approved',
+  pending_closure: 'Awaiting Closing Agreement',
 }
 
 export function formatStatusLabel(status) {
@@ -173,16 +175,40 @@ async function request(path, options = {}) {
 export const PAYMENT_METHOD_LABELS = {
   gcash: 'GCash',
   maya: 'Maya',
+  grab_pay: 'GrabPay',
+  card: 'Credit / Debit Card',
   bank_transfer: 'Bank Transfer',
   cash: 'Cash (In Person)',
   other: 'Other',
 }
 
+export const GATEWAY_PROVIDER_LABELS = {
+  paymongo: 'PayMongo Checkout',
+  sandbox_demo: 'Online Demo Checkout',
+  manual: 'Manual Proof',
+}
+
+export const BOOKING_EVENT_REASON_OPTIONS = [
+  { value: 'typhoon_weather', label: 'Severe Weather / Typhoon' },
+  { value: 'accident_emergency', label: 'Accident / Medical or Family Emergency' },
+  { value: 'schedule_conflict', label: 'Schedule Conflict / Unavailability' },
+  { value: 'scope_or_plan_change', label: 'Change in Plans / Requirements' },
+  { value: 'property_access_issue', label: 'Site / Property Access Issue' },
+  { value: 'other', label: 'Other Reason' },
+]
+
+export const BOOKING_EVENT_REASON_LABELS = Object.fromEntries(
+  BOOKING_EVENT_REASON_OPTIONS.map((opt) => [opt.value, opt.label]),
+)
+
 export const bookingsApi = {
   list: () => request('/bookings'),
   get: (id) => request(`/bookings/${id}`),
   create: (details) => request('/bookings', { method: 'POST', body: JSON.stringify(details) }),
-  status: (id, status) => request(`/bookings/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  status: (id, status, extra = {}) => request(`/bookings/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, ...extra }),
+  }),
   submitPayment: (bookingId, { paymentType, paymentMethod, amount, referenceNumber, notes, receiptFile }) => {
     const body = new FormData()
     body.append('paymentType', paymentType)
@@ -194,6 +220,27 @@ export const bookingsApi = {
     return request(`/bookings/${bookingId}/payments`, { method: 'POST', body })
   },
   verifyPayment: (bookingId, paymentId, payload) => request(`/bookings/${bookingId}/payments/${paymentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  }),
+  paymentGatewayConfig: () => request('/bookings/payment-gateway/config'),
+  createGatewayCheckout: (bookingId, payload) => request(`/bookings/${bookingId}/payments/checkout`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  confirmGatewayPayment: (bookingId, paymentId, payload = {}) => request(`/bookings/${bookingId}/payments/${paymentId}/confirm-gateway`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  confirmTransactionCompletion: (bookingId, payload = {}) => request(`/bookings/${bookingId}/complete-transaction`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  createRescheduleRequest: (bookingId, payload) => request(`/bookings/${bookingId}/reschedule-requests`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  respondRescheduleRequest: (bookingId, requestId, payload) => request(`/bookings/${bookingId}/reschedule-requests/${requestId}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   }),

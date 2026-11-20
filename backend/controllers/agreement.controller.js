@@ -373,11 +373,12 @@ async function proposeAgreement(req, res, next) {
       })
     }
 
-    // 4. Check gardener working schedule, unavailable dates, and simultaneous capacity
+    // 4. Check gardener working schedule, unavailable dates, and simultaneous/crew capacity
     const scheduleCheck = await validateGardenerSchedule(connection, {
       gardenerId,
       scheduledStart,
       scheduledEnd,
+      serviceId: inquiry.service_id || null,
     })
     if (!scheduleCheck.ok) {
       await connection.rollback()
@@ -542,10 +543,19 @@ async function proposeDirectServiceAgreement(req, res, next) {
       conditions,
     } = validated.value
 
+    if (service.gardener_id === req.user.id) {
+      await connection.rollback()
+      return res.status(409).json({
+        code: 'SELF_BOOKING_FORBIDDEN',
+        message: 'You cannot book or propose an agreement on your own gardener service.',
+      })
+    }
+
     const scheduleCheck = await validateGardenerSchedule(connection, {
       gardenerId: service.gardener_id,
       scheduledStart,
       scheduledEnd,
+      serviceId: service.id,
     })
     if (!scheduleCheck.ok) {
       await connection.rollback()
@@ -720,6 +730,7 @@ async function editAgreement(req, res, next) {
       gardenerId: current.gardener_id,
       scheduledStart,
       scheduledEnd,
+      serviceId: inquiry.service_id || null,
     })
     if (!scheduleCheck.ok) {
       await connection.rollback()
@@ -939,11 +950,12 @@ async function approveAgreement(req, res, next) {
       })
     }
 
-    // Re-check gardener working schedule, unavailable dates, and simultaneous capacity inside transaction
+    // Re-check gardener working schedule, unavailable dates, and simultaneous/crew capacity inside transaction
     const scheduleCheck = await validateGardenerSchedule(connection, {
       gardenerId: agreement.gardener_id,
       scheduledStart: agreement.scheduled_start,
       scheduledEnd: agreement.scheduled_end,
+      serviceId: inquiry.service_id || null,
     })
     if (!scheduleCheck.ok) {
       await connection.rollback()

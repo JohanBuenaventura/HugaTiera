@@ -8,7 +8,9 @@ CREATE TABLE users (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  role ENUM('client', 'gardener', 'administrator') NOT NULL,
+  role ENUM('client', 'gardener', 'clerk', 'administrator') NOT NULL,
+  can_act_as_client BOOLEAN NOT NULL DEFAULT FALSE,
+  can_act_as_gardener BOOLEAN NOT NULL DEFAULT FALSE,
   first_name VARCHAR(100) NOT NULL,
   middle_name VARCHAR(100) NULL,
   last_name VARCHAR(100) NOT NULL,
@@ -39,6 +41,7 @@ CREATE TABLE gardener_profiles (
   work_start_time TIME NOT NULL DEFAULT '08:00:00',
   work_end_time TIME NOT NULL DEFAULT '17:00:00',
   max_concurrent_jobs TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  crew_size TINYINT UNSIGNED NOT NULL DEFAULT 1,
   availability_notes VARCHAR(255) NULL,
   is_approved BOOLEAN NOT NULL DEFAULT FALSE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -55,6 +58,20 @@ CREATE TABLE gardener_unavailable_dates (
   FOREIGN KEY (gardener_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT chk_unavailable_dates_range CHECK (end_date >= start_date),
   INDEX idx_gardener_unavailable_range (gardener_id, start_date, end_date)
+) ENGINE=InnoDB;
+
+CREATE TABLE clerk_gardener_assignments (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  clerk_id INT UNSIGNED NOT NULL,
+  gardener_id INT UNSIGNED NOT NULL,
+  assigned_by INT UNSIGNED NULL,
+  notes VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_cga_clerk FOREIGN KEY (clerk_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cga_gardener FOREIGN KEY (gardener_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cga_assigned_by FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_clerk_gardener (clerk_id, gardener_id),
+  INDEX idx_cga_gardener (gardener_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE service_categories (
@@ -92,6 +109,7 @@ CREATE TABLE services (
   indicative_price DECIMAL(10, 2) NULL,
   price_unit VARCHAR(50) NULL,
   service_area VARCHAR(150) NOT NULL DEFAULT 'Zamboanga City',
+  workers_required TINYINT UNSIGNED NOT NULL DEFAULT 1,
   image_path VARCHAR(255) NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -134,6 +152,7 @@ CREATE TABLE inquiries (
   estimated_min_amount DECIMAL(10, 2) NULL,
   estimated_max_amount DECIMAL(10, 2) NULL,
   price_comment TEXT NULL,
+  category_specs JSON NULL,
   status ENUM('open', 'responded', 'closed', 'cancelled', 'provider_selected', 'in_agreement', 'confirmed', 'expired') NOT NULL DEFAULT 'open',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -302,6 +321,15 @@ CREATE TABLE bookings (
   required_deposit_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
   amount_paid DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
   paid_at TIMESTAMP NULL,
+  transaction_status ENUM('open', 'pending_closure', 'closed') NOT NULL DEFAULT 'open',
+  client_completion_confirmed_at TIMESTAMP NULL,
+  gardener_completion_confirmed_at TIMESTAMP NULL,
+  transaction_closed_at TIMESTAMP NULL,
+  completion_agreement_notes TEXT NULL,
+  cancellation_reason_type ENUM('typhoon_weather', 'accident_emergency', 'schedule_conflict', 'scope_or_plan_change', 'property_access_issue', 'other') NULL,
+  cancellation_reason VARCHAR(1000) NULL,
+  cancelled_by INT UNSIGNED NULL,
+  cancelled_at TIMESTAMP NULL,
   requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   agreement_id INT UNSIGNED NULL,
@@ -310,6 +338,7 @@ CREATE TABLE bookings (
   FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE RESTRICT,
   FOREIGN KEY (gardener_id) REFERENCES users(id) ON DELETE RESTRICT,
   FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL,
+  CONSTRAINT fk_bookings_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_bookings_agreement FOREIGN KEY (agreement_id) REFERENCES agreements(id) ON DELETE RESTRICT,
   UNIQUE KEY uq_booking_agreement (agreement_id),
   INDEX idx_bookings_client_status (client_id, status, requested_at),
@@ -317,12 +346,41 @@ CREATE TABLE bookings (
   INDEX idx_bookings_schedule (gardener_id, scheduled_start, scheduled_end)
 ) ENGINE=InnoDB;
 
+CREATE TABLE booking_reschedule_requests (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT UNSIGNED NOT NULL,
+  requested_by INT UNSIGNED NOT NULL,
+  reason_type ENUM('typhoon_weather', 'accident_emergency', 'schedule_conflict', 'scope_or_plan_change', 'property_access_issue', 'other') NOT NULL,
+  reason_details VARCHAR(1000) NOT NULL,
+  previous_start DATETIME NOT NULL,
+  previous_end DATETIME NOT NULL,
+  proposed_start DATETIME NOT NULL,
+  proposed_end DATETIME NOT NULL,
+  status ENUM('pending', 'approved', 'declined', 'cancelled') NOT NULL DEFAULT 'pending',
+  responded_by INT UNSIGNED NULL,
+  responded_at TIMESTAMP NULL,
+  response_note VARCHAR(500) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_reschedule_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+  CONSTRAINT fk_reschedule_requester FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_reschedule_responder FOREIGN KEY (responded_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT chk_reschedule_proposed_schedule CHECK (proposed_end > proposed_start),
+  INDEX idx_reschedule_booking_status (booking_id, status, created_at)
+) ENGINE=InnoDB;
+
 CREATE TABLE booking_payments (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  transaction_code VARCHAR(40) NULL UNIQUE,
   booking_id INT UNSIGNED NOT NULL,
   submitted_by INT UNSIGNED NOT NULL,
   payment_type ENUM('partial', 'full', 'balance') NOT NULL DEFAULT 'partial',
-  payment_method ENUM('gcash', 'maya', 'bank_transfer', 'cash', 'other') NOT NULL DEFAULT 'gcash',
+  payment_method ENUM('gcash', 'maya', 'grab_pay', 'card', 'bank_transfer', 'cash', 'other') NOT NULL DEFAULT 'gcash',
+  gateway_provider ENUM('manual', 'paymongo', 'sandbox_demo') NOT NULL DEFAULT 'manual',
+  gateway_session_id VARCHAR(120) NULL,
+  gateway_checkout_url VARCHAR(500) NULL,
+  gateway_status ENUM('none', 'awaiting_payment', 'paid', 'failed', 'cancelled') NOT NULL DEFAULT 'none',
+  gateway_paid_at TIMESTAMP NULL,
   amount DECIMAL(10, 2) NOT NULL,
   reference_number VARCHAR(100) NULL,
   receipt_path VARCHAR(255) NULL,
@@ -336,7 +394,8 @@ CREATE TABLE booking_payments (
   FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
   FOREIGN KEY (submitted_by) REFERENCES users(id) ON DELETE RESTRICT,
   FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_booking_payments_booking (booking_id, status, created_at)
+  INDEX idx_booking_payments_booking (booking_id, status, created_at),
+  INDEX idx_booking_payments_gateway_session (gateway_session_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE reviews (

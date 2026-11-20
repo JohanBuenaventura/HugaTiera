@@ -170,6 +170,106 @@ function computePeakConcurrentBookings(bookings, proposedStartMs, proposedEndMs)
   return peak
 }
 
+function computePeakWorkers(bookings, proposedStartMs, proposedEndMs) {
+  const events = []
+  for (const row of bookings) {
+    const bStart = parseSqlDateTimeParts(row.scheduled_start)
+    const bEnd = parseSqlDateTimeParts(row.scheduled_end)
+    if (!bStart || !bEnd) continue
+    const workers = Math.max(1, Number(row.workers_required) || 1)
+    const clampedStart = Math.max(bStart.ms, proposedStartMs)
+    const clampedEnd = Math.min(bEnd.ms, proposedEndMs)
+    if (clampedEnd > clampedStart) {
+      events.push({ t: clampedStart, delta: workers })
+      events.push({ t: clampedEnd, delta: -workers })
+    }
+  }
+  events.sort((a, b) => (a.t !== b.t ? a.t - b.t : a.delta - b.delta))
+
+  let current = 0
+  let peak = 0
+  for (const ev of events) {
+    current += ev.delta
+    if (current > peak) peak = current
+  }
+  return peak
+}
+
+function computeFullyBookedDates({
+  busyRows = [],
+  workStartMinutes = 480,
+  workEndMinutes = 1020,
+  maxConcurrentJobs = 1,
+  crewSize = 1,
+}) {
+  const effectiveCrew = Math.max(1, Number(crewSize) || 1, Number(maxConcurrentJobs) || 1)
+  const effectiveJobs = Math.max(1, Number(maxConcurrentJobs) || 1)
+  const dateCandidates = new Set()
+
+  for (const row of busyRows) {
+    const s = parseSqlDateTimeParts(row.scheduled_start)
+    const e = parseSqlDateTimeParts(row.scheduled_end)
+    if (!s || !e) continue
+    const cursor = new Date(s.year, s.month - 1, s.day)
+    const endDate = new Date(e.year, e.month - 1, e.day)
+    let guard = 0
+    while (cursor <= endDate && guard < 90) {
+      const y = cursor.getFullYear()
+      const m = String(cursor.getMonth() + 1).padStart(2, '0')
+      const d = String(cursor.getDate()).padStart(2, '0')
+      dateCandidates.add(`${y}-${m}-${d}`)
+      cursor.setDate(cursor.getDate() + 1)
+      guard += 1
+    }
+  }
+
+  const fullyBooked = []
+  for (const dateKey of [...dateCandidates].sort()) {
+    const [y, m, d] = dateKey.split('-').map(Number)
+    const dayStartMs = new Date(y, m - 1, d, Math.floor(workStartMinutes / 60), workStartMinutes % 60, 0, 0).getTime()
+    const dayEndMs = new Date(y, m - 1, d, Math.floor(workEndMinutes / 60), workEndMinutes % 60, 0, 0).getTime()
+    if (dayEndMs <= dayStartMs) continue
+
+    const points = new Set([dayStartMs, dayEndMs])
+    const intervals = []
+    for (const row of busyRows) {
+      const s = parseSqlDateTimeParts(row.scheduled_start)
+      const e = parseSqlDateTimeParts(row.scheduled_end)
+      if (!s || !e) continue
+      const cs = Math.max(s.ms, dayStartMs)
+      const ce = Math.min(e.ms, dayEndMs)
+      if (ce > cs) {
+        points.add(cs)
+        points.add(ce)
+        intervals.push({ start: cs, end: ce, workers: Math.max(1, Number(row.workers_required) || 1) })
+      }
+    }
+
+    const sortedPoints = [...points].sort((a, b) => a - b)
+    let hasOpenWindow = false
+    for (let i = 0; i < sortedPoints.length - 1; i += 1) {
+      const mid = (sortedPoints[i] + sortedPoints[i + 1]) / 2
+      let jobs = 0
+      let workers = 0
+      for (const iv of intervals) {
+        if (iv.start <= mid && iv.end > mid) {
+          jobs += 1
+          workers += iv.workers
+        }
+      }
+      if (jobs < effectiveJobs && workers < effectiveCrew) {
+        hasOpenWindow = true
+        break
+      }
+    }
+    if (!hasOpenWindow) {
+      fullyBooked.push(dateKey)
+    }
+  }
+
+  return fullyBooked
+}
+
 function formatWorkingDaysSummary(days) {
   if (!Array.isArray(days) || days.length === 0) return 'Not set'
   if (days.length === 7) return 'Daily (Mon–Sun)'
@@ -180,6 +280,8 @@ async function validateGardenerSchedule(connection, {
   gardenerId,
   scheduledStart,
   scheduledEnd,
+  serviceId = null,
+  workersRequired = null,
   excludeBookingId = null,
   lockRows = true,
 }) {
@@ -195,7 +297,7 @@ async function validateGardenerSchedule(connection, {
   }
 
   const [profileRows] = await connection.execute(
-    `SELECT working_days, work_start_time, work_end_time, max_concurrent_jobs, availability_notes
+    `SELECT working_days, work_start_time, work_end_time, max_concurrent_jobs, crew_size, availability_notes
      FROM gardener_profiles
      WHERE user_id = ?
      LIMIT 1`,
@@ -207,6 +309,19 @@ async function validateGardenerSchedule(connection, {
   const workStart = normalizeTimeOfDay(profile.work_start_time, '08:00:00')
   const workEnd = normalizeTimeOfDay(profile.work_end_time, '17:00:00')
   const maxConcurrentJobs = Math.max(1, Number(profile.max_concurrent_jobs) || 1)
+  const crewSize = Math.max(1, Number(profile.crew_size) || 1, maxConcurrentJobs)
+
+  let requestedWorkers = Math.max(1, Number(workersRequired) || 0)
+  if (!workersRequired && serviceId) {
+    const [svcRows] = await connection.execute(
+      'SELECT workers_required FROM services WHERE id = ? LIMIT 1',
+      [Number(serviceId)],
+    )
+    if (svcRows[0]?.workers_required) {
+      requestedWorkers = Math.max(1, Number(svcRows[0].workers_required))
+    }
+  }
+  if (!Number.isFinite(requestedWorkers) || requestedWorkers < 1) requestedWorkers = 1
 
   // 1. Validate working days (start day and end day must be working days)
   if (!workingDays.includes(start.weekday)) {
@@ -271,25 +386,27 @@ async function validateGardenerSchedule(connection, {
   const params = [gardenerId, sqlEnd, sqlStart]
   let excludeClause = ''
   if (excludeBookingId) {
-    excludeClause = ' AND id <> ?'
+    excludeClause = ' AND b.id <> ?'
     params.push(excludeBookingId)
   }
 
   const [overlapping] = await connection.execute(
-    `SELECT id, scheduled_start, scheduled_end
-     FROM bookings
-     WHERE gardener_id = ?
-       AND status IN ('pending', 'accepted', 'in_progress')
-       AND scheduled_start < ?
-       AND scheduled_end > ?${excludeClause}${lockRows ? ' FOR UPDATE' : ''}`,
+    `SELECT b.id, b.scheduled_start, b.scheduled_end, COALESCE(s.workers_required, 1) AS workers_required
+     FROM bookings b
+     LEFT JOIN services s ON s.id = b.service_id
+     WHERE b.gardener_id = ?
+       AND b.status IN ('pending', 'accepted', 'in_progress')
+       AND b.scheduled_start < ?
+       AND b.scheduled_end > ?${excludeClause}${lockRows ? ' FOR UPDATE' : ''}`,
     params,
   )
 
   const peakConcurrent = computePeakConcurrentBookings(overlapping, start.ms, end.ms)
+  const peakWorkers = computePeakWorkers(overlapping, start.ms, end.ms)
   if (peakConcurrent + 1 > maxConcurrentJobs) {
     const message = maxConcurrentJobs === 1
       ? 'The gardener already has an accepted booking during that scheduled time.'
-      : `The gardener has reached their maximum simultaneous job capacity (${maxConcurrentJobs}) during that scheduled time.`
+      : `Fully booked — the gardener has reached their maximum simultaneous job capacity (${maxConcurrentJobs}) during that scheduled time.`
     return {
       ok: false,
       status: 409,
@@ -298,6 +415,29 @@ async function validateGardenerSchedule(connection, {
       peakConcurrent,
       maxConcurrentJobs,
       remainingSlots: 0,
+      crewSize,
+      peakWorkers,
+      remainingWorkers: Math.max(0, crewSize - peakWorkers),
+      requestedWorkers,
+    }
+  }
+  if (peakWorkers + requestedWorkers > crewSize) {
+    const availWorkers = Math.max(0, crewSize - peakWorkers)
+    const message = availWorkers === 0
+      ? `Fully booked — all ${crewSize} worker(s) are already assigned during that scheduled time. No service is available in that slot.`
+      : `Not enough crew available — this service requires ${requestedWorkers} worker(s), but only ${availWorkers} of ${crewSize} worker(s) are free during that time.`
+    return {
+      ok: false,
+      status: 409,
+      code: 'CREW_CAPACITY_EXCEEDED',
+      message,
+      peakConcurrent,
+      maxConcurrentJobs,
+      remainingSlots: Math.max(0, maxConcurrentJobs - peakConcurrent),
+      crewSize,
+      peakWorkers,
+      remainingWorkers: availWorkers,
+      requestedWorkers,
     }
   }
 
@@ -306,6 +446,10 @@ async function validateGardenerSchedule(connection, {
     peakConcurrent,
     maxConcurrentJobs,
     remainingSlots: maxConcurrentJobs - peakConcurrent,
+    crewSize,
+    peakWorkers,
+    remainingWorkers: crewSize - peakWorkers,
+    requestedWorkers,
     workingDays,
     workStartTime: workStart.hhmm,
     workEndTime: workEnd.hhmm,
@@ -317,7 +461,9 @@ module.exports = {
   ALL_WEEKDAYS,
   WEEKDAY_LABELS,
   WEEKDAY_SHORT,
+  computeFullyBookedDates,
   computePeakConcurrentBookings,
+  computePeakWorkers,
   estimateWorkDuration,
   formatWorkingDaysSummary,
   normalizeTimeOfDay,

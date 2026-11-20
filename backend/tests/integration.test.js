@@ -653,7 +653,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     assert.equal(readAllRes.status, 204)
   })
 
-  test('TC-14: Completed booking review creation, duplicate block, and average rating', async () => {
+  test('TC-14: Completed booking full payment + Transaction Completion Agreement gate, review creation, duplicate block, and average rating', async () => {
     // Uncompleted booking cannot be reviewed
     const prematureReview = await apiRequest('/reviews', {
       method: 'POST',
@@ -662,7 +662,77 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(prematureReview.status, 409)
 
-    // Completed booking can be reviewed once
+    // Completed booking with unpaid remaining balance (only PHP 1350 deposit paid out of PHP 4500) cannot be reviewed yet
+    const unpaidBalanceReview = await apiRequest('/reviews', {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { bookingId: inquiryBookingId, rating: 5, reviewText: 'Before full payment' },
+    })
+    assert.equal(unpaidBalanceReview.status, 409)
+    assert.equal(unpaidBalanceReview.data.code, 'FULL_PAYMENT_REQUIRED')
+
+    // Client pays remaining PHP 3150 balance after work completion & gardener verifies
+    const balSubmit = await apiRequest(`/bookings/${inquiryBookingId}/payments`, {
+      method: 'POST',
+      cookie: clientCookie,
+      body: {
+        paymentType: 'balance',
+        paymentMethod: 'gcash',
+        amount: 3150,
+        referenceNumber: 'GCASH-TC14-BAL',
+      },
+    })
+    assert.equal(balSubmit.status, 201)
+    assert.match(balSubmit.data.payment.transaction_code, /^TXN-\d{8}-[A-Z0-9]{6}$/)
+
+    const balVerify = await apiRequest(`/bookings/${inquiryBookingId}/payments/${balSubmit.data.id}`, {
+      method: 'PATCH',
+      cookie: gardenerCookie,
+      body: { decision: 'verified' },
+    })
+    assert.equal(balVerify.status, 200)
+    assert.equal(balVerify.data.booking.payment_status, 'fully_paid')
+    assert.equal(balVerify.data.booking.transaction_status, 'pending_closure')
+
+    // Still cannot review until BOTH client and gardener sign the Transaction Completion Agreement
+    const unclosedReview = await apiRequest('/reviews', {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { bookingId: inquiryBookingId, rating: 5, reviewText: 'Before closing agreement' },
+    })
+    assert.equal(unclosedReview.status, 409)
+    assert.equal(unclosedReview.data.code, 'TRANSACTION_NOT_CLOSED')
+
+    // Client signs closing agreement -> still pending_closure until gardener also signs
+    const clientClose = await apiRequest(`/bookings/${inquiryBookingId}/complete-transaction`, {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { note: 'Work inspected and full payment settled.' },
+    })
+    assert.equal(clientClose.status, 200)
+    assert.equal(clientClose.data.closed, false)
+    assert.equal(clientClose.data.transaction_status, 'pending_closure')
+
+    const halfClosedReview = await apiRequest('/reviews', {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { bookingId: inquiryBookingId, rating: 5, reviewText: 'Only client signed' },
+    })
+    assert.equal(halfClosedReview.status, 409)
+    assert.equal(halfClosedReview.data.code, 'TRANSACTION_NOT_CLOSED')
+
+    // Gardener signs closing agreement -> transaction closes & rating unlocks
+    const gardenerClose = await apiRequest(`/bookings/${inquiryBookingId}/complete-transaction`, {
+      method: 'POST',
+      cookie: gardenerCookie,
+      body: { note: 'Full payment received. Thank you!' },
+    })
+    assert.equal(gardenerClose.status, 200)
+    assert.equal(gardenerClose.data.closed, true)
+    assert.equal(gardenerClose.data.transaction_status, 'closed')
+    assert.equal(gardenerClose.data.booking.can_review, true)
+
+    // Closed, fully paid, completed booking can now be reviewed once
     const validReview = await apiRequest('/reviews', {
       method: 'POST',
       cookie: clientCookie,
@@ -682,6 +752,15 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     assert.equal(gardenerRes.status, 200)
     assert.equal(gardenerRes.data.gardener.average_rating, 5)
     assert.equal(gardenerRes.data.gardener.review_count, 1)
+
+    // Recent public reviews feed and service catalog ratings include the verified review
+    const recentReviewsRes = await apiRequest('/reviews/recent?limit=5')
+    assert.equal(recentReviewsRes.status, 200)
+    assert.ok(recentReviewsRes.data.reviews.some((r) => r.booking_id === inquiryBookingId && r.rating === 5))
+
+    const ratedServicesRes = await apiRequest(`/services?keyword=${encodeURIComponent(String(runId))}`)
+    assert.equal(ratedServicesRes.status, 200)
+    assert.ok(ratedServicesRes.data.services.some((s) => s.gardener_id === gardenerId && Number(s.average_rating) === 5 && Number(s.review_count) === 1))
   })
 
   test('TC-15: User report submission, admin moderation, and immediate user deactivation enforcement', async () => {

@@ -330,4 +330,123 @@ describe('Scheduling: Working Days, Working Hours, Unavailable Dates, Estimated 
     assert.ok(availRes.data.availability.busySlots.length >= 3)
     assert.equal(availRes.data.availability.busySlots[0].client_name, undefined)
   })
+
+  it('enforces daily crew worker limits, flags fully booked dates, and generates urgent schedule reminder notifications', async () => {
+    // Gardener has 3 workers/day and up to 3 simultaneous jobs
+    const updateCrew = await api('/profiles/me', {
+      method: 'PUT',
+      headers: { Cookie: gardenerCookie },
+      body: {
+        firstName: 'SchedGardener',
+        lastName: 'Test',
+        phone: '09171234567',
+        businessName: 'Schedule Pro',
+        serviceArea: 'Zamboanga City',
+        workingDays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+        workStartTime: '08:00',
+        workEndTime: '17:00',
+        maxConcurrentJobs: 3,
+        crewSize: 3,
+      },
+    })
+    assert.equal(updateCrew.status, 200)
+    assert.equal(updateCrew.data.profile.crew_size, 3)
+
+    // Create a 2-worker landscaping service
+    const bigSvcRes = await api('/services', {
+      method: 'POST',
+      headers: { Cookie: gardenerCookie },
+      body: {
+        title: 'Full Team Landscaping',
+        description: 'Requires 2 crew members',
+        categoryId,
+        indicativePrice: 3500,
+        priceUnit: 'per day',
+        serviceArea: 'Zamboanga City',
+        workersRequired: 2,
+      },
+    })
+    assert.equal(bigSvcRes.status, 201)
+    const bigSvcId = bigSvcRes.data.id
+
+    try {
+      // Book 2-worker service full day 2027-03-22 (08:00-17:00) -> 2/3 workers used
+      const propBig = await api('/agreements/direct-service', {
+        method: 'POST',
+        headers: { Cookie: clientACookie },
+        body: {
+          serviceId: bigSvcId,
+          scopeOfWork: 'Full day landscaping',
+          amount: 3500,
+          scheduledStart: '2027-03-22T08:00',
+          scheduledEnd: '2027-03-22T17:00',
+          location: 'Tetuan, Zamboanga City',
+        },
+      })
+      assert.equal(propBig.status, 201)
+      createdInquiryIds.push(propBig.data.inquiryId)
+      await api(`/agreements/${propBig.data.agreement.id}/approve`, { method: 'POST', headers: { Cookie: clientACookie }, body: { version: 1 } })
+      await api(`/agreements/${propBig.data.agreement.id}/approve`, { method: 'POST', headers: { Cookie: gardenerCookie }, body: { version: 1 } })
+
+      // Book 1-worker service full day 2027-03-22 (08:00-17:00) -> 3/3 workers used (NOW FULLY BOOKED!)
+      const b1w = await createAndConfirmDirectBooking({
+        clientCookie: clientBCookie,
+        scheduledStart: '2027-03-22T08:00',
+        scheduledEnd: '2027-03-22T17:00',
+        estimatedWorkingDays: 1,
+      })
+      assert.equal(b1w.status, 200)
+
+      // 3rd booking on 2027-03-22 fails with 409 CREW_CAPACITY_EXCEEDED (0 workers left even though job slots=2<3)
+      const blockedFull = await api('/agreements/direct-service', {
+        method: 'POST',
+        headers: { Cookie: clientCCookie },
+        body: {
+          serviceId,
+          scopeOfWork: 'Should be blocked — fully booked',
+          amount: 1200,
+          scheduledStart: '2027-03-22T09:00',
+          scheduledEnd: '2027-03-22T12:00',
+          location: 'Tetuan, Zamboanga City',
+        },
+      })
+      assert.equal(blockedFull.status, 409)
+      assert.equal(blockedFull.data.code, 'CREW_CAPACITY_EXCEEDED')
+
+      // Availability endpoint marks 2027-03-22 as fully booked
+      const avail = await api(`/gardeners/${gardenerId}/availability`)
+      assert.equal(avail.status, 200)
+      assert.equal(avail.data.availability.crewSize, 3)
+      assert.ok(avail.data.availability.fullyBookedDates.includes('2027-03-22'))
+
+      // Urgent schedule reminder: insert an accepted booking scheduled for TODAY and list bookings
+      const now = new Date()
+      const pad = (n) => String(n).padStart(2, '0')
+      const todayDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+      const [todayBk] = await pool.execute(
+        `INSERT INTO bookings (client_id, gardener_id, service_id, scheduled_start, scheduled_end, location, status, booking_stage, payment_status)
+         VALUES (?, ?, ?, ?, ?, 'Tetuan, Zamboanga City', 'accepted', 'booked', 'partially_paid')`,
+        [createdUserIds[0], gardenerId, serviceId, `${todayDate} 09:00:00`, `${todayDate} 12:00:00`],
+      )
+      try {
+        const listRes = await api('/bookings', { headers: { Cookie: gardenerCookie } })
+        assert.equal(listRes.status, 200)
+        const urgentBooking = listRes.data.bookings.find((b) => b.id === todayBk.insertId)
+        assert.ok(urgentBooking)
+        assert.equal(urgentBooking.schedule_urgency, 'urgent_today')
+
+        // Automatic booking_reminder notification was created (and calling list again does not duplicate it)
+        await api('/bookings', { headers: { Cookie: gardenerCookie } })
+        const [remRows] = await pool.execute(
+          "SELECT id FROM notifications WHERE user_id = ? AND notification_type = 'booking_reminder' AND related_entity_id = ?",
+          [gardenerId, todayBk.insertId],
+        )
+        assert.equal(remRows.length, 1)
+      } finally {
+        await pool.query('DELETE FROM bookings WHERE id = ?', [todayBk.insertId])
+      }
+    } finally {
+      await pool.query('DELETE FROM services WHERE id = ?', [bigSvcId])
+    }
+  })
 })
