@@ -709,8 +709,9 @@ async function getSmartRecommendations(req, res, next) {
          )
          WHERE i.request_type = 'general'
            AND i.status IN ('open', 'responded')
-           AND (i.expires_at IS NULL OR i.expires_at > NOW())`,
-        [req.user.id],
+           AND (i.expires_at IS NULL OR i.expires_at > NOW())
+           AND i.client_id <> ?`,
+        [req.user.id, req.user.id],
       )
 
       if (leadRows.length > 0) {

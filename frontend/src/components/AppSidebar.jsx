@@ -36,7 +36,7 @@ export default function AppSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
-    if (!user || !['client', 'gardener'].includes(user.role)) return
+    if (!user || !['client', 'gardener', 'clerk'].includes(user.role)) return
     communicationApi.notifications().then((result) => {
       const unread = result.notifications.filter((notification) => !notification.read_at)
       const count = (type) => new Set(

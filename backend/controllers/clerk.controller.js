@@ -112,6 +112,7 @@ async function getClerkWorkspace(req, res, next) {
 
     const [pendingPayments] = await pool.execute(
       `SELECT p.id, p.transaction_code, p.booking_id, p.payment_type, p.payment_method,
+              p.gateway_provider, p.gateway_status,
               p.amount, p.reference_number, p.receipt_path, p.notes, p.status, p.created_at,
               b.gardener_id, b.booking_stage, b.payment_status, b.required_deposit_amount, b.amount_paid,
               COALESCE(a.amount, 0) AS agreed_amount,

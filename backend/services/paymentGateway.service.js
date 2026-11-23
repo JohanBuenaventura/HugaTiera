@@ -18,18 +18,24 @@ function getPayMongoSecretKey() {
   return key || null
 }
 
+function isSandboxAllowed() {
+  return process.env.NODE_ENV !== 'production' || process.env.ALLOW_SANDBOX_PAYMENTS === 'true'
+}
+
 function getGatewayConfig() {
   const secretKey = getPayMongoSecretKey()
   const isPayMongo = Boolean(secretKey)
   const isTestKey = isPayMongo && secretKey.startsWith('sk_test_')
+  const sandboxAvailable = !isPayMongo && isSandboxAllowed()
   return {
-    provider: isPayMongo ? 'paymongo' : 'sandbox_demo',
-    mode: isPayMongo ? (isTestKey ? 'paymongo_test' : 'paymongo_live') : 'sandbox_demo',
+    provider: isPayMongo ? 'paymongo' : (sandboxAvailable ? 'sandbox_demo' : 'unavailable'),
+    mode: isPayMongo ? (isTestKey ? 'paymongo_test' : 'paymongo_live') : (sandboxAvailable ? 'sandbox_demo' : 'unavailable'),
     label: isPayMongo
       ? (isTestKey ? 'PayMongo Checkout (Test Mode)' : 'PayMongo Checkout')
-      : 'Online Checkout (Sandbox / Demo Mode)',
+      : (sandboxAvailable ? 'Online Checkout (Sandbox / Demo Mode)' : 'Online Checkout Unavailable'),
     supportedMethods: ['gcash', 'maya', 'grab_pay', 'card'],
     minAmountPhp: 20,
+    enabled: isPayMongo || sandboxAvailable,
   }
 }
 
@@ -46,14 +52,18 @@ async function createCheckoutSession({
   description,
   clientName,
   clientEmail,
-  frontendBaseUrl,
 }) {
   const secretKey = getPayMongoSecretKey()
-  const safeBase = (frontendBaseUrl || process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')
+  const safeBase = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')
   const successUrl = `${safeBase}/bookings/${bookingId}?gatewayPaymentId=${paymentId}&gatewayResult=success`
   const cancelUrl = `${safeBase}/bookings/${bookingId}?gatewayPaymentId=${paymentId}&gatewayResult=cancelled`
 
   if (!secretKey) {
+    if (!isSandboxAllowed()) {
+      const err = new Error('Online payment gateway is not configured for production. Please use manual proof upload or configure PAYMONGO_SECRET_KEY.')
+      err.statusCode = 503
+      throw err
+    }
     const sessionId = `cs_demo_${crypto.randomBytes(8).toString('hex')}`
     return {
       provider: 'sandbox_demo',
@@ -125,6 +135,11 @@ async function createCheckoutSession({
 
 async function verifyCheckoutSession({ provider, sessionId, demoOutcome = 'paid' }) {
   if (provider === 'sandbox_demo') {
+    if (!isSandboxAllowed()) {
+      const err = new Error('Sandbox payment confirmation is disabled in production.')
+      err.statusCode = 503
+      throw err
+    }
     const normalized = String(demoOutcome || 'paid').trim().toLowerCase()
     if (normalized === 'paid') {
       const refCode = `DEMO-${crypto.randomBytes(4).toString('hex').toUpperCase()}`

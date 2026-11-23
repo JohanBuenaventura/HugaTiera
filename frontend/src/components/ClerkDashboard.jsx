@@ -22,6 +22,7 @@ import {
   parseWorkingDaysArray,
 } from '../services/profiles'
 import {
+  GATEWAY_PROVIDER_LABELS,
   bookingsApi,
   formatStatusLabel,
   getStatusBadgeClass,
@@ -347,7 +348,11 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
         </section>
 
         {loading ? (
-          <div className="dashboard-panel"><p className="form-note">Loading assigned gardeners...</p></div>
+          <div className="dashboard-panel skeleton-stack" aria-busy="true">
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+          </div>
         ) : workspace.gardeners.length === 0 ? (
           <div className="dashboard-panel">
             <p className="eyebrow">No gardeners assigned yet</p>
@@ -409,9 +414,16 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                       <article className="clerk-payment-card" key={payment.id}>
                         <div className="clerk-payment-head">
                           <div>
-                            <strong>
-                              {payment.transaction_code || `Payment #${payment.id}`} · PHP {Number(payment.amount).toLocaleString()}
-                            </strong>
+                            <div className="payment-record-title">
+                              <strong>
+                                {payment.transaction_code || `Payment #${payment.id}`} · PHP {Number(payment.amount).toLocaleString()}
+                              </strong>
+                              {payment.gateway_provider && (
+                                <span className="gateway-provider-badge">
+                                  {GATEWAY_PROVIDER_LABELS[payment.gateway_provider] || payment.gateway_provider}
+                                </span>
+                              )}
+                            </div>
                             <small>
                               Booking #{payment.booking_id} ({payment.service_title || 'Gardening service'}) · Client: {payment.client_name} · Method: {formatStatusLabel(payment.payment_method)} · Type: {formatStatusLabel(payment.payment_type)}
                             </small>

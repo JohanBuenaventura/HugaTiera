@@ -44,6 +44,7 @@ import { fetchSmartRecommendations, requestRecommendationSummary } from '../serv
 import { getRequestImageUrl } from '../services/requestImages'
 import AppSidebar from '../components/AppSidebar'
 import ClerkDashboard from '../components/ClerkDashboard'
+import GardenerClerksPanel from '../components/GardenerClerksPanel'
 import GardenerScheduleCalendar from '../components/GardenerScheduleCalendar'
 
 function ProfileForm({ role, profile, userId, onSaved }) {
@@ -1354,6 +1355,14 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                 >
                   Portfolio
                 </Link>
+                <Link
+                  className={`dashboard-tab${activeTab === 'clerks' ? ' is-active' : ''}`}
+                  role="tab"
+                  aria-selected={activeTab === 'clerks'}
+                  to="/dashboard?tab=clerks"
+                >
+                  My Clerks
+                </Link>
               </>
             )}
             <Link
@@ -1368,7 +1377,7 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
         </div>
         <div className="dashboard-hero-row">
           <div>
-            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : `Welcome, ${user.firstName}.`}</h1>
+            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Clerks.' : `Welcome, ${user.firstName}.`}</h1>
             <p className="dashboard-lead" style={{ marginBottom: 0 }}>
               {isProfileView
                 ? 'Review and update your contact details and public profile information.'
@@ -1376,9 +1385,11 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                   ? 'Create, edit, and manage the gardening services you offer.'
                   : activeTab === 'portfolio'
                     ? 'Showcase your completed garden projects to build client trust.'
-                    : role === 'gardener'
-                      ? 'Manage open client requests, submitted offers, mutual agreements, and bookings.'
-                      : 'Track your service requests, compare provider offers, review mutual agreements, and manage upcoming bookings.'}
+                    : activeTab === 'clerks'
+                      ? 'Add or revoke trusted clerks who can manage your schedules, services, and payment verifications.'
+                      : role === 'gardener'
+                        ? 'Manage open client requests, submitted offers, mutual agreements, and bookings.'
+                        : 'Track your service requests, compare provider offers, review mutual agreements, and manage upcoming bookings.'}
             </p>
           </div>
           {activeTab === 'overview' && (
@@ -1405,6 +1416,7 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                   <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
                   <Link className="button button-outline" to="/dashboard?tab=services">My services</Link>
                   <Link className="button button-outline" to="/dashboard?tab=portfolio">Portfolio</Link>
+                  <Link className="button button-outline" to="/dashboard?tab=clerks">My Clerks</Link>
                 </>
               )}
             </div>
@@ -1467,6 +1479,8 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
               <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
             </section>
           </>
+        ) : role === 'gardener' && activeTab === 'clerks' ? (
+          <GardenerClerksPanel />
         ) : role === 'gardener' && (activeTab === 'services' || activeTab === 'portfolio') ? (
           <GardenerTools isApproved={form.is_approved} section={activeTab} />
         ) : (
@@ -1595,6 +1609,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
   const [clerkAssignBusy, setClerkAssignBusy] = useState(false)
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' })
   const [editingAccount, setEditingAccount] = useState(null)
+  const [deleteAccountTarget, setDeleteAccountTarget] = useState(null)
   const [accountSaving, setAccountSaving] = useState(false)
   const [adminError, setAdminError] = useState('')
   const [adminMessage, setAdminMessage] = useState('')
@@ -1624,16 +1639,20 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
     }
   }
 
-  async function handleDeleteAccount(account) {
-    if (!window.confirm(`Delete account "${account.first_name} ${account.last_name}" (${account.email})? This cannot be undone.`)) return
-    setAdminError(''); setAdminMessage('')
+  async function confirmDeleteAccount() {
+    if (!deleteAccountTarget) return
+    setAccountSaving(true); setAdminError(''); setAdminMessage('')
     try {
-      await profileApi.adminDeleteUser(account.id)
-      onUserDeleted(account.id)
-      if (editingAccount?.id === account.id) setEditingAccount(null)
+      await profileApi.adminDeleteUser(deleteAccountTarget.id)
+      onUserDeleted(deleteAccountTarget.id)
+      if (editingAccount?.id === deleteAccountTarget.id) setEditingAccount(null)
+      setDeleteAccountTarget(null)
       setAdminMessage('Account deleted successfully.')
     } catch (deleteError) {
       setAdminError(deleteError.message)
+      setDeleteAccountTarget(null)
+    } finally {
+      setAccountSaving(false)
     }
   }
 
@@ -2510,7 +2529,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                           <button className="table-action" type="button" onClick={() => onStatusChange(account.id, !account.is_active)}>
                             {account.is_active ? 'Deactivate' : 'Activate'}
                           </button>
-                          <button className="table-action table-action-danger" type="button" onClick={() => handleDeleteAccount(account)}>
+                          <button className="table-action table-action-danger" type="button" onClick={() => setDeleteAccountTarget(account)}>
                             Delete
                           </button>
                         </div>
@@ -2593,9 +2612,9 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                     <div className="managed-item" key={item.id}>
                       <div>
                         <strong>
-                          Clerk: {item.clerk_first_name} {item.clerk_last_name} ({item.clerk_email})
+                          Clerk: {item.clerk_name || `${item.clerk_first_name || ''} ${item.clerk_last_name || ''}`.trim()} ({item.clerk_email})
                           {' → '}
-                          Gardener: {item.gardener_business_name || `${item.gardener_first_name} ${item.gardener_last_name}`}
+                          Gardener: {item.gardener_name || item.gardener_business_name || `${item.gardener_first_name || ''} ${item.gardener_last_name || ''}`.trim()}
                         </strong>
                         <span>
                           {item.notes || 'Authorized for schedule, crew capacity, services, and payment verifications.'}
@@ -2614,6 +2633,32 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                 )}
               </div>
             </div>
+
+            {deleteAccountTarget && (
+              <div
+                className="gateway-demo-backdrop"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-account-title"
+                onClick={(e) => { if (e.target === e.currentTarget && !accountSaving) setDeleteAccountTarget(null) }}
+              >
+                <div className="gateway-demo-modal">
+                  <p className="eyebrow" style={{ marginBottom: '4px' }}>Permanent action</p>
+                  <h2 id="delete-account-title">Delete user account?</h2>
+                  <p className="field-note">
+                    Delete <strong>{deleteAccountTarget.first_name} {deleteAccountTarget.last_name}</strong> ({deleteAccountTarget.email})? This cannot be undone. Accounts with existing inquiries or bookings are protected and must be deactivated instead.
+                  </p>
+                  <div className="gateway-demo-actions">
+                    <button type="button" className="button button-danger" disabled={accountSaving} onClick={confirmDeleteAccount}>
+                      {accountSaving ? 'Deleting...' : 'Yes, delete account'}
+                    </button>
+                    <button type="button" className="table-action" disabled={accountSaving} onClick={() => setDeleteAccountTarget(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
       </section>

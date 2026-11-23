@@ -161,7 +161,8 @@ export function RegisterPage() {
   const { register } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const initialRole = params.get('role') === 'gardener' ? 'gardener' : 'client'
+  const roleParam = params.get('role')
+  const initialRole = roleParam === 'gardener' || roleParam === 'both' ? roleParam : 'client'
   const [form, setForm] = useState({
     role: initialRole,
     firstName: '',
@@ -270,20 +271,29 @@ export function RegisterPage() {
           <div className="role-options role-options-3">
             <label className={form.role === 'client' ? 'selected' : ''}>
               <input type="radio" name="role" value="client" checked={form.role === 'client'} onChange={updateField('role')} />
-              Find a gardener
+              <span className="role-option-copy">
+                <strong>Find a gardener</strong>
+                <small>Client account</small>
+              </span>
             </label>
             <label className={form.role === 'gardener' ? 'selected' : ''}>
               <input type="radio" name="role" value="gardener" checked={form.role === 'gardener'} onChange={updateField('role')} />
-              Offer services
+              <span className="role-option-copy">
+                <strong>Offer services</strong>
+                <small>Service provider</small>
+              </span>
             </label>
             <label className={form.role === 'both' ? 'selected' : ''}>
               <input type="radio" name="role" value="both" checked={form.role === 'both'} onChange={updateField('role')} />
-              Both (Client &amp; Gardener)
+              <span className="role-option-copy">
+                <strong>Both (Client &amp; Provider)</strong>
+                <small>Hire &amp; offer services</small>
+              </span>
             </label>
           </div>
           {form.role === 'both' && (
             <p className="field-note" style={{ marginTop: '6px' }}>
-              Switch anytime between Client Mode and Gardener Mode with one click inside your dashboard.
+              Switch anytime between Client Mode and Gardener / Service Provider Mode with one click inside your dashboard.
             </p>
           )}
         </fieldset>
@@ -393,6 +403,7 @@ export function RegisterPage() {
                 City
                 <input
                   name="city"
+                  aria-label="City"
                   required
                   maxLength="100"
                   autoComplete="address-level2"

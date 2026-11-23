@@ -565,4 +565,76 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
     })
     assert.equal(afterUnassign.status, 403)
   })
+
+  it('allows a gardener to self-create, list, and revoke their own clerk, while blocking non-clerk email hijacking', async () => {
+    const stamp = Date.now()
+    const clerkEmail = `self_clerk_${stamp}@test.local`
+
+    // 1. Gardener A creates a new clerk account directly for themselves
+    const createRes = await api('/profiles/me/clerks', {
+      method: 'POST',
+      headers: { Cookie: gardenerACookie },
+      body: {
+        firstName: 'Nina',
+        lastName: 'Desk',
+        email: clerkEmail,
+        phone: '09178889999',
+        password: 'ClerkPassword123!',
+        notes: 'Handles Alpha Gardens bookings',
+      },
+    })
+    assert.equal(createRes.status, 201, `Expected 201 got ${createRes.status}: ${JSON.stringify(createRes.data)}`)
+    const selfClerkId = createRes.data.clerk.clerk_id
+    const selfAssignmentId = createRes.data.assignmentId
+    createdUserIds.push(selfClerkId)
+
+    // 2. Gardener A sees the clerk in GET /profiles/me/clerks
+    const listRes = await api('/profiles/me/clerks', { headers: { Cookie: gardenerACookie } })
+    assert.equal(listRes.status, 200)
+    assert.ok(listRes.data.clerks.some((c) => c.assignment_id === selfAssignmentId))
+
+    // 3. New clerk logs in and can manage Gardener A (but NOT Gardener B)
+    const loginRes = await api('/auth/login', {
+      method: 'POST',
+      body: { email: clerkEmail, password: 'ClerkPassword123!' },
+    })
+    assert.equal(loginRes.status, 200)
+    assert.equal(loginRes.data.user.role, 'clerk')
+
+    const wsRes = await api('/clerk/workspace', { headers: { Cookie: loginRes.cookie } })
+    assert.equal(wsRes.status, 200)
+    assert.equal(wsRes.data.gardeners.length, 1)
+    assert.equal(wsRes.data.gardeners[0].id, gardenerAId)
+
+    // 4. Attempting to link a non-clerk (e.g., Gardener B's email) via /assign is rejected with 400 TARGET_NOT_CLERK
+    const [gBRows] = await pool.query('SELECT email FROM users WHERE id = ?', [gardenerBId])
+    const hijackTry = await api('/profiles/me/clerks/assign', {
+      method: 'POST',
+      headers: { Cookie: gardenerACookie },
+      body: { email: gBRows[0].email },
+    })
+    assert.equal(hijackTry.status, 400)
+    assert.equal(hijackTry.data.code, 'TARGET_NOT_CLERK')
+
+    // 5. Gardener B cannot revoke Gardener A's clerk assignment (404)
+    const wrongRevoke = await api(`/profiles/me/clerks/${selfAssignmentId}`, {
+      method: 'DELETE',
+      headers: { Cookie: gardenerBCookie },
+    })
+    assert.equal(wrongRevoke.status, 404)
+
+    // 6. Gardener A revokes their clerk -> 204, and clerk loses access immediately (403)
+    const revokeRes = await api(`/profiles/me/clerks/${selfAssignmentId}`, {
+      method: 'DELETE',
+      headers: { Cookie: gardenerACookie },
+    })
+    assert.equal(revokeRes.status, 204)
+
+    const afterRevoke = await api(`/clerk/gardeners/${gardenerAId}/schedule`, {
+      method: 'PUT',
+      headers: { Cookie: loginRes.cookie },
+      body: { workingDays: ['mon'], workStartTime: '08:00', workEndTime: '17:00', maxConcurrentJobs: 1, crewSize: 1 },
+    })
+    assert.equal(afterRevoke.status, 403)
+  })
 })

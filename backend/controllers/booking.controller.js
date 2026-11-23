@@ -266,6 +266,7 @@ async function getBooking(req, res, next) {
 
     const [payments] = await pool.execute(
       `SELECT p.id, p.transaction_code, p.booking_id, p.submitted_by, p.payment_type, p.payment_method,
+              p.gateway_provider, p.gateway_session_id, p.gateway_checkout_url, p.gateway_status, p.gateway_paid_at,
               p.amount, p.reference_number, p.receipt_path, p.notes, p.status,
               p.verified_by, p.verified_at, p.rejection_reason, p.created_at, p.updated_at,
               CONCAT(sub.first_name, ' ', sub.last_name) AS submitted_by_name,
@@ -1240,8 +1241,27 @@ async function createGatewayCheckout(req, res, next) {
       return res.status(409).json({ message: 'This booking is already fully paid.' })
     }
 
+    const agreedAmount = Number(booking.agreed_amount || 0)
+    const alreadyPaid = Number(booking.amount_paid || 0)
+    const remainingBalance = Math.max(0, Number((agreedAmount - alreadyPaid).toFixed(2)))
+    if (agreedAmount > 0 && cleanAmount > remainingBalance + 0.01) {
+      await connection.rollback()
+      return res.status(400).json({
+        code: 'OVERPAYMENT_EXCEEDS_BALANCE',
+        message: `Online payment amount (PHP ${cleanAmount.toFixed(2)}) cannot exceed the remaining balance of PHP ${remainingBalance.toFixed(2)}.`,
+      })
+    }
+
     const transactionCode = generateTransactionCode()
     const gatewayCfg = getGatewayConfig()
+    if (!gatewayCfg.enabled) {
+      await connection.rollback()
+      return res.status(503).json({
+        code: 'GATEWAY_UNAVAILABLE',
+        message: 'Online payment gateway is not configured in this environment.',
+      })
+    }
+
     const [ins] = await connection.execute(
       `INSERT INTO booking_payments
         (transaction_code, booking_id, submitted_by, payment_type, payment_method,
@@ -1251,7 +1271,6 @@ async function createGatewayCheckout(req, res, next) {
     )
     const paymentId = ins.insertId
 
-    const originHeader = typeof req.headers.origin === 'string' ? req.headers.origin : null
     const session = await createCheckoutSession({
       bookingId,
       paymentId,
@@ -1261,7 +1280,6 @@ async function createGatewayCheckout(req, res, next) {
       description: `${booking.service_title || 'Gardening service'} (${paymentType} payment)`,
       clientName: booking.client_name,
       clientEmail: booking.client_email,
-      frontendBaseUrl: originHeader,
     })
 
     await connection.execute(

@@ -1,22 +1,35 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Leaf } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Clock, Leaf, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
-import { profileApi } from '../services/profiles'
+import { formatWorkingDaysLabel, profileApi } from '../services/profiles'
 
 export default function ServiceDetailPage() {
   const { serviceId } = useParams()
   const { user } = useAuth()
   const [data, setData] = useState(null)
+  const [availability, setAvailability] = useState(null)
   const [error, setError] = useState('')
   const [reporting, setReporting] = useState(false)
   const [reportForm, setReportForm] = useState({ reason: '', details: '' })
   const [reportStatus, setReportStatus] = useState({ error: '', message: '', submitting: false })
 
   useEffect(() => {
-    servicesApi.detail(serviceId).then(setData).catch((loadError) => setError(loadError.message))
+    let active = true
+    servicesApi.detail(serviceId)
+      .then((res) => {
+        if (!active) return
+        setData(res)
+        if (res?.service?.gardener_id) {
+          servicesApi.gardenerAvailability(res.service.gardener_id)
+            .then((avail) => { if (active) setAvailability(avail) })
+            .catch(() => {})
+        }
+      })
+      .catch((loadError) => { if (active) setError(loadError.message) })
+    return () => { active = false }
   }, [serviceId])
 
   async function submitReport(event) {
@@ -38,7 +51,20 @@ export default function ServiceDetailPage() {
   }
 
   if (error) return <main className={`marketplace-page${user ? ' protected-page' : ''}`}>{user ? <AppSidebar /> : <PageHeader />}<section className="container detail-content"><div className="form-error">{error}</div></section></main>
-  if (!data) return <main className={`marketplace-page${user ? ' protected-page' : ''}`}>{user ? <AppSidebar /> : <PageHeader />}<section className="container detail-content"><p>Loading service...</p></section></main>
+  if (!data) {
+    return (
+      <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+        {user ? <AppSidebar /> : <PageHeader />}
+        <section className="container detail-content">
+          <div className="dashboard-panel skeleton-stack" aria-busy="true">
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+          </div>
+        </section>
+      </main>
+    )
+  }
   const { service, portfolios } = data
 
   return (
@@ -72,6 +98,24 @@ export default function ServiceDetailPage() {
             <h2>{service.business_name || `${service.first_name} ${service.last_name}`}</h2>
             <p>{service.gardener_description || 'A local gardening service provider on HugaTiera.'}</p>
             <Link className="text-link" to={`/gardeners/${service.gardener_id}`}>View gardener profile <ArrowLeft size={15} /></Link>
+            {availability?.schedule && (
+              <div className="availability-preview-box">
+                <p className="eyebrow" style={{ marginBottom: '6px' }}>Availability &amp; crew capacity</p>
+                <span><CalendarDays size={13} /> {formatWorkingDaysLabel(availability.schedule.workingDays)}</span>
+                <span><Clock size={13} /> {availability.schedule.workStartTime} – {availability.schedule.workEndTime}</span>
+                <span><Users size={13} /> Daily crew: {availability.schedule.crewSize || 1} worker(s) · Needs {service.workers_required || 1} worker(s)</span>
+                {Array.isArray(availability.fullyBookedDates) && availability.fullyBookedDates.length > 0 && (
+                  <div className="fully-booked-row">
+                    <strong>Fully booked dates:</strong>
+                    <div className="fully-booked-chips">
+                      {availability.fullyBookedDates.slice(0, 5).map((d) => (
+                        <span className="fully-booked-pill" key={d.date || d}>{d.date || d}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {user && user.id !== service.gardener_id && (
               <div style={{ marginTop: '18px' }}>
                 <button className="table-action" type="button" onClick={() => setReporting((open) => !open)}>

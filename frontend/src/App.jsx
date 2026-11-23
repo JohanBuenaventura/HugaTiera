@@ -307,12 +307,14 @@ function App() {
             <Route path="/assistant" element={<AssistantPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/inquiries/:inquiryId" element={<InquiryPage detail />} />
+            <Route element={<ProtectedRoute roles={['client', 'gardener', 'clerk']} />}>
+              <Route path="/notifications" element={<CommunicationPage mode="notifications" />} />
+            </Route>
             <Route element={<ProtectedRoute roles={['client', 'gardener']} />}>
               <Route path="/profile" element={<DashboardPage profileView />} />
               <Route path="/inquiries" element={<InquiryPage />} />
               <Route path="/inquiries/new" element={<InquiryPage create />} />
               <Route path="/messages" element={<CommunicationPage mode="messages" />} />
-              <Route path="/notifications" element={<CommunicationPage mode="notifications" />} />
               <Route path="/bookings" element={<BookingPage />} />
               <Route path="/bookings/new" element={<BookingPage create />} />
               <Route path="/bookings/:bookingId" element={<BookingPage detail />} />

@@ -4804,6 +4804,40 @@ tbody tr:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
+.role-option-copy {
+  display: grid;
+  gap: 2px;
+  line-height: 1.25;
+}
+.role-option-copy strong {
+  font-size: 13px;
+  color: inherit;
+}
+.role-option-copy small {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #55675C;
+}
+.auth-form textarea {
+  display: block;
+  width: 100%;
+  min-height: 84px;
+  margin-top: 7px;
+  padding: 12px 13px;
+  border: 1px solid #d5dfd3;
+  border-radius: 10px;
+  outline: 0;
+  color: #263d2e;
+  background: #fbfcfa;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.auth-form textarea:focus {
+  border-color: #39734b;
+  box-shadow: 0 0 0 3px rgba(57, 115, 75, .12);
+}
 @media (max-width: 640px) {
   .role-options-3 {
     grid-template-columns: 1fr;
@@ -5079,4 +5113,105 @@ tbody tr:hover {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 16px;
+}
+
+/* ==========================================================================
+   100% UI/UX Polish: Danger Buttons, Skeleton Loaders, Availability Preview & Print
+   ========================================================================== */
+
+.button-danger {
+  background: #B42318;
+  color: #FFFFFF;
+}
+.button-danger:hover:not(:disabled) {
+  background: #912018;
+}
+
+.skeleton-stack {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+}
+.skeleton-line {
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #E8EFE9 25%, #F4F8F4 50%, #E8EFE9 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line.short {
+  width: 48%;
+  height: 13px;
+}
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.availability-preview-box {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid #D5E2D7;
+  border-radius: 12px;
+  background: #F6FAF6;
+  font-size: 13px;
+  color: #36483D;
+}
+.availability-preview-box > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fully-booked-row {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+.fully-booked-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fully-booked-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #FDF2F2;
+  border: 1px solid #F0B4B0;
+  color: #912018;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+@media print {
+  .app-sidebar,
+  .ai-widget-launcher,
+  .ai-widget-panel,
+  .no-print,
+  .back-link,
+  .payment-channel-box,
+  .booking-actions,
+  .gateway-demo-backdrop {
+    display: none !important;
+  }
+  .booking-page,
+  .protected-page {
+    display: block !important;
+    padding: 0 !important;
+    background: #FFFFFF !important;
+  }
+  .booking-content {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .dashboard-panel,
+  .booking-detail-card {
+    box-shadow: none !important;
+    border: 1px solid #CBD5CE !important;
+    break-inside: avoid;
+  }
 }

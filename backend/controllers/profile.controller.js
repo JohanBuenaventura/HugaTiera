@@ -1,4 +1,6 @@
+const bcrypt = require('bcryptjs')
 const { pool } = require('../config/database')
+const { createNotification } = require('../services/notification.service')
 const {
   avatarsDirectory,
   processAndSaveAvatar,
@@ -534,13 +536,219 @@ async function deleteUnavailableDate(req, res, next) {
   }
 }
 
+async function listMyClerks(req, res, next) {
+  if (req.user.role !== 'gardener') {
+    return res.status(403).json({ message: 'Only gardeners can manage their assigned clerks.' })
+  }
+  try {
+    const [clerks] = await pool.execute(
+      `SELECT cga.id AS assignment_id, cga.clerk_id, cga.notes, cga.created_at AS assigned_at,
+              u.email, u.first_name, u.last_name, u.phone, u.is_active,
+              CONCAT(u.first_name, ' ', u.last_name) AS clerk_name
+       FROM clerk_gardener_assignments cga
+       JOIN users u ON u.id = cga.clerk_id
+       WHERE cga.gardener_id = ?
+       ORDER BY cga.created_at DESC, cga.id DESC`,
+      [req.user.id],
+    )
+    return res.json({ clerks })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function createMyClerk(req, res, next) {
+  if (req.user.role !== 'gardener') {
+    return res.status(403).json({ message: 'Only gardeners can create a clerk for their account.' })
+  }
+
+  const email = text(req.body?.email).toLowerCase()
+  const password = typeof req.body?.password === 'string' ? req.body.password : ''
+  const notes = text(req.body?.notes) || null
+  const names = validateNameParts({
+    firstName: req.body?.firstName,
+    middleName: req.body?.middleName,
+    lastName: req.body?.lastName,
+  })
+  if (names.error) return res.status(400).json({ message: names.error })
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) {
+    return res.status(400).json({ message: 'Please enter a valid email address for your clerk.' })
+  }
+  if (password.length < 8 || password.length > 72) {
+    return res.status(400).json({ message: 'Clerk password must be between 8 and 72 characters.' })
+  }
+  const phoneResult = validateMobileNumber(req.body?.phone, { required: false })
+  if (phoneResult.error) return res.status(400).json({ message: phoneResult.error })
+  if (notes && notes.length > 255) {
+    return res.status(400).json({ message: 'Notes must be 255 characters or fewer.' })
+  }
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [existing] = await connection.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [email])
+    if (existing[0]) {
+      await connection.rollback()
+      return res.status(409).json({
+        code: 'EMAIL_EXISTS',
+        message: 'An account with this email already exists. If they are already a Clerk, use "Assign existing clerk by email" instead.',
+      })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+    const [userIns] = await connection.execute(
+      `INSERT INTO users
+        (email, password_hash, role, can_act_as_client, can_act_as_gardener, first_name, middle_name, last_name, phone)
+       VALUES (?, ?, 'clerk', FALSE, FALSE, ?, ?, ?, ?)`,
+      [email, passwordHash, names.firstName, names.middleName, names.lastName, phoneResult.phone],
+    )
+    const clerkId = userIns.insertId
+
+    const [assignIns] = await connection.execute(
+      `INSERT INTO clerk_gardener_assignments (clerk_id, gardener_id, assigned_by, notes)
+       VALUES (?, ?, ?, ?)`,
+      [clerkId, req.user.id, req.user.id, notes],
+    )
+
+    await createNotification({
+      userId: clerkId,
+      type: 'clerk_assignment',
+      title: 'Welcome to HugaTiera Clerk Desk',
+      message: `${req.user.firstName} ${req.user.lastName} added you as their Assigned Clerk to help manage schedules, services, and payment verifications.`,
+      entityType: 'gardener_profile',
+      entityId: req.user.id,
+      connection,
+    })
+
+    await connection.commit()
+    return res.status(201).json({
+      assignmentId: assignIns.insertId,
+      clerk: {
+        assignment_id: assignIns.insertId,
+        clerk_id: clerkId,
+        email,
+        first_name: names.firstName,
+        last_name: names.lastName,
+        clerk_name: `${names.firstName} ${names.lastName}`.trim(),
+        phone: phoneResult.phone,
+        is_active: true,
+        notes,
+      },
+    })
+  } catch (error) {
+    await connection.rollback().catch(() => {})
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'An account with this email already exists.' })
+    }
+    return next(error)
+  } finally {
+    connection.release()
+  }
+}
+
+async function assignExistingClerk(req, res, next) {
+  if (req.user.role !== 'gardener') {
+    return res.status(403).json({ message: 'Only gardeners can assign a clerk to their account.' })
+  }
+  const email = text(req.body?.email).toLowerCase()
+  const notes = text(req.body?.notes) || null
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: 'Please enter a valid clerk email address.' })
+  }
+  if (notes && notes.length > 255) {
+    return res.status(400).json({ message: 'Notes must be 255 characters or fewer.' })
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, email, role, first_name, last_name, phone, is_active FROM users WHERE email = ? LIMIT 1',
+      [email],
+    )
+    const target = rows[0]
+    if (!target || !target.is_active) {
+      return res.status(404).json({ message: 'No active account was found with that email.' })
+    }
+    if (target.role !== 'clerk') {
+      return res.status(400).json({
+        code: 'TARGET_NOT_CLERK',
+        message: 'Only existing Clerk accounts can be linked by email. To add a new staff member, use "Create new clerk account" instead.',
+      })
+    }
+    if (target.id === req.user.id) {
+      return res.status(400).json({ message: 'You cannot assign yourself as your own clerk.' })
+    }
+
+    const [ins] = await pool.execute(
+      `INSERT INTO clerk_gardener_assignments (clerk_id, gardener_id, assigned_by, notes)
+       VALUES (?, ?, ?, ?)`,
+      [target.id, req.user.id, req.user.id, notes],
+    )
+
+    await createNotification({
+      userId: target.id,
+      type: 'clerk_assignment',
+      title: 'Assigned to manage a gardener',
+      message: `${req.user.firstName} ${req.user.lastName} assigned you as their Clerk to help manage schedules, services, and payment verifications.`,
+      entityType: 'gardener_profile',
+      entityId: req.user.id,
+    }).catch(() => {})
+
+    return res.status(201).json({
+      assignmentId: ins.insertId,
+      clerk: {
+        assignment_id: ins.insertId,
+        clerk_id: target.id,
+        email: target.email,
+        first_name: target.first_name,
+        last_name: target.last_name,
+        clerk_name: `${target.first_name} ${target.last_name}`.trim(),
+        phone: target.phone,
+        is_active: Boolean(target.is_active),
+        notes,
+      },
+    })
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'This clerk is already assigned to your gardener account.' })
+    }
+    return next(error)
+  }
+}
+
+async function revokeMyClerk(req, res, next) {
+  if (req.user.role !== 'gardener') {
+    return res.status(403).json({ message: 'Only gardeners can revoke clerk access to their account.' })
+  }
+  const assignmentId = Number(req.params.assignmentId)
+  if (!Number.isInteger(assignmentId) || assignmentId < 1) {
+    return res.status(400).json({ message: 'A valid clerk assignment ID is required.' })
+  }
+  try {
+    const [del] = await pool.execute(
+      'DELETE FROM clerk_gardener_assignments WHERE id = ? AND gardener_id = ?',
+      [assignmentId, req.user.id],
+    )
+    if (!del.affectedRows) {
+      return res.status(404).json({ message: 'Clerk assignment was not found for your account.' })
+    }
+    return res.status(204).send()
+  } catch (error) {
+    return next(error)
+  }
+}
+
 module.exports = {
   addUnavailableDate,
+  assignExistingClerk,
+  createMyClerk,
   createReport,
   deleteAvatar,
   deleteUnavailableDate,
   getProfile,
+  listMyClerks,
   listUnavailableDates,
+  revokeMyClerk,
   sendAvatar,
   updateProfile,
   uploadAvatar,

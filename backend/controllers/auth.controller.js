@@ -255,6 +255,13 @@ async function switchRole(req, res, next) {
       await connection.rollback()
       return res.status(404).json({ message: 'Account not found.' })
     }
+    if (!['client', 'gardener'].includes(user.role)) {
+      await connection.rollback()
+      return res.status(403).json({
+        code: 'ROLE_SWITCH_FORBIDDEN',
+        message: 'Only client and gardener accounts can switch between Client Mode and Gardener Mode.',
+      })
+    }
     const allowed = targetRole === 'client' ? Boolean(user.can_act_as_client) : Boolean(user.can_act_as_gardener)
     if (!allowed) {
       await connection.rollback()

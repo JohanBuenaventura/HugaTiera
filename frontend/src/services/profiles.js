@@ -189,6 +189,7 @@ export function getDashboardNavLinks(role, unreadCounts = {}) {
       { to: '/dashboard?tab=schedules', label: 'Schedules', type: 'route' },
       { to: '/dashboard?tab=payments', label: 'Payments', type: 'route' },
       { to: '/dashboard?tab=services', label: 'Services', type: 'route' },
+      { to: '/notifications', label: 'Notifications', badge: unreadCounts.notifications || 0, type: 'route' },
       { to: '/services', label: 'Marketplace', type: 'route' },
     ]
   }
@@ -207,7 +208,7 @@ export function resolveDashboardTab(tabParam, profileView = false) {
   if (profileView || tabParam === 'profile' || tabParam === 'settings') {
     return 'profile'
   }
-  if (['services', 'portfolio', 'analytics', 'approvals', 'pricing', 'activity', 'reports', 'accounts', 'schedules', 'payments'].includes(tabParam)) {
+  if (['services', 'portfolio', 'clerks', 'analytics', 'approvals', 'pricing', 'activity', 'reports', 'accounts', 'schedules', 'payments'].includes(tabParam)) {
     return tabParam
   }
   return 'overview'
@@ -267,6 +268,10 @@ export const profileApi = {
   listUnavailableDates: () => request('/profiles/me/unavailable-dates'),
   addUnavailableDate: (payload) => request('/profiles/me/unavailable-dates', { method: 'POST', body: JSON.stringify(payload) }),
   deleteUnavailableDate: (blockId) => request(`/profiles/me/unavailable-dates/${blockId}`, { method: 'DELETE' }),
+  listMyClerks: () => request('/profiles/me/clerks'),
+  createMyClerk: (payload) => request('/profiles/me/clerks', { method: 'POST', body: JSON.stringify(payload) }),
+  assignExistingClerk: (payload) => request('/profiles/me/clerks/assign', { method: 'POST', body: JSON.stringify(payload) }),
+  revokeMyClerk: (assignmentId) => request(`/profiles/me/clerks/${assignmentId}`, { method: 'DELETE' }),
   avatarUrl: (userId) => `${apiBaseUrl}/profiles/${userId}/avatar`,
   uploadAvatar: (file) => {
     const body = new FormData()

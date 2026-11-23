@@ -30,11 +30,19 @@ const dbUnavailableCodes = new Set([
   'ER_ACCESS_DENIED_ERROR',
 ])
 
+app.disable('x-powered-by')
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  return next()
+})
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }))
-app.use(express.json())
+app.use(express.json({ limit: '256kb' }))
 app.use(cookieParser())
 
 app.use('/api/health', healthRoutes)

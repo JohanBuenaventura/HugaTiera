@@ -307,6 +307,11 @@ async function listOpenRequests(req, res, next) {
     ]
     const params = [req.user.id]
 
+    if (req.user.role === 'gardener') {
+      whereClauses.push('i.client_id <> ?')
+      params.push(req.user.id)
+    }
+
     if (categoryId) {
       whereClauses.push('i.category_id = ?')
       params.push(categoryId)

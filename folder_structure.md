@@ -1,6 +1,6 @@
 # HugaTiera – Folder Structure
 
-This document reflects the **actual current repository structure** of HugaTiera (verified November 17, 2026).
+This document reflects the **actual current repository structure** of HugaTiera (verified November 23, 2026).
 
 ```text
 HugaTiera/
@@ -13,6 +13,7 @@ HugaTiera/
 │   │   ├── ai.controller.js
 │   │   ├── auth.controller.js
 │   │   ├── booking.controller.js
+│   │   ├── clerk.controller.js
 │   │   ├── conversation.controller.js
 │   │   ├── inquiry.controller.js
 │   │   ├── notification.controller.js
@@ -23,6 +24,7 @@ HugaTiera/
 │   │   └── service.controller.js
 │   ├── middleware/
 │   │   ├── auth.middleware.js
+│   │   ├── rateLimit.middleware.js
 │   │   └── upload.middleware.js
 │   ├── routes/
 │   │   ├── admin.routes.js
@@ -30,6 +32,7 @@ HugaTiera/
 │   │   ├── ai.routes.js
 │   │   ├── auth.routes.js
 │   │   ├── booking.routes.js
+│   │   ├── clerk.routes.js
 │   │   ├── conversation.routes.js
 │   │   ├── gardener.routes.js
 │   │   ├── health.routes.js
@@ -40,19 +43,36 @@ HugaTiera/
 │   │   ├── requestImage.routes.js
 │   │   ├── review.routes.js
 │   │   └── service.routes.js
+│   ├── scripts/
+│   │   └── seedDemo.js
 │   ├── services/
 │   │   ├── ai.service.js
-│   │   └── notification.service.js
+│   │   ├── notification.service.js
+│   │   └── paymentGateway.service.js
+│   ├── utils/
+│   │   ├── priceEstimator.js
+│   │   ├── scheduling.js
+│   │   ├── smartMatching.js
+│   │   └── userProfile.js
 │   ├── tests/
 │   │   ├── avatarsServicesAdmin.test.js
+│   │   ├── cancellationReschedule.test.js
+│   │   ├── dualRoleAndClerk.test.js
+│   │   ├── inquiryPriceEstimator.test.js
 │   │   ├── integration.test.js
+│   │   ├── paymentGateway.test.js
 │   │   ├── r2.requestImages.test.js
 │   │   ├── r3.agreements.test.js
 │   │   ├── r4.directInquiry.test.js
 │   │   ├── r5.generalRequest.test.js
-│   │   └── r6.aiAssistance.test.js
+│   │   ├── r6.aiAssistance.test.js
+│   │   ├── registrationBasicInfo.test.js
+│   │   ├── reservationPayments.test.js
+│   │   ├── schedulingAvailability.test.js
+│   │   └── smartAiRecommendations.test.js
 │   ├── uploads/
 │   │   ├── avatars/
+│   │   ├── payment-receipts/
 │   │   ├── portfolios/
 │   │   ├── request-images/
 │   │   │   ├── originals/
@@ -71,7 +91,29 @@ HugaTiera/
 │   │   ├── 001_unified_requests_and_agreements.sql
 │   │   ├── 001_unified_requests_and_agreements_rollback.sql
 │   │   ├── 002_avatars_service_images.sql
-│   │   └── 002_avatars_service_images_rollback.sql
+│   │   ├── 002_avatars_service_images_rollback.sql
+│   │   ├── 003_user_basic_info.sql
+│   │   ├── 003_user_basic_info_rollback.sql
+│   │   ├── 004_inquiry_price_estimator.sql
+│   │   ├── 004_inquiry_price_estimator_rollback.sql
+│   │   ├── 005_scheduling_availability_capacity.sql
+│   │   ├── 005_scheduling_availability_capacity_rollback.sql
+│   │   ├── 006_itemized_pricing_settings.sql
+│   │   ├── 006_itemized_pricing_settings_rollback.sql
+│   │   ├── 007_reservation_payment_workflow.sql
+│   │   ├── 007_reservation_payment_workflow_rollback.sql
+│   │   ├── 008_transaction_completion_agreement.sql
+│   │   ├── 008_transaction_completion_agreement_rollback.sql
+│   │   ├── 009_event_cancellation_and_reschedule.sql
+│   │   ├── 009_event_cancellation_and_reschedule_rollback.sql
+│   │   ├── 010_inquiry_category_specs.sql
+│   │   ├── 010_inquiry_category_specs_rollback.sql
+│   │   ├── 011_crew_capacity_workers.sql
+│   │   ├── 011_crew_capacity_workers_rollback.sql
+│   │   ├── 012_dual_role_and_assigned_clerk.sql
+│   │   ├── 012_dual_role_and_assigned_clerk_rollback.sql
+│   │   ├── 013_payment_gateway_sessions.sql
+│   │   └── 013_payment_gateway_sessions_rollback.sql
 │   ├── schema/
 │   │   └── hugatiera_schema.sql
 │   └── README.md
@@ -89,16 +131,18 @@ HugaTiera/
 │   │   └── icons.svg
 │   ├── src/
 │   │   ├── assets/
-│   │   │   ├── hero.png
-│   │   │   ├── react.svg
-│   │   │   └── vite.svg
 │   │   ├── components/
 │   │   │   ├── AiAssistantWidget.jsx
 │   │   │   ├── AppSidebar.jsx
+│   │   │   ├── ClerkDashboard.jsx
+│   │   │   ├── GardenerClerksPanel.jsx
+│   │   │   ├── GardenerScheduleCalendar.jsx
 │   │   │   └── ProtectedRoute.jsx
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx
 │   │   │   └── auth-context.js
+│   │   ├── hooks/
+│   │   │   └── useAuth.js
 │   │   ├── pages/
 │   │   │   ├── AssistantPage.jsx
 │   │   │   ├── AuthPage.jsx
@@ -115,10 +159,13 @@ HugaTiera/
 │   │   │   ├── api.js
 │   │   │   ├── auth.js
 │   │   │   ├── bookings.js
+│   │   │   ├── categorySpecs.js
+│   │   │   ├── clerk.js
 │   │   │   ├── communication.js
 │   │   │   ├── inquiries.js
 │   │   │   ├── profiles.js
 │   │   │   ├── requestImages.js
+│   │   │   ├── reviews.js
 │   │   │   └── services.js
 │   │   ├── App.css
 │   │   ├── App.jsx
@@ -148,5 +195,5 @@ HugaTiera/
 ```
 
 ## Notes
-- `node_modules/`, `frontend/dist/`, `backend/.env`, `frontend/.env`, `backend/uploads/portfolios/*`, `backend/uploads/request-images/*`, and `database/backups/*.sql` are excluded by `.gitignore`.
+- `node_modules/`, `frontend/dist/`, `backend/.env`, `frontend/.env`, `backend/uploads/*`, and `database/backups/*.sql` are excluded by `.gitignore`.
 - Every path documented in the tree above exists in the repository.

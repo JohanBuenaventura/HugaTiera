@@ -193,6 +193,14 @@ describe('Step 3 (Migration 013): Third-Party Payment Gateway (PayMongo + Sandbo
     })
     assert.equal(tooLow.status, 400)
 
+    const overpayment = await api(`/bookings/${bookingId}/payments/checkout`, {
+      method: 'POST',
+      headers: { Cookie: clientCookie },
+      body: { paymentType: 'full', paymentMethod: 'gcash', amount: 99999 },
+    })
+    assert.equal(overpayment.status, 400)
+    assert.equal(overpayment.data.code, 'OVERPAYMENT_EXCEEDS_BALANCE')
+
     const gardenerTry = await api(`/bookings/${bookingId}/payments/checkout`, {
       method: 'POST',
       headers: { Cookie: gardenerCookie },
@@ -300,5 +308,14 @@ describe('Step 3 (Migration 013): Third-Party Payment Gateway (PayMongo + Sandbo
     assert.equal(balConfirm.data.booking.transaction_status, 'pending_closure')
     assert.equal(Number(balConfirm.data.booking.amount_paid), 2000)
     assert.equal(Number(balConfirm.data.booking.remaining_balance), 0)
+
+    // 5. Verify GET /bookings/:id returns gateway_provider & gateway_status on payments
+    const bookingDetail = await api(`/bookings/${bookingId}`, {
+      headers: { Cookie: clientCookie },
+    })
+    assert.equal(bookingDetail.status, 200)
+    assert.ok(bookingDetail.data.payments.length >= 2)
+    assert.equal(bookingDetail.data.payments[0].gateway_provider, 'sandbox_demo')
+    assert.equal(bookingDetail.data.payments[0].gateway_status, 'paid')
   })
 })

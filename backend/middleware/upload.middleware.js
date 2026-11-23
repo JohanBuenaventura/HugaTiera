@@ -291,6 +291,18 @@ function processAndSavePaymentReceipt(buffer, userId) {
   })
 }
 
+function processAndSavePortfolioImage(buffer, userId) {
+  return processAndSaveImageToDir({
+    buffer,
+    baseDirectory: uploadDirectory,
+    prefix: 'portfolio',
+    ownerId: userId,
+    maxDimension: 1920,
+    missingMessage: 'A portfolio image is required.',
+    tooLargeMessage: 'Portfolio image must be 5 MB or smaller.',
+  })
+}
+
 async function removeFileIfExists(baseDirectory, relativePath) {
   if (!relativePath) return
   try {
@@ -308,6 +320,7 @@ module.exports = {
   portfolioUpload,
   processAndSaveAvatar,
   processAndSavePaymentReceipt,
+  processAndSavePortfolioImage,
   processAndSaveRequestImage,
   processAndSaveServiceImage,
   removeFileIfExists,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CalendarDays, CheckCircle2, Clock, CreditCard, ExternalLink, FileCheck2, Leaf, Lock, MapPin, ShieldAlert, ShieldCheck, Upload } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CalendarDays, CheckCircle2, Clock, CreditCard, ExternalLink, FileCheck2, Leaf, Lock, MapPin, Printer, ShieldAlert, ShieldCheck, Upload } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -310,6 +310,8 @@ function BookingDetails({ id }) {
   const [paymentChannel, setPaymentChannel] = useState('online')
   const [gatewayConfig, setGatewayConfig] = useState(null)
   const [activeCheckoutModal, setActiveCheckoutModal] = useState(null)
+  const [rejectPaymentTarget, setRejectPaymentTarget] = useState(null)
+  const [rejectPaymentReason, setRejectPaymentReason] = useState('')
   const [processingGateway, setProcessingGateway] = useState(false)
   const [submittingPayment, setSubmittingPayment] = useState(false)
   const [verifyingPaymentId, setVerifyingPaymentId] = useState(null)
@@ -341,6 +343,21 @@ function BookingDetails({ id }) {
     reviewsApi.booking(id).then((result) => setReview(result.review)).catch(() => {})
     bookingsApi.paymentGatewayConfig().then((res) => setGatewayConfig(res.gateway)).catch(() => {})
   }, [id, load])
+
+  useEffect(() => {
+    if (!activeCheckoutModal && !rejectPaymentTarget) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        if (!processingGateway) setActiveCheckoutModal(null)
+        if (!verifyingPaymentId) {
+          setRejectPaymentTarget(null)
+          setRejectPaymentReason('')
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [activeCheckoutModal, processingGateway, rejectPaymentTarget, verifyingPaymentId])
 
   useEffect(() => {
     const gwPaymentId = Number(searchParams.get('gatewayPaymentId'))
@@ -497,7 +514,11 @@ function BookingDetails({ id }) {
         notes: paymentForm.notes,
       })
       if (res.checkout?.checkoutUrl && !res.checkout?.demoMode) {
-        window.location.href = res.checkout.checkoutUrl
+        const safeUrl = String(res.checkout.checkoutUrl)
+        if (!safeUrl.startsWith('https://')) {
+          throw new Error('Invalid payment checkout redirect URL received from gateway.')
+        }
+        window.location.href = safeUrl
         return
       }
       setActiveCheckoutModal({
@@ -543,15 +564,18 @@ function BookingDetails({ id }) {
     }
   }
 
-  async function handleVerifyPayment(paymentId, decision) {
-    let rejectionReason = ''
-    if (decision === 'rejected') {
-      rejectionReason = window.prompt('Enter reason for rejecting this payment proof:', '') || ''
-      if (!rejectionReason.trim()) return
+  async function handleVerifyPayment(paymentId, decision, reasonOverride = '') {
+    if (decision === 'rejected' && !reasonOverride.trim()) {
+      setRejectPaymentTarget(payments.find((p) => p.id === paymentId) || { id: paymentId })
+      setRejectPaymentReason('')
+      return
     }
+    const rejectionReason = decision === 'rejected' ? reasonOverride.trim() : ''
     setVerifyingPaymentId(paymentId); setError(''); setStatusMessage('')
     try {
       const res = await bookingsApi.verifyPayment(id, paymentId, { decision, rejectionReason })
+      setRejectPaymentTarget(null)
+      setRejectPaymentReason('')
       setStatusMessage(
         decision === 'verified'
           ? (res?.booking?.booking_stage === 'booked'
@@ -610,8 +634,26 @@ function BookingDetails({ id }) {
     }
   }
 
-  if (!booking) return <section className="container booking-content">{error ? <div className="form-error">{error}</div> : <p>Loading booking...</p>}</section>
-  const gardener = user.role === 'gardener'
+  if (!booking) {
+    return (
+      <section className="container booking-content">
+        {error ? (
+          <div className="form-error">{error}</div>
+        ) : (
+          <div className="dashboard-panel skeleton-stack" aria-busy="true">
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+          </div>
+        )}
+      </section>
+    )
+  }
+  const gardener = Number(booking.gardener_id) === Number(user.id)
+  const roleModeMismatch = Boolean(
+    user.isDualRole && ((gardener && user.role !== 'gardener') || (!gardener && user.role !== 'client')),
+  )
   const agreementSummary = buildBookingAgreementSummary(booking, user)
   const isBookedPaid = booking.booking_stage === 'booked'
   const isWorkCompleted = booking.status === 'completed'
@@ -784,7 +826,18 @@ function BookingDetails({ id }) {
           </Link>
         )}
         <button className="table-action" type="button" onClick={openConversation}>Open conversation</button>
+        <button className="table-action no-print" type="button" onClick={() => window.print()}>
+          <Printer size={14} style={{ verticalAlign: 'text-bottom', marginRight: '4px' }} /> Print / Save PDF
+        </button>
       </div>
+      {roleModeMismatch && (
+        <div className="booking-next-banner tone-warning no-print" role="status">
+          <strong>Viewing in opposite workspace mode</strong>
+          <p>
+            You are the <strong>{gardener ? 'Gardener' : 'Client'}</strong> on this booking, while your sidebar is currently set to <strong>{user.role === 'gardener' ? 'Gardener' : 'Client'} Mode</strong>. Switch mode in the sidebar before submitting payments or updating service status.
+          </p>
+        </div>
+      )}
       {booking.status !== 'cancelled' && booking.status !== 'declined' && (
         <ol className="booking-stepper" aria-label="Booking progress">
           {workflowSteps.map((step) => (
@@ -976,7 +1029,13 @@ function BookingDetails({ id }) {
           )}
 
           {activeCheckoutModal && (
-            <div className="gateway-demo-backdrop" role="dialog" aria-modal="true" aria-labelledby="demo-checkout-title">
+            <div
+              className="gateway-demo-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="demo-checkout-title"
+              onClick={(e) => { if (e.target === e.currentTarget && !processingGateway) setActiveCheckoutModal(null) }}
+            >
               <div className="gateway-demo-modal">
                 <p className="eyebrow" style={{ marginBottom: '4px' }}>HugaTiera Third-Party Checkout Simulator</p>
                 <h2 id="demo-checkout-title">Authorize Online Payment</h2>
@@ -1097,6 +1156,66 @@ function BookingDetails({ id }) {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {rejectPaymentTarget && (
+            <div
+              className="gateway-demo-backdrop no-print"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="reject-payment-title"
+              onClick={(e) => {
+                if (e.target === e.currentTarget && !verifyingPaymentId) {
+                  setRejectPaymentTarget(null)
+                  setRejectPaymentReason('')
+                }
+              }}
+            >
+              <div className="gateway-demo-modal">
+                <p className="eyebrow" style={{ marginBottom: '4px' }}>Payment verification</p>
+                <h2 id="reject-payment-title">Reject payment proof?</h2>
+                <p className="field-note">
+                  Provide a clear reason for rejecting {rejectPaymentTarget.transaction_code || `Payment #${rejectPaymentTarget.id}`}. The client will be notified so they can re-submit valid proof.
+                </p>
+                <form
+                  className="profile-form"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    if (!rejectPaymentReason.trim()) return
+                    handleVerifyPayment(rejectPaymentTarget.id, 'rejected', rejectPaymentReason)
+                  }}
+                >
+                  <label>
+                    Rejection reason
+                    <textarea
+                      required
+                      rows="3"
+                      maxLength="500"
+                      placeholder="e.g., Reference number does not match our GCash statement or receipt photo is unreadable."
+                      value={rejectPaymentReason}
+                      onChange={(e) => setRejectPaymentReason(e.target.value)}
+                    />
+                  </label>
+                  <div className="gateway-demo-actions">
+                    <button
+                      type="submit"
+                      className="button button-danger"
+                      disabled={verifyingPaymentId === rejectPaymentTarget.id || !rejectPaymentReason.trim()}
+                    >
+                      {verifyingPaymentId === rejectPaymentTarget.id ? 'Rejecting...' : 'Confirm rejection'}
+                    </button>
+                    <button
+                      type="button"
+                      className="table-action"
+                      disabled={verifyingPaymentId === rejectPaymentTarget.id}
+                      onClick={() => { setRejectPaymentTarget(null); setRejectPaymentReason('') }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
         </div>
