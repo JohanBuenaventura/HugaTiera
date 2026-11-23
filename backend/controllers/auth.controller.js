@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/database')
+const { createNotification } = require('../services/notification.service')
 const {
   normalizeText,
   sanitizeUser,
@@ -9,7 +10,7 @@ const {
   validateNameParts,
 } = require('../utils/userProfile')
 
-const publicRoles = new Set(['client', 'gardener', 'both'])
+const publicRoles = new Set(['client', 'gardener', 'both', 'clerk'])
 
 function validateCredentials({ email, password }) {
   const normalizedEmail = normalizeText(email).toLowerCase()
@@ -89,7 +90,7 @@ async function register(req, res, next) {
     return res.status(400).json({ message: 'Passwords do not match.' })
   }
   if (!publicRoles.has(role)) {
-    return res.status(400).json({ message: 'Choose a client, gardener, or dual (client & gardener) account.' })
+    return res.status(400).json({ message: 'Choose a client, gardener, dual (client & gardener), or clerk account.' })
   }
 
   const isDual = role === 'both'
@@ -99,6 +100,8 @@ async function register(req, res, next) {
 
   let clientDetails = null
   let gardenerDetails = null
+  let assignedClerkEmail = null
+  let assignedClerkNotes = null
 
   if (canActAsClient) {
     const address = normalizeText(req.body.address)
@@ -134,6 +137,23 @@ async function register(req, res, next) {
     if (description && description.length > 2000) {
       return res.status(400).json({ message: 'Professional description must be 2,000 characters or fewer.' })
     }
+
+    const rawClerkEmail = normalizeText(req.body.assignedClerkEmail).toLowerCase()
+    const rawClerkNotes = normalizeText(req.body.assignedClerkNotes) || null
+    if (rawClerkEmail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawClerkEmail) || rawClerkEmail.length > 255) {
+        return res.status(400).json({ message: 'Please enter a valid email address for the clerk you want to assign.' })
+      }
+      if (rawClerkEmail === email) {
+        return res.status(400).json({ message: 'You cannot assign your own email as your clerk.' })
+      }
+      if (rawClerkNotes && rawClerkNotes.length > 255) {
+        return res.status(400).json({ message: 'Clerk assignment note must be 255 characters or fewer.' })
+      }
+      assignedClerkEmail = rawClerkEmail
+      assignedClerkNotes = rawClerkNotes
+    }
+
     gardenerDetails = { businessName, serviceArea, years, description }
   }
 
@@ -184,6 +204,35 @@ async function register(req, res, next) {
           gardenerDetails.years,
         ],
       )
+
+      if (assignedClerkEmail) {
+        const [clerkRows] = await connection.execute(
+          'SELECT id, role, is_active FROM users WHERE email = ? LIMIT 1',
+          [assignedClerkEmail],
+        )
+        const targetClerk = clerkRows[0]
+        if (!targetClerk || !targetClerk.is_active || targetClerk.role !== 'clerk') {
+          await connection.rollback()
+          return res.status(400).json({
+            code: 'INVALID_CLERK_EMAIL',
+            message: 'The assigned clerk email must belong to an active Clerk account. Ask your clerk to sign up as a Clerk first, or leave this blank and create a clerk later in Dashboard → My Clerks.',
+          })
+        }
+        await connection.execute(
+          `INSERT INTO clerk_gardener_assignments (clerk_id, gardener_id, assigned_by, notes)
+           VALUES (?, ?, ?, ?)`,
+          [targetClerk.id, result.insertId, result.insertId, assignedClerkNotes],
+        )
+        await createNotification({
+          userId: targetClerk.id,
+          type: 'clerk_assignment',
+          title: 'Assigned to a new gardener account',
+          message: `${names.firstName} ${names.lastName} assigned you as their Clerk during sign-up to help manage schedules, services, and payment verifications.`,
+          entityType: 'gardener_profile',
+          entityId: result.insertId,
+          connection,
+        })
+      }
     }
 
     await connection.commit()

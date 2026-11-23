@@ -190,21 +190,92 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
     }
   })
 
-  it('rejects public registration with role="clerk"', async () => {
-    const res = await api('/auth/register', {
+  it('blocks public administrator registration, allows public Clerk sign-up (0 gardeners initially), and allows a Gardener to assign a Clerk during sign-up', async () => {
+    const stamp = Date.now()
+    // 1. Public administrator registration remains strictly blocked
+    const adminAttempt = await api('/auth/register', {
       method: 'POST',
       body: {
-        role: 'clerk',
+        role: 'administrator',
         firstName: 'Sneaky',
-        lastName: 'Clerk',
+        lastName: 'Admin',
         dateOfBirth: '1995-01-01',
         phone: '09171112222',
-        email: `sneaky_clerk_${Date.now()}@test.local`,
+        email: `sneaky_admin_${stamp}@test.local`,
         password: 'Password123!',
         confirmPassword: 'Password123!',
       },
     })
-    assert.equal(res.status, 400)
+    assert.equal(adminAttempt.status, 400)
+
+    // 2. Public Clerk sign-up succeeds with zero assigned gardeners initially
+    const publicClerkEmail = `public_clerk_${stamp}@test.local`
+    const clerkReg = await api('/auth/register', {
+      method: 'POST',
+      body: {
+        role: 'clerk',
+        firstName: 'Public',
+        lastName: 'Clerk',
+        dateOfBirth: '1996-03-12',
+        phone: '09171113333',
+        email: publicClerkEmail,
+        password: 'Password123!',
+        confirmPassword: 'Password123!',
+      },
+    })
+    assert.equal(clerkReg.status, 201, `Expected 201 got ${clerkReg.status}: ${JSON.stringify(clerkReg.data)}`)
+    assert.equal(clerkReg.data.user.role, 'clerk')
+    createdUserIds.push(clerkReg.data.user.id)
+
+    const emptyWs = await api('/clerk/workspace', { headers: { Cookie: clerkReg.cookie } })
+    assert.equal(emptyWs.status, 200)
+    assert.equal(emptyWs.data.gardeners.length, 0)
+
+    // 3. Gardener sign-up with a non-clerk assignedClerkEmail fails with 400 INVALID_CLERK_EMAIL
+    const [clientRows] = await pool.query('SELECT email FROM users WHERE id = ?', [singleClientId])
+    const badAssignReg = await api('/auth/register', {
+      method: 'POST',
+      body: {
+        role: 'gardener',
+        firstName: 'BadAssign',
+        lastName: 'Gardener',
+        dateOfBirth: '1992-08-20',
+        phone: '09171114444',
+        serviceArea: 'Zamboanga City',
+        assignedClerkEmail: clientRows[0].email,
+        email: `bad_assign_g_${stamp}@test.local`,
+        password: 'Password123!',
+        confirmPassword: 'Password123!',
+      },
+    })
+    assert.equal(badAssignReg.status, 400)
+    assert.equal(badAssignReg.data.code, 'INVALID_CLERK_EMAIL')
+
+    // 4. Gardener sign-up with the valid Clerk email atomically assigns that clerk
+    const goodGardenerReg = await api('/auth/register', {
+      method: 'POST',
+      body: {
+        role: 'gardener',
+        firstName: 'Linked',
+        lastName: 'Gardener',
+        dateOfBirth: '1991-09-14',
+        phone: '09171115555',
+        businessName: 'Linked Gardens',
+        serviceArea: 'Tetuan, Zamboanga City',
+        assignedClerkEmail: publicClerkEmail,
+        assignedClerkNotes: 'Assigned during sign-up',
+        email: `linked_gardener_${stamp}@test.local`,
+        password: 'Password123!',
+        confirmPassword: 'Password123!',
+      },
+    })
+    assert.equal(goodGardenerReg.status, 201, `Expected 201 got ${goodGardenerReg.status}: ${JSON.stringify(goodGardenerReg.data)}`)
+    createdUserIds.push(goodGardenerReg.data.user.id)
+
+    const linkedWs = await api('/clerk/workspace', { headers: { Cookie: clerkReg.cookie } })
+    assert.equal(linkedWs.status, 200)
+    assert.equal(linkedWs.data.gardeners.length, 1)
+    assert.equal(linkedWs.data.gardeners[0].id, goodGardenerReg.data.user.id)
   })
 
   it('registers a dual-role ("both") user, switches roles, keeps approved service public, and prevents self-dealing', async () => {

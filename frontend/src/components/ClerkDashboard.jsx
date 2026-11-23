@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import AppSidebar from './AppSidebar'
+import { useAuth } from '../hooks/useAuth'
 import { clerkApi } from '../services/clerk'
 import { servicesApi } from '../services/services'
 import {
@@ -39,6 +40,7 @@ const emptyNewService = {
 }
 
 export default function ClerkDashboard({ activeTab = 'overview' }) {
+  const { user } = useAuth()
   const [workspace, setWorkspace] = useState({ gardeners: [], services: [], bookings: [], pendingPayments: [] })
   const [categories, setCategories] = useState([])
   const [selectedGardenerId, setSelectedGardenerId] = useState(null)
@@ -356,9 +358,9 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
         ) : workspace.gardeners.length === 0 ? (
           <div className="dashboard-panel">
             <p className="eyebrow">No gardeners assigned yet</p>
-            <h2>Waiting for administrator assignment</h2>
+            <h2>Waiting for a gardener or administrator assignment</h2>
             <p className="form-note">
-              Your account is configured as an Assigned Clerk, but an Administrator has not linked any gardener accounts to you yet. Once assigned in Admin → Accounts, your gardeners&apos; schedules, payments, and services will appear here automatically.
+              Your Clerk account (<strong>{user?.email}</strong>) is ready! Share this email with a Gardener so they can link you during sign-up or under <strong>Gardener Dashboard → My Clerks → Link Existing Clerk</strong>, or ask an Administrator to assign you under <strong>Admin → Accounts</strong>. Once linked, their schedules, payments, and services will appear here automatically.
             </p>
           </div>
         ) : (

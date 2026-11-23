@@ -162,7 +162,7 @@ export function RegisterPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const roleParam = params.get('role')
-  const initialRole = roleParam === 'gardener' || roleParam === 'both' ? roleParam : 'client'
+  const initialRole = ['gardener', 'both', 'clerk'].includes(roleParam) ? roleParam : 'client'
   const [form, setForm] = useState({
     role: initialRole,
     firstName: '',
@@ -176,6 +176,9 @@ export function RegisterPage() {
     serviceArea: 'Zamboanga City',
     yearsOfExperience: '',
     description: '',
+    assignClerkNow: false,
+    assignedClerkEmail: '',
+    assignedClerkNotes: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -241,6 +244,12 @@ export function RegisterPage() {
           serviceArea: form.serviceArea,
           yearsOfExperience: form.yearsOfExperience === '' ? null : Number(form.yearsOfExperience),
           description: form.description,
+          ...(form.assignClerkNow && form.assignedClerkEmail.trim()
+            ? {
+              assignedClerkEmail: form.assignedClerkEmail.trim(),
+              assignedClerkNotes: form.assignedClerkNotes.trim(),
+            }
+            : {}),
         }
         : {}),
     }
@@ -268,7 +277,7 @@ export function RegisterPage() {
 
         <fieldset>
           <legend>I want to...</legend>
-          <div className="role-options role-options-3">
+          <div className="role-options role-options-4">
             <label className={form.role === 'client' ? 'selected' : ''}>
               <input type="radio" name="role" value="client" checked={form.role === 'client'} onChange={updateField('role')} />
               <span className="role-option-copy">
@@ -280,20 +289,32 @@ export function RegisterPage() {
               <input type="radio" name="role" value="gardener" checked={form.role === 'gardener'} onChange={updateField('role')} />
               <span className="role-option-copy">
                 <strong>Offer services</strong>
-                <small>Service provider</small>
+                <small>Gardener (can assign a clerk)</small>
               </span>
             </label>
             <label className={form.role === 'both' ? 'selected' : ''}>
               <input type="radio" name="role" value="both" checked={form.role === 'both'} onChange={updateField('role')} />
               <span className="role-option-copy">
                 <strong>Both (Client &amp; Provider)</strong>
-                <small>Hire &amp; offer services</small>
+                <small>Hire, offer &amp; assign a clerk</small>
+              </span>
+            </label>
+            <label className={form.role === 'clerk' ? 'selected' : ''}>
+              <input type="radio" name="role" value="clerk" checked={form.role === 'clerk'} onChange={updateField('role')} />
+              <span className="role-option-copy">
+                <strong>Work as a Clerk</strong>
+                <small>Manage assigned gardeners</small>
               </span>
             </label>
           </div>
           {form.role === 'both' && (
             <p className="field-note" style={{ marginTop: '6px' }}>
               Switch anytime between Client Mode and Gardener / Service Provider Mode with one click inside your dashboard.
+            </p>
+          )}
+          {form.role === 'clerk' && (
+            <p className="field-note" style={{ marginTop: '6px' }}>
+              Sign up as a Clerk to manage schedules, crew capacity, services, and payment verifications for gardeners who assign you to their account.
             </p>
           )}
         </fieldset>
@@ -465,6 +486,55 @@ export function RegisterPage() {
                 onChange={updateField('description')}
               />
             </label>
+
+            <div className="signup-clerk-box">
+              <label className="signup-clerk-toggle">
+                <input
+                  type="checkbox"
+                  checked={form.assignClerkNow}
+                  onChange={(e) => setForm((current) => ({ ...current, assignClerkNow: e.target.checked }))}
+                />
+                <span>
+                  <strong>Assign an existing Clerk to manage my account (Optional)</strong>
+                  <small>You can link a clerk right now or create/assign clerks anytime later in Dashboard → My Clerks.</small>
+                </span>
+              </label>
+              {form.assignClerkNow && (
+                <div className="form-row" style={{ marginTop: '10px' }}>
+                  <label>
+                    Clerk email address
+                    <input
+                      name="assignedClerkEmail"
+                      type="email"
+                      required
+                      maxLength="255"
+                      placeholder="clerk@example.com"
+                      value={form.assignedClerkEmail}
+                      onChange={updateField('assignedClerkEmail')}
+                    />
+                  </label>
+                  <label>
+                    Clerk role note <span className="label-note">(Optional)</span>
+                    <input
+                      name="assignedClerkNotes"
+                      maxLength="255"
+                      placeholder="e.g., Handles schedules & payment checks"
+                      value={form.assignedClerkNotes}
+                      onChange={updateField('assignedClerkNotes')}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {form.role === 'clerk' && (
+          <div className="auth-form-section">
+            <p className="auth-section-title">Clerk account setup</p>
+            <p className="field-note" style={{ margin: 0 }}>
+              Once your Clerk account is created, share your email address with a Gardener (so they can link you during sign-up or under <strong>Gardener Dashboard → My Clerks</strong>) or with an Administrator. Until assigned, you will have read/write access to zero gardener accounts.
+            </p>
           </div>
         )}
 
