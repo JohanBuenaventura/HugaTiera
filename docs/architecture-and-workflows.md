@@ -6,38 +6,42 @@ This document describes the implemented architecture, role responsibilities, end
 
 ## 1. System Architecture
 
-HugaTiera uses a three-tier client–server architecture separating the **React + Vite Frontend**, the **Node.js + Express REST API Backend**, and the **MySQL (`InnoDB`) Relational Database**, with backend-mediated integration to the **Google Gemini API** and local file storage for sanitized images.
+HugaTiera uses a three-tier client–server architecture separating the **React + Vite Frontend**, the **Node.js + Express REST API Backend**, and the **MySQL (`InnoDB`) Relational Database** (`25` tables, `59` foreign keys), with backend-mediated integration to the **Google Gemini API**, **PayMongo Checkout / Sandbox Gateway**, and local file storage for `sharp`-sanitized images.
 
 ```mermaid
 flowchart TB
-  subgraph ClientTier["Frontend Tier (React 19 + Vite 8 — Port 5173)"]
-    UI["Public & Protected Pages<br/>(Landing, Marketplace, Dashboards, Inquiries, Bookings, Messages, AI Assistant)"]
-    AuthCtx["AuthContext & ProtectedRoute<br/>(Session state, 401 vs 503 offline detection)"]
-    AxiosClient["Axios API Services (withCredentials: true)<br/>(auth, profiles, services, inquiries, agreements, bookings, requestImages, ai, communication, admin)"]
-    UI --> AuthCtx --> AxiosClient
+  subgraph ClientTier["Frontend Tier (React 19 + Vite 8 - Port 5173)"]
+    UI["Public & Protected Pages (Landing, Marketplace, Dashboards, Clerk Desk, Calendar, Inquiries, Bookings, Messages, Notifications, AI Assistant)"]
+    AuthCtx["AuthContext & ProtectedRoute (Session state, Dual-Role switching, 401 vs 503 offline detection)"]
+    ApiClients["Fetch API Services (credentials: include) (auth, profiles, services, inquiries, agreements, bookings, clerk, requestImages, ai, communication, reviews)"]
+    UI --> AuthCtx --> ApiClients
   end
 
-  subgraph ServerTier["Backend Tier (Node.js + Express 5 — Port 5000)"]
-    CORS["CORS + JSON Parser + Cookie Parser<br/>(HttpOnly JWT Cookie: hugatiera_token)"]
-    AuthMW["Auth & RBAC Middleware<br/>(requireAuth verifies users.is_active=TRUE in MySQL, requireRole)"]
-    UploadMW["Upload Middleware (multer + sharp)<br/>(5 MB limit, magic-byte check, 1920x1920 fit, EXIF/GPS strip)"]
-    Controllers["REST Controllers (12 Modules)<br/>(auth, profile, service, portfolio, inquiry, agreement, booking, review, conversation, notification, requestImage, ai, admin)"]
-    AIService["AI Service Layer (services/ai.service.js)<br/>(Primary: gemini-3.8-flash | Fallback: gemini-3.5-flash-lite | Single-slot FOR UPDATE rate limit)"]
-    AxiosClient <-->|"HTTP / JSON + Multipart"| CORS
+  subgraph ServerTier["Backend Tier (Node.js + Express 5 - Port 5000)"]
+    CORS["CORS + Security Headers + Rate Limiters + Cookie Parser (HttpOnly JWT Cookie: auth_token)"]
+    AuthMW["Auth & RBAC Middleware (requireAuth verifies users.is_active=TRUE, requireRole)"]
+    UploadMW["Upload Middleware (multer + sharp) (5 MB limit, magic-byte check, resize, EXIF/GPS strip)"]
+    Controllers["REST Controllers (14 Modules: auth, profile, service, portfolio, inquiry, agreement, booking, clerk, review, conversation, notification, requestImage, ai, admin)"]
+    AIService["AI & Matching Layer (ai.service.js + smartMatching.js) (Primary: gemini-3.8-flash | Fallback: gemini-3.5-flash-lite | FOR UPDATE rate limit)"]
+    PayService["Payment Gateway Layer (paymentGateway.service.js) (PayMongo Checkout API + Sandbox/Demo Mode)"]
+    ApiClients <-->|"HTTP / JSON + Multipart"| CORS
     CORS --> AuthMW --> Controllers
     Controllers --> UploadMW
     Controllers --> AIService
+    Controllers --> PayService
   end
 
   subgraph DataTier["Persistence & External Tier"]
-    MySQL[("MySQL / MariaDB (InnoDB)<br/>hugatiera_db (19 Tables, 46 FKs)")]
-    FileStore[("Local File Storage (backend/uploads/)<br/>portfolios/ & request-images/{originals,generated}/")]
-    GeminiAPI["Google Gemini REST API<br/>(generateContent — Text & Multimodal Photo Analysis)"]
+    MySQL[("MySQL / MariaDB (InnoDB) hugatiera_db (25 Tables, 59 FKs)")]
+    FileStore[("Local File Storage (backend/uploads/) avatars/, services/, portfolios/, payment-receipts/, request-images/")]
+    GeminiAPI["Google Gemini REST API (Text & Multimodal Photo Analysis)"]
+    PayMongoAPI["PayMongo Checkout API (or Built-in Sandbox/Demo)"]
     Controllers <-->|"mysql2/promise Pool & Transactions"| MySQL
     UploadMW --> FileStore
     Controllers --> FileStore
     AIService <-->|"HTTPS (Backend-Only API Key)"| GeminiAPI
     AIService <-->|"ai_usage_log Quota & Audit"| MySQL
+    PayService <-->|"HTTPS Checkout & Verification"| PayMongoAPI
   end
 ```
 
@@ -51,34 +55,34 @@ flowchart TB
    - Wraps multi-table workflow mutations (inquiry creation with draft image attachment, quotation submission/acceptance, mutual agreement versioning/approval, booking confirmation, and review creation) in `mysql2/promise` transactions (`BEGIN` / `COMMIT` / `ROLLBACK`) with row-level `SELECT ... FOR UPDATE` locks where concurrency protection is required.
    - Processes uploaded garden photos with `sharp` to validate image streams, apply EXIF orientation, resize within `1920×1920`, and strip all EXIF/GPS/XMP/IPTC metadata before writing to disk.
 3. **Database (`hugatiera_db`):**
-   - Enforces relational integrity via `19` `InnoDB` tables, `46` foreign keys, `CHECK` constraints, and stored generated columns (`quotations.active_flag` and `agreements.active_key`) that guarantee at the database level at most one active offer per provider per inquiry and at most one active agreement per inquiry.
+   - Enforces relational integrity via `25` `InnoDB` tables, `59` foreign keys, `CHECK` constraints, and stored generated columns (`quotations.active_flag` and `agreements.active_key`) that guarantee at the database level at most one active offer per provider per inquiry and at most one active agreement per inquiry.
 
 ---
 
 ## 2. User Roles and Capabilities
 
-### 2.1 Client (`role = 'client'`)
-- **Discovery:** Browse and filter approved gardening services by keyword, category, service area, and sort order (`/services`), inspect service details (`/services/:serviceId`), and view public gardener profiles, portfolios, and verified reviews (`/gardeners/:gardenerId`).
-- **AI Planning & Requirement Assistance:** Use the standalone Garden Planning Assistant (`/assistant`) or the embedded AI helpers inside `/inquiries/new` to structure requirements (`POST /api/ai/requirements`) and analyze uploaded garden photos (`POST /api/ai/photo-analysis`), then review and edit all AI suggestions before submission.
-- **Case 1 — General Service Request:** Submit an open request (`request_type = 'general'`) with up to 5 EXIF-stripped garden photos and an optional validity period (`7`, `14`, or `30` days), compare offers from multiple approved gardeners side by side (including ratings, completed booking counts, experience, and portfolio previews), and accept or decline offers.
-- **Case 2 — Direct Service Provider Inquiry:** Submit a direct inquiry (`request_type = 'direct'`) to a specific approved gardener or service, review the provider's feasibility response (`offer`, `feasible`, `modifications`, `cannot_do`), and accept or decline.
-- **Priced-Service Direct Agreement:** Initiate a direct service request + mutual agreement proposal (`POST /api/agreements/direct-service`) from any active service listing with an indicative price.
-- **Mutual Agreement & Booking Lifecycle:** Propose, edit (creating version $N+1$), approve, or cancel mutual agreements; track confirmed bookings (`accepted` → `in_progress` → `completed`), view the read-only **Mutual Agreement Summary** on booking details, and submit a 1–5 star review once a booking is marked `completed`.
-- **Dashboard & Settings (`ISS-05`):** View primary workflow activity (requests, offers, agreements, bookings) on the `Overview` tab and manage personal/address details in the dedicated `Profile & Settings` tab.
+### 2.1 Client (`role = 'client'` or Dual-Role `can_act_as_client = TRUE`)
+- **Registration & Basic Info:** Registers with optional middle name, required 18+ birthday, mobile number (10–15 digits), and Zamboanga City address/city (`users.middle_name`, `users.date_of_birth`). May also register as `both` or enable Gardener mode later with 1-click sidebar switching.
+- **Discovery & Smart AI Matching:** Browse and filter approved gardening services (`/services`), view recommended nearby services and recent verified reviews directly on the Client Dashboard (`ClientDiscoveryShowcase` via `GET /api/ai/recommendations` and `GET /api/reviews/recent`), inspect service details (`/services/:serviceId`), and check gardener availability/crew capacity (`/gardeners/:gardenerId`).
+- **Price Estimator, Category Specs & AI Planning:** Use the per-sq.m **Amount Predictor** (`POST /api/inquiries/estimate`), select itemized plant/material/equipment/disposal add-ons, add client price comments, fill dynamic category-specific specs (`category_specs`), and run Gemini photo analysis / requirement structuring before submission.
+- **Case 1 & Case 2 Requests, Mutual Agreements, Reservations & Payments:** Submit open general requests or direct inquiries, compare offers, approve versioned **Mutual Agreements** (which create a **Reservation** with a required deposit), settle deposits/balances via **PayMongo Checkout**, **Sandbox/Demo Checkout**, or manual receipt proof (`TXN-...`), request or approve **event-based cancellations / reschedules**, confirm the **mutual Transaction Completion Agreement**, and submit a verified 1–5 star review once `completed` + `fully_paid` + `closed`.
 
-### 2.2 Gardener (`role = 'gardener'`)
-- **Professional Profile & Approval:** Maintain business name (optional, with automatic full-name fallback across all views), service area, years of experience, and description in the `Profile & Settings` tab. New gardeners start with `is_approved = FALSE` until approved by an administrator.
-- **Service Listings & Portfolio:** Create, update, and deactivate gardening service listings (`/api/services`) and upload/edit/delete portfolio project photos (`/api/portfolios`).
-- **Open Service Requests Board (Case 1):** Approved gardeners browse non-expired open general requests (`GET /api/inquiries/open`) filtered by category or service area, inspect the **Provider Decision-Support View** (client requirements, AI requirement summary, and garden photos with space notes), and submit, revise (`PUT /api/inquiries/quotations/:quotationId`), or withdraw (`POST /api/inquiries/quotations/:quotationId/withdraw`) offers until client acceptance.
-- **Direct Inquiries (Case 2):** Evaluate direct client inquiries and respond with `offer`, `feasible`, `modifications` (with required `proposedChanges`), or `cannot_do`.
-- **Mutual Agreement & Service Execution:** Propose, revise, or approve mutual agreements; transition confirmed bookings from `accepted` to `in_progress` and `completed`.
+### 2.2 Gardener (`role = 'gardener'` or Dual-Role `can_act_as_gardener = TRUE`)
+- **Professional Profile, Schedule, Crew Capacity & Clerks:** Maintain profile details, avatar, working days/hours, blocked dates (`gardener_unavailable_dates`), simultaneous job limit (`max_concurrent_jobs`), daily **crew size** (`crew_size`), and **My Clerks** (`GardenerClerksPanel.jsx`). New gardeners start with `is_approved = FALSE` until approved by an administrator.
+- **Service Listings & Portfolio:** Create, update, upload cover/design photos (`services.image_path`), set `workers_required`, and manage portfolio project galleries (`/api/portfolios`).
+- **Schedule Calendar Dropdown & Urgency Alerts:** Manage schedules via `<GardenerScheduleCalendar />` with **Overdue / Urgent Today / Due Tomorrow / Action Needed** reminders and automatic "Fully Booked" day detection.
+- **Open Requests Board, Itemized Offers & Payment Verification:** Browse AI-ranked open leads (`GET /api/inquiries/open`), submit itemized labor + materials offers with `estimated_working_days`/`estimated_hours`, verify manual payment proofs, execute confirmed paid bookings (`in_progress` → `completed`), handle event cancellations/reschedules, and sign off on the Transaction Completion Agreement.
 
-### 2.3 Administrator (`role = 'administrator'`)
-- **Platform Summary & Statistics (`ISS-06`):** View live platform metrics on `/dashboard`, including Total Users, Active Services, Pending Gardener Approvals, Inquiries (`open` vs `total`), Bookings (`completed` vs `total`), and Open Reports.
-- **Gardener Approval Queue:** Review pending gardener profiles (`GET /api/admin/gardeners/pending`) and approve or request changes (`PATCH /api/admin/gardeners/:userId/approval`) with automated in-app notifications.
-- **Account & Category Management:** Activate or deactivate client and gardener accounts (`PATCH /api/admin/users/:userId/status` — immediately enforced by `requireAuth`) and create/edit/toggle service categories (`/api/admin/categories`).
-- **Service, Activity & Report Moderation:** Moderate service listings (`PATCH /api/admin/services/:serviceId/status`), monitor platform-wide inquiries (including unassigned Case 1 general requests via `LEFT JOIN` with `"Open General Request"` fallback) and bookings (`GET /api/admin/activity`), and resolve or dismiss user-submitted reports (`PATCH /api/admin/reports/:reportId`).
-- **Role-Appropriate Navigation (`ISS-06`):** Admin header navigation displays only `Admin Panel` and `Messages`, and backend `/api/bookings` and `GET /api/inquiries` routes enforce `requireRole('client', 'gardener')` (`403` for administrators).
+### 2.3 Assigned Clerk (`role = 'clerk'`)
+- **Scoped Gardener Operations (`clerk_gardener_assignments`):** Linked to one or more gardeners by an Administrator or by the gardener via **My Clerks**.
+- **Dedicated Clerk Desk (`<ClerkDashboard />` + `/api/clerk/*`):** Manages assigned gardeners' working days/hours, crew size, blocked dates, service listings, and manual payment proof verification without accessing unassigned gardeners or admin controls.
+
+### 2.4 Administrator (`role = 'administrator'`)
+- **Separated Dashboard Pages (`Overview`, `Analytics`, `Approvals`, `Activity`, `Reports`, `Accounts`):**
+  - `Overview` & `Analytics`: Live platform KPIs, pipeline/supply/account health meters, and operational breakdown report.
+  - `Approvals` & Pricing: Review pending gardeners, manage service categories (including per-sq.m baseline rates), configure `pricing_addons` (plants/materials/equipment/disposal), and moderate service listings.
+  - `Accounts` & Clerk Assignments: Edit user details/roles (`PATCH /api/admin/users/:userId`), toggle activation, safely delete unreferenced accounts (`DELETE /api/admin/users/:userId` with `409` `ON DELETE RESTRICT` protection), and manage `clerk_gardener_assignments`.
+  - `Activity` & `Reports`: Monitor platform inquiries/bookings and resolve user reports.
 
 ---
 
@@ -135,7 +139,10 @@ flowchart TD
 | **Inquiry / Request** | `inquiries.status` | `open` → `responded` → `provider_selected` → `in_agreement` → `confirmed`<br/>Terminal/Alternate: `expired` (renewable back to `open`/`responded`), `closed`, `cancelled` |
 | **Quotation / Offer** | `quotations.status` | `draft` / `sent` → `accepted` (locks offer via `locked_at`) or `declined` or `withdrawn` (by gardener before acceptance) or `expired` |
 | **Mutual Agreement** | `agreements.status` | `proposed` → `agreed` (when both `client_approved_at` and `gardener_approved_at` are set on the same version) or `superseded` (when edited into version $N+1$) or `cancelled` |
-| **Booking** | `bookings.status` | `accepted` (created by agreement approval) → `in_progress` → `completed` or `cancelled` (`pending` and `declined` exist only for legacy pre-R3 rows) |
+| **Booking** | `bookings.status` | `accepted` (created as a reservation by agreement approval) → `in_progress` (once deposit paid) → `completed` or event-based `cancelled` (`pending` and `declined` exist only for legacy pre-R3 rows) |
+| **Booking Stage & Payment** | `bookings.booking_stage`, `payment_status` | `reserved` (`unpaid` / `pending_verification`) → `booked` (`partially_paid` / `fully_paid` once verified deposit meets `required_deposit_amount`) |
+| **Transaction Closure** | `bookings.transaction_status` | `open` → `pending_closure` (one party confirmed completion) → `closed` (both confirmed + `completed` + `fully_paid`; unlocks 1–5 star review) |
+| **Reschedule Request** | `booking_reschedule_requests.status` | `pending` → `approved` (updates booking dates after crew/schedule validation), `declined`, or `cancelled` |
 
 ---
 
