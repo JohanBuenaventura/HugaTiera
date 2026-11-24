@@ -46,9 +46,16 @@ import AppSidebar from '../components/AppSidebar'
 import ClerkDashboard from '../components/ClerkDashboard'
 import GardenerClerksPanel from '../components/GardenerClerksPanel'
 import GardenerScheduleCalendar from '../components/GardenerScheduleCalendar'
+import StructuredAddressFields from '../components/StructuredAddressFields'
+import {
+  composeStructuredAddress,
+  parseStructuredAddress,
+  validateStructuredAddress,
+} from '../utils/zamboangaAddress'
 
 function ProfileForm({ role, profile, userId, onSaved }) {
   const [form, setForm] = useState(profile)
+  const [addressParts, setAddressParts] = useState(() => parseStructuredAddress(profile.address, profile.city))
   const [avatarVersion, setAvatarVersion] = useState(0)
   const [avatarBusy, setAvatarBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -108,11 +115,43 @@ function ProfileForm({ role, profile, userId, onSaved }) {
       setBlockBusy(false)
     }
   }
+  function handleAddressPartsChange(nextParts) {
+    setError('')
+    setAddressParts(nextParts)
+    setForm((current) => ({
+      ...current,
+      address: composeStructuredAddress(nextParts),
+      city: (nextParts.city || '').trim(),
+    }))
+  }
+
   async function submit(event) {
     event.preventDefault()
-    setSaving(true); setMessage(''); setError('')
+    setMessage(''); setError('')
+
+    let payload = form
+    if (role === 'client') {
+      const hasAnyAddressInput = Boolean(
+        addressParts.street?.trim()
+        || addressParts.barangay?.trim()
+        || addressParts.customBarangay?.trim()
+        || addressParts.landmark?.trim(),
+      )
+      const addrError = validateStructuredAddress(addressParts, { requireFields: hasAnyAddressInput })
+      if (addrError) {
+        setError(addrError)
+        return
+      }
+      payload = {
+        ...form,
+        address: hasAnyAddressInput ? composeStructuredAddress(addressParts) : '',
+        city: (addressParts.city || 'Zamboanga City').trim(),
+      }
+    }
+
+    setSaving(true)
     try {
-      const result = await profileApi.update(form)
+      const result = await profileApi.update(payload)
       onSaved(result)
       setMessage('Profile saved successfully.')
     } catch (saveError) { setError(saveError.message) } finally { setSaving(false) }
@@ -212,7 +251,14 @@ function ProfileForm({ role, profile, userId, onSaved }) {
     <div className="form-row"><label>Mobile number<input type="tel" maxLength="30" placeholder="0917 123 4567" value={form.phone || ''} onChange={change('phone')} /></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
     {role === 'client' ? (
       <>
-        <div className="form-row"><label>Address<input value={form.address || ''} onChange={change('address')} /></label><label>City<input required value={form.city || ''} onChange={change('city')} /></label></div>
+        <div className="auth-form-section">
+          <p className="auth-section-title">Address details</p>
+          <StructuredAddressFields
+            value={addressParts}
+            onChange={handleAddressPartsChange}
+            required={false}
+          />
+        </div>
         <label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label>
       </>
     ) : (
