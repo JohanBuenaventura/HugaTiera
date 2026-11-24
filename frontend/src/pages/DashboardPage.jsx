@@ -580,11 +580,12 @@ function formatInquirySubtitle(inquiry, role) {
 
 function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
   const [services, setServices] = useState([])
+  const [categories, setCategories] = useState([])
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [referenceLocation, setReferenceLocation] = useState(defaultLocation || 'Zamboanga City')
   const [locationInput, setLocationInput] = useState(defaultLocation || '')
-  const [keywordInput, setKeywordInput] = useState('')
+  const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [sortBy, setSortBy] = useState('smart_ai')
   const [nearbyOnly, setNearbyOnly] = useState(false)
   const [minRating, setMinRating] = useState(0)
@@ -595,9 +596,11 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
 
   useEffect(() => {
     let active = true
-    reviewsApi.recent(4)
-      .then((revRes) => {
-        if (active) setReviews(revRes?.reviews || [])
+    Promise.all([reviewsApi.recent(4), servicesApi.categories()])
+      .then(([revRes, catRes]) => {
+        if (!active) return
+        setReviews(revRes?.reviews || [])
+        setCategories(catRes?.categories || [])
       })
       .catch(() => {})
     return () => { active = false }
@@ -611,7 +614,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
       fetchSmartRecommendations({
         mode: 'services',
         location: locationInput.trim() || defaultLocation || 'Zamboanga City',
-        keyword: keywordInput.trim(),
+        categoryId: selectedCategoryId || undefined,
         sortBy,
         nearbyOnly,
         minRating: minRating || undefined,
@@ -625,7 +628,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
         })
         .catch(() => {
           if (!active) return
-          servicesApi.list({ limit: 6 }).then((fallback) => {
+          servicesApi.list({ categoryId: selectedCategoryId || undefined, limit: 6 }).then((fallback) => {
             if (active) setServices(fallback?.services || [])
           }).catch(() => {})
         })
@@ -637,7 +640,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
       active = false
       clearTimeout(timer)
     }
-  }, [defaultLocation, locationInput, keywordInput, sortBy, nearbyOnly, minRating, goodConductOnly])
+  }, [defaultLocation, locationInput, selectedCategoryId, sortBy, nearbyOnly, minRating, goodConductOnly])
 
   async function handleExplainTopPicks() {
     if (services.length === 0) return
@@ -703,13 +706,16 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
               />
             </label>
             <label>
-              What do you need? <span className="label-note">(Optional)</span>
-              <input
-                maxLength="120"
-                placeholder="e.g., lawn mowing, landscaping, pruning"
-                value={keywordInput}
-                onChange={(e) => setKeywordInput(e.target.value)}
-              />
+              What do you need? <span className="label-note">(Category)</span>
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+              >
+                <option value="">All gardening categories</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
             </label>
           </div>
           <div className="ai-filter-controls">
