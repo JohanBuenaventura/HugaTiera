@@ -1,16 +1,16 @@
-# HugaTiera — Teammate & AI Agent Sync Guide (`mergedbranchv1`)
+# HugaTiera — Teammate & AI Agent Sync Guide (`main`)
 
-Use this guide whenever you pull **`mergedbranchv1`** (or future updates) onto a teammate's machine so your local MySQL database, `.env` configuration, dependencies, and running servers stay in sync—preventing `500 Internal Server Error` (`Unknown column ...`), stale-route JSON errors, and Git merge conflicts.
+Use this guide whenever you pull **`main`** (which includes merged `mergedbranchv1` via PR #4 and subsequent updates) onto a teammate's machine so your local MySQL database, `.env` configuration, dependencies, and running servers stay in sync—preventing `500 Internal Server Error` (`Unknown column ...`), stale-route JSON errors, and Git merge conflicts.
 
 ---
 
 ## 1. Quick Copy-Paste Prompt for Your AI Coding Agent
 
-If you are using an AI coding agent (Antigravity, Cursor, Copilot, Claude Code, etc.), paste this prompt right after switching to `mergedbranchv1`:
+If you are using an AI coding agent (Antigravity, Cursor, Copilot, Claude Code, etc.), paste this prompt right after pulling `main`:
 
 ```text
-Read TEAM_SYNC_GUIDE.md and AGENTS.md, then sync my local environment for branch mergedbranchv1:
-1. Verify I am on mergedbranchv1 and check git status without discarding any of my uncommitted work.
+Read TEAM_SYNC_GUIDE.md and AGENTS.md, then sync my local environment for branch main:
+1. Verify I am on main (latest origin/main) and check git status without discarding any of my uncommitted work.
 2. Inspect my local hugatiera_db and hugatiera_db_migration_test table/column counts (read-only) to determine which migrations from database/migrations/001..013 are missing.
 3. Ask my approval first, then back up hugatiera_db to database/backups/ and apply ONLY the missing migrations in numerical order (do NOT rerun already-applied migrations).
 4. Sync backend/.env keys against backend/.env.example without overwriting my existing secrets, and run npm install in backend and frontend if needed.
@@ -21,9 +21,9 @@ Read TEAM_SYNC_GUIDE.md and AGENTS.md, then sync my local environment for branch
 
 ## 2. Branch & Anti-Conflict Rules
 
-- **Active integrated branch:** Work from **`mergedbranchv1`** (created from `hugatierav2` with role-switch error feedback, Option 3 automatic Client mode for Gardeners, and updated documentation).
-- **Do NOT merge `feature/registration-profile-details` into `mergedbranchv1`:**
-  - All user-facing features from `feature/registration-profile-details` (optional middle name, 18+ birthday, mobile number, dual-role switching) are already integrated in `mergedbranchv1`.
+- **Active integrated branch:** Work from **`main`** (contains merged `mergedbranchv1`, Option 3 automatic Client mode for Gardeners, 2-card 3-step registration wizard, provider-managed Clerks, Smart AI category filtering, Zamboanga City demo seed SQL, and synchronized documentation).
+- **Do NOT merge `feature/registration-profile-details` into `main`:**
+  - All user-facing features from `feature/registration-profile-details` (optional middle name, 18+ birthday, mobile number, dual-role switching) are already integrated in `main`.
   - Merging it directly causes **20 file conflicts** and **duplicate `003` / `004` migration numbering**.
 - **Adding new migrations in the future:**
   - Migrations **`001` through `013`** are already used in `database/migrations/`.
@@ -34,7 +34,7 @@ Read TEAM_SYNC_GUIDE.md and AGENTS.md, then sync my local environment for branch
 
 ## 3. Check Your Local Database Schema Before Logging In
 
-The most common error after pulling `mergedbranchv1` is a **`500 Internal Server Error`** on login:
+The most common error after pulling `main` is a **`500 Internal Server Error`** on login:
 
 ```text
 Error: Unknown column 'can_act_as_client' in 'field list'
@@ -60,7 +60,7 @@ WHERE TABLE_SCHEMA = 'hugatiera_db'
 "
 ```
 
-- **Target state (`mergedbranchv1`):** `25` tables, `59` foreign keys, and all 5 `users` columns above exist.
+- **Target state (`main`):** `25` tables, `59` foreign keys, and all 5 `users` columns above exist.
 - If `table_count` is **`25`** and all 5 columns exist, your database is already up to date—skip to Section 4.
 
 ### Step 3.2 — Back Up Your Local `hugatiera_db` First (Mandatory)
@@ -121,8 +121,11 @@ Import the complete 25-table schema directly (do **not** run `001`–`013` after
 
 ```powershell
 c:\xampp\mysql\bin\mysql.exe -u root < database/schema/hugatiera_schema.sql
-# Optional: seed demo accounts, categories, and approved services
+# Optional: seed role demo accounts (backend script)
 npm --prefix backend run seed:demo
+# Optional: import idempotent Zamboanga City showcase providers/services into hugatiera_db ONLY
+# (keep hugatiera_db_migration_test clean so integration tests stay exact!)
+Get-Content -Raw database\seeds\zamboanga_demo_data.sql | c:\xampp\mysql\bin\mysql.exe -u root hugatiera_db
 ```
 
 ---
