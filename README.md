@@ -55,12 +55,13 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
 |---|---|---|
 | **Frontend** | React.js + Vite | `react` `^19.3.1`, `vite` `^8.3.6`, JavaScript (ES Modules), HTML5, CSS3 |
 | **Routing & UI** | React Router DOM + Lucide React | `react-router-dom` `^7.18.5`, `lucide-react` `^1.69.0`, `axios` `^1.21.0` |
-| **Backend** | Node.js + Express.js | `express` `^5.3.0` (CommonJS REST API) |
-| **Database** | MySQL / MariaDB (`InnoDB`) | `mysql2` `^3.24.6` (`mysql2/promise` connection pool & transactions), `19` tables, `46` FKs |
-| **Authentication** | JWT + bcryptjs | `jsonwebtoken` `^9.0.2` (`HttpOnly` cookie), `bcryptjs` `^3.0.2`, `cookie-parser` `^1.4.7` |
-| **Image Processing** | Multer + Sharp | `multer` `^2.5.0`, `sharp` `^0.35.5` (validation, resize, EXIF/GPS stripping) |
-| **AI Integration** | Google Gemini REST API | Primary: `gemini-3.8-flash` \| Automatic Fallback: `gemini-3.5-flash-lite` |
-| **Testing & Linting** | Node.js Test Runner + ESLint | `node --test` (`56/56` automated backend tests across 7 suites), `eslint` `^10.14.0` |
+| **Backend** | Node.js + Express.js | `express` `^5.3.0` (CommonJS REST API, 16 route modules, security headers & auth rate limiting) |
+| **Database** | MySQL / MariaDB (`InnoDB`) | `mysql2` `^3.24.6` (`mysql2/promise` connection pool & transactions), `25` tables, `59` FKs, Migrations `001`–`013` |
+| **Authentication** | JWT + bcryptjs | `jsonwebtoken` `^9.0.2` (`HttpOnly` cookie `auth_token`), `bcryptjs` `^3.0.2`, `cookie-parser` `^1.4.7`, Dual-Role & Clerk RBAC |
+| **Image Processing** | Multer + Sharp | `multer` `^2.5.0`, `sharp` `^0.35.5` (validation, resize, EXIF/GPS stripping across avatars, covers, portfolios, receipts, request photos) |
+| **AI & Matching** | Google Gemini REST API + Smart Matching | Primary: `gemini-3.8-flash` \| Fallback: `gemini-3.5-flash-lite` \| Barangay proximity & conduct scoring |
+| **Payments** | PayMongo Checkout + Sandbox/Demo | PayMongo Checkout API (when `PAYMONGO_SECRET_KEY` is set) + built-in Sandbox/Demo mode & manual receipt proofs |
+| **Testing & Linting** | Node.js Test Runner + ESLint | `node --test` (`80/80` automated backend tests across 15 suites), `eslint` `^10.14.0` |
 
 ---
 
@@ -141,11 +142,13 @@ DB_USER=root
 DB_PASSWORD=
 DB_NAME=hugatiera_db
 JWT_SECRET=replace_with_a_long_random_secret_key
-GEMINI_API_KEY=replace_with_your_gemini_api_key
+JWT_EXPIRES_IN=1d
+GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3.8-flash
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
 GEMINI_THINKING_LEVEL=low
 AI_HOURLY_LIMIT=10
+PAYMONGO_SECRET_KEY=
 ```
 
 Create `frontend/.env` (using [frontend/.env.example](file:///c:/xampp/htdocs/HugaTiera/frontend/.env.example) as a template):
@@ -154,23 +157,22 @@ VITE_API_URL=http://localhost:5000/api
 ```
 
 > [!WARNING]
-> Never commit `backend/.env` or `frontend/.env` to Git, and never expose `GEMINI_API_KEY`, `JWT_SECRET`, or database credentials in frontend variables.
+> Never commit `backend/.env` or `frontend/.env` to Git, and never expose `GEMINI_API_KEY`, `PAYMONGO_SECRET_KEY`, `JWT_SECRET`, or database credentials in frontend variables.
 
 ---
 
-## 7. Database Setup & Migration 001 Status
+## 7. Database Setup & Migrations `001`–`013` Status
 
 ### 7.1 Fresh Database Installation
-If setting up HugaTiera on a new machine without an existing `hugatiera_db` database, start MySQL in XAMPP and import [database/schema/hugatiera_schema.sql](file:///c:/xampp/htdocs/HugaTiera/database/schema/hugatiera_schema.sql), which creates `hugatiera_db` with all **19 tables** and **46 foreign keys**:
+If setting up HugaTiera on a new machine without an existing `hugatiera_db` database, start MySQL in XAMPP and import [database/schema/hugatiera_schema.sql](file:///c:/xampp/htdocs/HugaTiera/database/schema/hugatiera_schema.sql), which creates `hugatiera_db` with all **25 tables** and **59 foreign keys**:
 ```powershell
 c:\xampp\mysql\bin\mysql.exe -u root < database/schema/hugatiera_schema.sql
 ```
 
-### 7.2 Existing Database & Migration 001 Record
-- On the current development/production workspace, **Migration 001 (`database/migrations/001_unified_requests_and_agreements.sql`) was executed and verified against `hugatiera_db` on November 12, 2026**.
-- Both `hugatiera_db` (production database) and `hugatiera_db_migration_test` (automated test database) are at the complete 19-table schema (`46` foreign keys).
-- **Do NOT rerun `001_unified_requests_and_agreements.sql` against `hugatiera_db`.**
-- Full table-by-table documentation, the 19-table Mermaid ERD, and Migration 001 verification details are in [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md).
+### 7.2 Existing Database & Migration Record
+- Incremental migrations `001` through `013` (each paired with a `_rollback.sql` script in `database/migrations/`) have been applied and verified on both `hugatiera_db_migration_test` and local `hugatiera_db` (`25` tables, `59` foreign keys), with pre-migration backups preserved in `database/backups/`.
+- **Do NOT rerun already-applied migrations against `hugatiera_db`.**
+- Full table-by-table documentation, the 25-table ERD, Level 0–2 DFDs, and migration history are in [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) and [docs/erd-and-dfd.md](file:///c:/xampp/htdocs/HugaTiera/docs/erd-and-dfd.md).
 
 ---
 
@@ -178,6 +180,9 @@ c:\xampp\mysql\bin\mysql.exe -u root < database/schema/hugatiera_schema.sql
 
 ### 8.1 Start the Backend and Frontend Servers
 ```powershell
+# Optional: seed idempotent demo data
+npm --prefix backend run seed:demo
+
 # Terminal 1 — Start the Express backend on http://localhost:5000
 npm --prefix backend run dev
 
@@ -193,12 +198,21 @@ npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-### 8.3 Automated Backend Test Suites (`53/53` Tests)
-All automated backend test suites run against the dedicated test database **`hugatiera_db_migration_test`** (`DB_NAME=hugatiera_db_migration_test`) so `hugatiera_db` is never modified by test runs. Run all 6 suites sequentially (`--test-concurrency=1`):
+### 8.3 Automated Backend Test Suites (15 Suites / `80` Tests)
+All automated backend test suites run sequentially against the dedicated test database **`hugatiera_db_migration_test`** (`DB_NAME=hugatiera_db_migration_test`) so `hugatiera_db` is never modified:
 ```powershell
 $env:DB_NAME="hugatiera_db_migration_test"
 node --test --test-concurrency=1 `
   backend/tests/integration.test.js `
+  backend/tests/avatarsServicesAdmin.test.js `
+  backend/tests/registrationBasicInfo.test.js `
+  backend/tests/inquiryPriceEstimator.test.js `
+  backend/tests/schedulingAvailability.test.js `
+  backend/tests/reservationPayments.test.js `
+  backend/tests/cancellationReschedule.test.js `
+  backend/tests/smartAiRecommendations.test.js `
+  backend/tests/dualRoleAndClerk.test.js `
+  backend/tests/paymentGateway.test.js `
   backend/tests/r2.requestImages.test.js `
   backend/tests/r3.agreements.test.js `
   backend/tests/r4.directInquiry.test.js `
@@ -206,27 +220,13 @@ node --test --test-concurrency=1 `
   backend/tests/r6.aiAssistance.test.js
 ```
 
-| Test Suite File | Scope Covered | Passing Tests |
-|---|---|---|
-| `backend/tests/integration.test.js` | Core Phases 1–15 + Audit Fixes (`TC-01`–`TC-18`: auth, approval visibility, Case 1/2 inquiries, agreements, bookings, messaging, reviews, reports, deactivation, `ISS-01`–`ISS-09`) | `15 / 15` |
-| `backend/tests/r2.requestImages.test.js` | Step R2 garden photo upload, `sharp` EXIF/GPS stripping, role/ownership access control, 24h draft cleanup | `12 / 12` |
-| `backend/tests/r3.agreements.test.js` | Step R3 versioned mutual agreements, approval reset on edit, stale-version & duplicate rejection, `Promise.all` concurrency, booking gating | `5 / 5` |
-| `backend/tests/r4.directInquiry.test.js` | Step R4 Case 2 direct inquiry, draft photo attachment, feasibility responses, offer revisions (`quotation_revisions`), withdrawal, locking, lazy expiry | `6 / 6` |
-| `backend/tests/r5.generalRequest.test.js` | Step R5 Case 1 general request, open board privacy, multi-provider offer isolation, comparison metrics, Case 1 chat gating, renewal | `6 / 6` |
-| `backend/tests/r6.aiAssistance.test.js` | Step R6/R7 Gemini requirements & photo analysis, primary (`gemini-3.8-flash`) to fallback (`gemini-3.5-flash-lite`) Scenarios A–H, `Promise.all` 15-request concurrency rate limit | `9 / 9` |
-| **Total** | **All Automated Backend Integration & Revision Suites** | **`53 / 53`** |
-
 ---
 
-## 9. Security, Privacy & Current Scope Boundaries
+## 9. Security, Privacy & Scope Notes
 
-- **Photo Privacy:** Client garden photos are stripped of all EXIF/GPS metadata by `sharp` before disk storage and are never served from a public static folder. Furthermore, the Open Service Requests Board (`GET /api/inquiries/open`) exposes only area-level location and client first name; exact street addresses are shared only inside the mutual agreement.
-- **SQL Injection & Access Control:** Every database query uses parameterized `mysql2` placeholders (`?`), and every protected endpoint verifies authentication, active user status, role permissions, and resource ownership.
-- **Intentional Scope Exclusions (Per Academic Project Rules):**
-  - No online payment processing, wallets, escrow, or financial settlement (all payments are settled directly between client and gardener outside the platform).
-  - No physical gardening product e-commerce, live GPS tracking, payroll, or native mobile apps.
-  - Paid AI image generation is postponed (`501 IMAGE_GENERATION_POSTPONED`); only text and uploaded-photo understanding are active.
-- **Remaining Manual Verification Items:** Live Gemini generation with a real `GEMINI_API_KEY` and manual multi-device browser visual checks are tracked in [project_progress.md](file:///c:/xampp/htdocs/HugaTiera/project_progress.md).
+- **Photo Privacy:** Client garden photos, avatars, service cover photos, portfolios, and payment receipts are validated with magic-byte checks and `sharp` EXIF/GPS stripping before disk storage and are never served from an unrestricted public static directory. The Open Service Requests Board exposes only area-level location and client first name; exact street addresses are shared inside the mutual agreement.
+- **SQL Injection, Rate Limiting & Access Control:** Every database query uses parameterized `mysql2` placeholders (`?`), auth endpoints enforce rate limits, and every protected endpoint verifies authentication, live `users.is_active = TRUE`, role permissions (`client`, `gardener`, `clerk`, `administrator`), and resource ownership.
+- **Payments & Postponed Scope:** Reservation deposit gating, manual payment proofs, and PayMongo Checkout (with automatic Sandbox/Demo fallback when `PAYMONGO_SECRET_KEY` is blank) are implemented on `mergedbranchv1`. Physical gardening product e-commerce, live GPS tracking, payroll, native mobile apps, and paid AI image generation (`501 IMAGE_GENERATION_POSTPONED`) remain out of scope.
 
 ---
 
@@ -235,12 +235,14 @@ node --test --test-concurrency=1 `
 | Document | Description |
 |---|---|
 | [README.md](file:///c:/xampp/htdocs/HugaTiera/README.md) | Main project overview, setup, testing, and quick reference (this file). |
-| [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) | Authoritative 19-table schema reference, 46 FKs, Mermaid ERD, and Migration 001 execution record. |
-| [docs/architecture-and-workflows.md](file:///c:/xampp/htdocs/HugaTiera/docs/architecture-and-workflows.md) | System architecture, Client/Gardener/Admin workflows, Case 1 vs Case 2 + R3 Agreement flowcharts, and Gemini AI fallback design. |
-| [docs/api-reference.md](file:///c:/xampp/htdocs/HugaTiera/docs/api-reference.md) | Complete REST API endpoint documentation across all 15 route modules. |
+| [TEAM_SYNC_GUIDE.md](file:///c:/xampp/htdocs/HugaTiera/TEAM_SYNC_GUIDE.md) | Teammate & AI agent sync checklist (branch rules, DB migration checks, `.env` sync, and common error fixes). |
+| [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) | Authoritative 25-table schema reference, 59 FKs, and Migrations `001`–`013` record. |
+| [docs/erd-and-dfd.md](file:///c:/xampp/htdocs/HugaTiera/docs/erd-and-dfd.md) | Full 25-table Mermaid ERD and Level 0 / Level 1 / Level 2 DFDs. |
+| [docs/architecture-and-workflows.md](file:///c:/xampp/htdocs/HugaTiera/docs/architecture-and-workflows.md) | System architecture, Client/Gardener/Clerk/Admin workflows, Case 1 vs Case 2 + Agreement/Payment flows, and Gemini AI fallback design. |
+| [docs/api-reference.md](file:///c:/xampp/htdocs/HugaTiera/docs/api-reference.md) | Complete REST API endpoint documentation across all 16 route modules. |
 | [docs/implementation/implementation-plan.md](file:///c:/xampp/htdocs/HugaTiera/docs/implementation/implementation-plan.md) | Revision Track R0–R7 technical specification and state machine rules. |
 | [project_progress.md](file:///c:/xampp/htdocs/HugaTiera/project_progress.md) | Chronological project progress tracker, completed phases/revisions, and verification records. |
-| [system_bug_and_missing_features.md](file:///c:/xampp/htdocs/HugaTiera/system_bug_and_missing_features.md) | Resolved Phase 15 bugs (`BUG-01`–`BUG-07`), resolved Post-Migration Audit items (`ISS-01`–`ISS-10`), and verified scope boundaries. |
+| [system_bug_and_missing_features.md](file:///c:/xampp/htdocs/HugaTiera/system_bug_and_missing_features.md) | Resolved Phase 15 bugs, audit items, and verified scope boundaries. |
 | [folder_structure.md](file:///c:/xampp/htdocs/HugaTiera/folder_structure.md) | Verified directory and file tree of the repository. |
-| [backend/README.md](file:///c:/xampp/htdocs/HugaTiera/backend/README.md) | Backend-specific setup, scripts, and module summary. |
+| [backend/readme.md](file:///c:/xampp/htdocs/HugaTiera/backend/readme.md) | Backend-specific setup, scripts, and module summary. |
 | [frontend/README.md](file:///c:/xampp/htdocs/HugaTiera/frontend/README.md) | Frontend-specific setup, scripts, and structure summary. |
