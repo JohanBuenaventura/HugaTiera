@@ -4497,7 +4497,8 @@ tbody tr:hover {
   font-size: 13px;
   font-weight: 700;
 }
-.ai-filter-inputs input {
+.ai-filter-inputs input,
+.ai-filter-inputs select {
   width: 100%;
   padding: 9px 12px;
   border: 1px solid #BAC9BC;
@@ -4799,6 +4800,11 @@ tbody tr:hover {
    Step 2: Dual Role Switcher & Assigned Clerk Operations Workspace
    ========================================================================== */
 
+.role-options-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
 .role-options-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -4808,6 +4814,179 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+.register-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.register-step-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid #D5DDD3;
+  border-radius: 10px;
+  background: #F6F8F4;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: default;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.register-step-pill.is-clickable {
+  cursor: pointer;
+}
+.register-step-pill.is-clickable:hover {
+  border-color: var(--forest);
+  background: #EEF4EF;
+}
+.register-step-pill.is-active {
+  border-color: var(--forest);
+  background: #EDF5EF;
+  color: var(--forest);
+}
+.register-step-pill.is-done {
+  border-color: #B7D3C0;
+  background: #F1F8F3;
+  color: var(--forest);
+}
+.register-step-num {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #DDE5DC;
+  color: var(--forest);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.register-step-pill.is-active .register-step-num,
+.register-step-pill.is-done .register-step-num {
+  background: var(--forest);
+  color: #FFFFFF;
+}
+.register-clerk-invite-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 13px;
+  border: 1px dashed #C7D4C9;
+  border-radius: 10px;
+  background: #F8FAF7;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.register-clerk-banner {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #B7D3C0;
+  border-radius: 10px;
+  background: #EFF7F1;
+  color: var(--forest);
+  font-size: 13px;
+}
+.register-clerk-banner-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.register-clerk-banner p {
+  margin: 0;
+  color: #415548;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.register-inline-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--forest);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.register-inline-link:hover {
+  color: #163625;
+}
+.register-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid #CFDCD1;
+  border-radius: 10px;
+  background: #F4F8F4;
+  font-size: 13px;
+  color: var(--forest);
+}
+.register-summary-strip small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.register-step-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+.register-step-actions .button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.register-step-actions .register-back-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  border: 1px solid #C8D2C6;
+  border-radius: 10px;
+  background: #FFFFFF;
+  color: var(--forest);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.register-step-actions .register-back-btn:hover {
+  border-color: var(--forest);
+  background: #F3F7F4;
+}
+@media (max-width: 640px) {
+  .role-options-2 {
+    grid-template-columns: 1fr;
+  }
+  .register-stepper {
+    grid-template-columns: 1fr;
+  }
+  .register-step-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .register-step-actions .register-back-btn {
+    justify-content: center;
+  }
 }
 .signup-clerk-box {
   margin-top: 6px;
