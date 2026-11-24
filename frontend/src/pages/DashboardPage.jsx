@@ -11,6 +11,8 @@ import {
 import { servicesApi } from '../services/services'
 import { inquiriesApi } from '../services/inquiries'
 import { communicationApi } from '../services/communication'
+import { reviewsApi } from '../services/reviews'
+import { authApi } from '../services/auth'
 import {
   bookingsApi,
   formatBookingStatusLabel,
@@ -111,6 +113,85 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   </form>
 }
 
+function ChangePasswordForm() {
+  const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function change(field) {
+    return (event) => setForm((current) => ({ ...current, [field]: event.target.value }))
+  }
+
+  async function submit(event) {
+    event.preventDefault()
+    setMessage('')
+    setError('')
+    if (form.newPassword !== form.confirmPassword) {
+      setError('New passwords do not match.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const result = await authApi.changePassword(form.currentPassword, form.newPassword)
+      setMessage(result.message)
+      setForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+    } catch (saveError) {
+      setError(saveError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form className="profile-form" onSubmit={submit}>
+      {message && <div className="form-success" role="status">{message}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
+      <label>
+        Current password
+        <input
+          type="password"
+          autoComplete="current-password"
+          required
+          value={form.currentPassword}
+          onChange={change('currentPassword')}
+        />
+      </label>
+      <div className="form-row">
+        <label>
+          New password
+          <input
+            type="password"
+            autoComplete="new-password"
+            minLength="8"
+            maxLength="72"
+            required
+            value={form.newPassword}
+            onChange={change('newPassword')}
+          />
+        </label>
+        <label>
+          Confirm new password
+          <input
+            type="password"
+            autoComplete="new-password"
+            minLength="8"
+            maxLength="72"
+            required
+            value={form.confirmPassword}
+            onChange={change('confirmPassword')}
+          />
+        </label>
+      </div>
+      <span className="field-note">Use 8 to 72 characters. Your current password is required to make this change.</span>
+      <button className="button" type="submit" disabled={saving}>
+        {saving ? 'Changing password...' : 'Change password'}
+      </button>
+    </form>
+  )
+}
+
 function Stats({ role, counts }) {
   const values = role === 'client'
     ? [['Inquiries', counts.inquiries], ['Bookings', counts.bookings], ['Notifications', counts.notifications]]
@@ -118,7 +199,7 @@ function Stats({ role, counts }) {
   return <div className="stat-grid">{values.map(([label, value], index) => <div className={`stat-card${index === 0 ? ' stat-card-primary' : ''}`} key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div>
 }
 
-function GardenerTools({ isApproved, section = 'services' }) {
+function GardenerTools({ gardenerId, isApproved, section = 'services' }) {
   const emptyService = { title: '', description: '', categoryId: '', indicativePrice: '', priceUnit: '', serviceArea: 'Zamboanga City' }
   const [serviceForm, setServiceForm] = useState(emptyService)
   const [serviceImageFile, setServiceImageFile] = useState(null)
@@ -126,6 +207,8 @@ function GardenerTools({ isApproved, section = 'services' }) {
   const [categories, setCategories] = useState([])
   const [services, setServices] = useState([])
   const [portfolios, setPortfolios] = useState([])
+  const [reviews, setReviews] = useState([])
+  const [reviewsLoading, setReviewsLoading] = useState(true)
   const [editId, setEditId] = useState(null)
   const [portfolioEditId, setPortfolioEditId] = useState(null)
   const [imageForm, setImageForm] = useState({ title: '', description: '', image: null })
@@ -141,6 +224,24 @@ function GardenerTools({ isApproved, section = 'services' }) {
       })
       .catch((loadError) => setError(loadError.message))
   }, [])
+
+  useEffect(() => {
+    if (section !== 'portfolio' || !gardenerId) return undefined
+
+    let active = true
+    reviewsApi.gardener(gardenerId)
+      .then((result) => {
+        if (active) setReviews(result.reviews || [])
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message)
+      })
+      .finally(() => {
+        if (active) setReviewsLoading(false)
+      })
+
+    return () => { active = false }
+  }, [gardenerId, section])
 
   const serviceChange = (field) => (event) => setServiceForm({ ...serviceForm, [field]: event.target.value })
   async function saveService(event) {
@@ -199,6 +300,10 @@ function GardenerTools({ isApproved, section = 'services' }) {
     try { await servicesApi.removePortfolio(id); setPortfolios((current) => current.filter((portfolio) => portfolio.id !== id)); setMessage('Portfolio entry removed.') } catch (removeError) { setError(removeError.message) }
   }
 
+  const averageRating = reviews.length
+    ? (reviews.reduce((total, review) => total + Number(review.rating), 0) / reviews.length).toFixed(1)
+    : null
+
   if (section === 'portfolio') {
     return (
       <section className="profile-settings-panel">
@@ -234,6 +339,37 @@ function GardenerTools({ isApproved, section = 'services' }) {
               </div>
             ))}
           </div>
+          <section className="portfolio-feedback-section">
+            <div className="activity-heading">
+              <div>
+                <p className="eyebrow">Customer feedback</p>
+                <h2>Reviews from your clients.</h2>
+              </div>
+              {averageRating && (
+                <span className="portfolio-rating-summary">
+                  ★ {averageRating} · {reviews.length} review{reviews.length === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+            {reviewsLoading && <div className="loading-state" role="status">Loading customer reviews<span /></div>}
+            {!reviewsLoading && reviews.length === 0 && (
+              <p className="form-note">Completed bookings can receive client feedback. Your reviews will appear here.</p>
+            )}
+            {!reviewsLoading && reviews.length > 0 && (
+              <div className="review-list">
+                {reviews.map((review) => (
+                  <article className="review-card" key={review.id}>
+                    <div className="review-heading">
+                      <strong>{'★'.repeat(Number(review.rating))}{'☆'.repeat(5 - Number(review.rating))}</strong>
+                      <span>{review.client_name}</span>
+                    </div>
+                    <p>{review.review_text || 'No written feedback provided.'}</p>
+                    <small>{new Date(review.created_at).toLocaleDateString()}</small>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </section>
     )
@@ -693,18 +829,29 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
         )}
 
         {isProfileView ? (
-          <section className="dashboard-panel profile-settings-panel">
-            <div className="activity-heading">
-              <div>
-                <p className="eyebrow">Your profile</p>
-                <h2>Update your {roleLabel.toLowerCase()} information.</h2>
+          <>
+            <section className="dashboard-panel profile-settings-panel">
+              <div className="activity-heading">
+                <div>
+                  <p className="eyebrow">Your profile</p>
+                  <h2>Update your {roleLabel.toLowerCase()} information.</h2>
+                </div>
+                <Link className="text-link" to="/dashboard">Back to overview</Link>
               </div>
-              <Link className="text-link" to="/dashboard">Back to overview</Link>
-            </div>
-            <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
-          </section>
+              <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
+            </section>
+            <section className="dashboard-panel profile-settings-panel password-settings-panel">
+              <div className="activity-heading">
+                <div>
+                  <p className="eyebrow">Account security</p>
+                  <h2>Change your password.</h2>
+                </div>
+              </div>
+              <ChangePasswordForm />
+            </section>
+          </>
         ) : role === 'gardener' && (activeTab === 'services' || activeTab === 'portfolio') ? (
-          <GardenerTools isApproved={form.is_approved} section={activeTab} />
+          <GardenerTools gardenerId={user.id} isApproved={form.is_approved} section={activeTab} />
         ) : (
           <>
             <Stats role={role} counts={counts} />

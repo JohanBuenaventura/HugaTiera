@@ -16,13 +16,20 @@ let baseUrl
 let userId
 const email = `password.reset.${Date.now()}@hugatiera.test`
 
-async function apiRequest(requestPath, body) {
+async function apiRequest(requestPath, body, cookie = '') {
   const response = await fetch(`${baseUrl}${requestPath}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
     body: JSON.stringify(body),
   })
-  return { status: response.status, data: await response.json() }
+  return {
+    status: response.status,
+    data: await response.json(),
+    cookie: response.headers.get('set-cookie')?.split(';')[0] || cookie,
+  }
 }
 
 before(async () => {
@@ -73,4 +80,38 @@ test('reset token changes the password once and rejects reuse', async () => {
 
   const login = await apiRequest('/auth/login', { email, password: 'NewPassword123!' })
   assert.equal(login.status, 200)
+})
+
+test('signed-in users can change their password after verifying the current password', async () => {
+  const login = await apiRequest('/auth/login', { email, password: 'NewPassword123!' })
+  assert.equal(login.status, 200)
+
+  const wrongPassword = await apiRequest('/auth/change-password', {
+    currentPassword: 'WrongPassword123!',
+    newPassword: 'ChangedPassword123!',
+  }, login.cookie)
+  assert.equal(wrongPassword.status, 401)
+
+  const resetToken = crypto.randomBytes(32).toString('hex')
+  await pool.execute(
+    'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))',
+    [userId, crypto.createHash('sha256').update(resetToken).digest('hex')],
+  )
+
+  const changed = await apiRequest('/auth/change-password', {
+    currentPassword: 'NewPassword123!',
+    newPassword: 'ChangedPassword123!',
+  }, login.cookie)
+  assert.equal(changed.status, 200)
+
+  const oldLogin = await apiRequest('/auth/login', { email, password: 'NewPassword123!' })
+  const newLogin = await apiRequest('/auth/login', { email, password: 'ChangedPassword123!' })
+  assert.equal(oldLogin.status, 401)
+  assert.equal(newLogin.status, 200)
+
+  const [[tokenRow]] = await pool.execute(
+    'SELECT used_at FROM password_reset_tokens WHERE user_id = ? AND token_hash = ?',
+    [userId, crypto.createHash('sha256').update(resetToken).digest('hex')],
+  )
+  assert.ok(tokenRow.used_at)
 })

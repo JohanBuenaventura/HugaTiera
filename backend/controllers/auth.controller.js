@@ -203,6 +203,54 @@ async function resetPassword(req, res, next) {
   }
 }
 
+async function changePassword(req, res, next) {
+  const { currentPassword, newPassword } = req.body
+
+  if (typeof currentPassword !== 'string' || currentPassword.length === 0) {
+    return res.status(400).json({ message: 'Current password is required.' })
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 72) {
+    return res.status(400).json({ message: 'New password must be between 8 and 72 characters.' })
+  }
+  if (currentPassword === newPassword) {
+    return res.status(400).json({ message: 'New password must be different from your current password.' })
+  }
+
+  const connection = await pool.getConnection()
+
+  try {
+    await connection.beginTransaction()
+    const [users] = await connection.execute(
+      'SELECT id, password_hash FROM users WHERE id = ? AND is_active = TRUE LIMIT 1 FOR UPDATE',
+      [req.user.id],
+    )
+    const user = users[0]
+    const passwordMatches = user ? await bcrypt.compare(currentPassword, user.password_hash) : false
+
+    if (!passwordMatches) {
+      await connection.rollback()
+      return res.status(401).json({ message: 'Current password is incorrect.' })
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12)
+    await connection.execute(
+      'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [passwordHash, user.id],
+    )
+    await connection.execute(
+      'UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL',
+      [user.id],
+    )
+    await connection.commit()
+    return res.json({ message: 'Your password has been changed.' })
+  } catch (error) {
+    await connection.rollback()
+    return next(error)
+  } finally {
+    connection.release()
+  }
+}
+
 async function register(req, res, next) {
   const firstName = normalizeText(req.body.firstName)
   const middleName = normalizeText(req.body.middleName) || null
@@ -313,6 +361,7 @@ function currentUser(req, res) {
 }
 
 module.exports = {
+  changePassword,
   currentUser,
   forgotPassword,
   login,

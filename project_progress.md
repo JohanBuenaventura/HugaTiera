@@ -64,13 +64,14 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 ## Completed Features
 - Approved React + Vite, Node.js + Express.js, and MySQL architecture.
 - 19-table MySQL schema in `database/schema/hugatiera_schema.sql` and Migration 001 in `database/migrations/001_unified_requests_and_agreements.sql` (applied to both `hugatiera_db_migration_test` and `hugatiera_db`).
-- Password recovery with short-lived, single-use hashed reset tokens (`password_reset_tokens`) and provider-neutral SMTP delivery. Migration 004 was backed up and applied to `hugatiera_db` on 2026-11-24; development mode logs the reset URL when SMTP is not configured.
+- Password recovery with short-lived, single-use hashed reset tokens (`password_reset_tokens`) and provider-neutral SMTP delivery. Migration 004 was backed up and applied to `hugatiera_db` on 2026-11-24; development mode logs the reset URL when SMTP is not configured. Signed-in clients and gardeners can also change passwords from Profile & Settings after verifying their current password; outstanding reset links are invalidated.
 - Backend health endpoint at `GET /api/health`.
 - Client and gardener registration with validation, optional middle name in signup and editable profiles, required client address at signup and profile updates, hashed passwords, and `HttpOnly` JWT cookies.
 - Required private date-of-birth validation for new accounts (18+ by Manila-local date), optional phone at signup, and continued exclusion of date of birth from auth/profile responses.
 - Live `users.is_active = TRUE` verification in `requireAuth` so deactivated accounts immediately lose access.
 - Role-specific profile retrieval, updates, and tabbed `Overview` vs `Profile & Settings` dashboards (`ISS-05`).
 - Gardener service listing CRUD, portfolio upload/edit/delete, public marketplace search/filter/sort/pagination, and automatic full-name fallback when `business_name` is empty (`ISS-04`).
+- Gardener Portfolio tab displays the gardener's visible customer reviews, including star ratings, reviewer names, review dates, and average rating, using the existing reviews API.
 - Step R2 secure garden photo upload and authenticated delivery (`/api/request-images`, `sharp` resize + EXIF/GPS strip, `getRequestImageFileUrl` frontend origin resolution `ISS-01`).
 - Step R3 versioned mutual agreement engine (`/api/agreements`), priced-service direct agreement routing (`POST /api/agreements/direct-service`), two-party approval gating before booking confirmation, and read-only Mutual Agreement Summary on booking details (`ISS-09`).
 - Step R4 Case 2 Direct Service Provider Inquiry (feasibility responses `offer`/`feasible`/`modifications`/`cannot_do`, offer revisions in `quotation_revisions`, withdrawal, offer locking, lazy expiry).

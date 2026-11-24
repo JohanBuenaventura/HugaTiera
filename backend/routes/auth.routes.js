@@ -1,5 +1,6 @@
 const express = require('express')
 const {
+  changePassword,
   currentUser,
   forgotPassword,
   login,
@@ -15,6 +16,7 @@ router.post('/register', register)
 router.post('/login', login)
 router.post('/forgot-password', forgotPassword)
 router.post('/reset-password', resetPassword)
+router.post('/change-password', requireAuth, changePassword)
 router.post('/logout', logout)
 router.get('/me', requireAuth, currentUser)
 router.get('/administrator-check', requireAuth, requireRole('administrator'), (req, res) => {

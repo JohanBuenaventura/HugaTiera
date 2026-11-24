@@ -2847,6 +2847,26 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   font-weight: 700;
 }
 
+.portfolio-feedback-section {
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.portfolio-feedback-section .review-list {
+  max-width: none;
+}
+
+.portfolio-rating-summary {
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: var(--forest);
+  background: var(--forest-soft);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 @media (max-width: 1100px) {
   .dashboard-overview-action-grid {
     grid-template-columns: 1fr 1fr;

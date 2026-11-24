@@ -20,10 +20,11 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
   - Client and Gardener registration with `bcryptjs` password hashing and `HttpOnly` JWT cookies (`hugatiera_token`).
   - Live account status verification (`users.is_active = TRUE`) on every protected request; administrator self-registration is blocked.
   - Forgot-password and reset-password flows with 30-minute, single-use hashed reset tokens stored in MySQL.
+  - Signed-in clients and gardeners can change their password from Profile & Settings after verifying their current password; outstanding reset links are invalidated.
 - **Public Marketplace & Gardener Portfolios:**
   - Keyword, category, and service-area filtering with sorting (`newest`, `price_low`, `price_high`) and pagination (`/services`).
   - Public visibility gated by administrator gardener approval (`gardener_profiles.is_approved = TRUE`).
-  - Gardener portfolio photo uploads with magic-byte validation (`JPEG`, `PNG`, `WebP`, up to 5 MB), metadata editing, and public gallery display alongside verified star ratings (`/gardeners/:gardenerId`).
+  - Gardener portfolio photo uploads with magic-byte validation (`JPEG`, `PNG`, `WebP`, up to 5 MB), metadata editing, and public gallery display alongside verified star ratings (`/gardeners/:gardenerId`); gardeners can also review client feedback from their Portfolio dashboard tab.
   - Automatic full-name fallback (`first_name + last_name`) whenever a gardener's `business_name` is optional/empty (`ISS-04`).
 - **Secure Garden Photo Uploads (`Step R2` & `ISS-01`):**
   - Client garden photo uploads (`POST /api/request-images`) decoded, auto-oriented, resized within `1920×1920`, and re-encoded via `sharp` with **all EXIF, GPS location, XMP, and IPTC metadata stripped**.
