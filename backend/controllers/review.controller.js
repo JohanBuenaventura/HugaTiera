@@ -5,6 +5,31 @@ function text(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+async function listRecentReviews(req, res, next) {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 6, 1), 12)
+  try {
+    const [reviews] = await pool.execute(
+      `SELECT r.id, r.booking_id, r.rating, r.review_text, r.created_at,
+              r.gardener_id, b.service_id, s.title AS service_title,
+              CONCAT(c.first_name, ' ', LEFT(c.last_name, 1), '.') AS client_name,
+              COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(g.first_name, ' ', g.last_name)) AS gardener_name
+       FROM reviews r
+       JOIN bookings b ON b.id = r.booking_id
+       JOIN users c ON c.id = r.client_id
+       JOIN users g ON g.id = r.gardener_id
+       JOIN gardener_profiles gp ON gp.user_id = g.id
+       LEFT JOIN services s ON s.id = b.service_id
+       WHERE r.is_visible = TRUE AND g.is_active = TRUE AND gp.is_approved = TRUE
+       ORDER BY r.created_at DESC, r.id DESC
+       LIMIT ?`,
+      [limit],
+    )
+    return res.json({ reviews })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 async function listGardenerReviews(req, res, next) {
   try {
     const [reviews] = await pool.execute(
@@ -48,13 +73,27 @@ async function createReview(req, res, next) {
   try {
     await connection.beginTransaction()
     const [bookings] = await connection.execute(
-      `SELECT id, gardener_id FROM bookings
-       WHERE id = ? AND client_id = ? AND status = 'completed' FOR UPDATE`,
+      `SELECT id, gardener_id, status, payment_status, transaction_status FROM bookings
+       WHERE id = ? AND client_id = ? FOR UPDATE`,
       [bookingId, req.user.id],
     )
-    if (!bookings[0]) {
+    if (!bookings[0] || bookings[0].status !== 'completed') {
       await connection.rollback()
       return res.status(409).json({ message: 'Only your completed bookings can be reviewed.' })
+    }
+    if (bookings[0].payment_status !== 'fully_paid') {
+      await connection.rollback()
+      return res.status(409).json({
+        code: 'FULL_PAYMENT_REQUIRED',
+        message: 'Full payment must be verified before you can rate and review this service.',
+      })
+    }
+    if (bookings[0].transaction_status !== 'closed') {
+      await connection.rollback()
+      return res.status(409).json({
+        code: 'TRANSACTION_NOT_CLOSED',
+        message: 'Both the client and gardener must sign the Transaction Completion Agreement before submitting a rating and review.',
+      })
     }
     const [existing] = await connection.execute('SELECT id FROM reviews WHERE booking_id = ? LIMIT 1', [bookingId])
     if (existing[0]) {
@@ -84,4 +123,4 @@ async function createReview(req, res, next) {
   }
 }
 
-module.exports = { createReview, getBookingReview, listGardenerReviews }
+module.exports = { createReview, getBookingReview, listGardenerReviews, listRecentReviews }

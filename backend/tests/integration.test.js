@@ -135,8 +135,12 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Fake',
         lastName: 'Admin',
+        dateOfBirth: '1995-05-15',
+        phone: '09171234560',
+        address: 'Tetuan, Zamboanga City',
         email: `fake.admin.${runId}@hugatiera.local`,
         password: 'Password123!',
+        confirmPassword: 'Password123!',
         role: 'administrator',
       },
     })
@@ -146,14 +150,23 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       method: 'POST',
       body: {
         firstName: 'Maria',
+        middleName: 'Clara',
         lastName: 'Santos',
+        dateOfBirth: '1996-04-20',
+        phone: '09171234567',
+        address: '123 Tetuan Hwy, Brgy. Tetuan',
+        city: 'Zamboanga City',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
+        confirmPassword: 'Password123!',
         role: 'client',
       },
     })
     assert.equal(clientReg.status, 201)
     assert.equal(clientReg.data.user.role, 'client')
+    assert.equal(clientReg.data.user.middleName, 'Clara')
+    assert.equal(clientReg.data.user.dateOfBirth, '1996-04-20')
+    assert.ok(clientReg.data.user.age >= 18)
     clientCookie = clientReg.cookie
     clientId = clientReg.data.user.id
     createdUserIds.push(clientId)
@@ -163,8 +176,12 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Maria',
         lastName: 'Santos',
+        dateOfBirth: '1996-04-20',
+        phone: '09171234567',
+        address: '123 Tetuan Hwy, Brgy. Tetuan',
         email: `client.${runId}@hugatiera.local`,
         password: 'Password123!',
+        confirmPassword: 'Password123!',
         role: 'client',
       },
     })
@@ -175,13 +192,19 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
       body: {
         firstName: 'Ramon',
         lastName: 'Verde',
+        dateOfBirth: '1990-08-12',
+        phone: '09187654321',
+        serviceArea: 'Zamboanga City',
+        yearsOfExperience: 5,
         email: `gardener.${runId}@hugatiera.local`,
         password: 'Password123!',
+        confirmPassword: 'Password123!',
         role: 'gardener',
       },
     })
     assert.equal(gardenerReg.status, 201)
     assert.equal(gardenerReg.data.user.role, 'gardener')
+    assert.equal(gardenerReg.data.user.middleName, null)
     gardenerCookie = gardenerReg.cookie
     gardenerId = gardenerReg.data.user.id
     createdUserIds.push(gardenerId)
@@ -465,7 +488,37 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(conflictBooking.status, 409)
 
-    // Gardener transitions confirmed booking: accepted -> in_progress -> completed
+    // Unpaid reservation cannot transition to in_progress until deposit/payment is verified
+    const unpaidStartAttempt = await apiRequest(`/bookings/${inquiryBookingId}/status`, {
+      method: 'PATCH',
+      cookie: gardenerCookie,
+      body: { status: 'in_progress' },
+    })
+    assert.equal(unpaidStartAttempt.status, 409)
+    assert.equal(unpaidStartAttempt.data.code, 'PAYMENT_REQUIRED')
+
+    // Client submits partial deposit payment proof (30% of 4500 = 1350) & gardener verifies to upgrade reservation -> confirmed booking
+    const paySubmit = await apiRequest(`/bookings/${inquiryBookingId}/payments`, {
+      method: 'POST',
+      cookie: clientCookie,
+      body: {
+        paymentType: 'partial',
+        paymentMethod: 'gcash',
+        amount: 1350,
+        referenceNumber: 'GCASH-TC10-001',
+      },
+    })
+    assert.equal(paySubmit.status, 201)
+
+    const payVerify = await apiRequest(`/bookings/${inquiryBookingId}/payments/${paySubmit.data.id}`, {
+      method: 'PATCH',
+      cookie: gardenerCookie,
+      body: { decision: 'verified' },
+    })
+    assert.equal(payVerify.status, 200)
+    assert.equal(payVerify.data.booking.booking_stage, 'booked')
+
+    // Gardener transitions paid confirmed booking: accepted -> in_progress -> completed
     for (const nextStatus of ['in_progress', 'completed']) {
       const statusRes = await apiRequest(`/bookings/${inquiryBookingId}/status`, {
         method: 'PATCH',
@@ -600,7 +653,7 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     assert.equal(readAllRes.status, 204)
   })
 
-  test('TC-14: Completed booking review creation, duplicate block, and average rating', async () => {
+  test('TC-14: Completed booking full payment + Transaction Completion Agreement gate, review creation, duplicate block, and average rating', async () => {
     // Uncompleted booking cannot be reviewed
     const prematureReview = await apiRequest('/reviews', {
       method: 'POST',
@@ -609,7 +662,77 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     })
     assert.equal(prematureReview.status, 409)
 
-    // Completed booking can be reviewed once
+    // Completed booking with unpaid remaining balance (only PHP 1350 deposit paid out of PHP 4500) cannot be reviewed yet
+    const unpaidBalanceReview = await apiRequest('/reviews', {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { bookingId: inquiryBookingId, rating: 5, reviewText: 'Before full payment' },
+    })
+    assert.equal(unpaidBalanceReview.status, 409)
+    assert.equal(unpaidBalanceReview.data.code, 'FULL_PAYMENT_REQUIRED')
+
+    // Client pays remaining PHP 3150 balance after work completion & gardener verifies
+    const balSubmit = await apiRequest(`/bookings/${inquiryBookingId}/payments`, {
+      method: 'POST',
+      cookie: clientCookie,
+      body: {
+        paymentType: 'balance',
+        paymentMethod: 'gcash',
+        amount: 3150,
+        referenceNumber: 'GCASH-TC14-BAL',
+      },
+    })
+    assert.equal(balSubmit.status, 201)
+    assert.match(balSubmit.data.payment.transaction_code, /^TXN-\d{8}-[A-Z0-9]{6}$/)
+
+    const balVerify = await apiRequest(`/bookings/${inquiryBookingId}/payments/${balSubmit.data.id}`, {
+      method: 'PATCH',
+      cookie: gardenerCookie,
+      body: { decision: 'verified' },
+    })
+    assert.equal(balVerify.status, 200)
+    assert.equal(balVerify.data.booking.payment_status, 'fully_paid')
+    assert.equal(balVerify.data.booking.transaction_status, 'pending_closure')
+
+    // Still cannot review until BOTH client and gardener sign the Transaction Completion Agreement
+    const unclosedReview = await apiRequest('/reviews', {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { bookingId: inquiryBookingId, rating: 5, reviewText: 'Before closing agreement' },
+    })
+    assert.equal(unclosedReview.status, 409)
+    assert.equal(unclosedReview.data.code, 'TRANSACTION_NOT_CLOSED')
+
+    // Client signs closing agreement -> still pending_closure until gardener also signs
+    const clientClose = await apiRequest(`/bookings/${inquiryBookingId}/complete-transaction`, {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { note: 'Work inspected and full payment settled.' },
+    })
+    assert.equal(clientClose.status, 200)
+    assert.equal(clientClose.data.closed, false)
+    assert.equal(clientClose.data.transaction_status, 'pending_closure')
+
+    const halfClosedReview = await apiRequest('/reviews', {
+      method: 'POST',
+      cookie: clientCookie,
+      body: { bookingId: inquiryBookingId, rating: 5, reviewText: 'Only client signed' },
+    })
+    assert.equal(halfClosedReview.status, 409)
+    assert.equal(halfClosedReview.data.code, 'TRANSACTION_NOT_CLOSED')
+
+    // Gardener signs closing agreement -> transaction closes & rating unlocks
+    const gardenerClose = await apiRequest(`/bookings/${inquiryBookingId}/complete-transaction`, {
+      method: 'POST',
+      cookie: gardenerCookie,
+      body: { note: 'Full payment received. Thank you!' },
+    })
+    assert.equal(gardenerClose.status, 200)
+    assert.equal(gardenerClose.data.closed, true)
+    assert.equal(gardenerClose.data.transaction_status, 'closed')
+    assert.equal(gardenerClose.data.booking.can_review, true)
+
+    // Closed, fully paid, completed booking can now be reviewed once
     const validReview = await apiRequest('/reviews', {
       method: 'POST',
       cookie: clientCookie,
@@ -629,6 +752,15 @@ describe('HugaTiera Phase 15 System Integration & Regression Suite', () => {
     assert.equal(gardenerRes.status, 200)
     assert.equal(gardenerRes.data.gardener.average_rating, 5)
     assert.equal(gardenerRes.data.gardener.review_count, 1)
+
+    // Recent public reviews feed and service catalog ratings include the verified review
+    const recentReviewsRes = await apiRequest('/reviews/recent?limit=5')
+    assert.equal(recentReviewsRes.status, 200)
+    assert.ok(recentReviewsRes.data.reviews.some((r) => r.booking_id === inquiryBookingId && r.rating === 5))
+
+    const ratedServicesRes = await apiRequest(`/services?keyword=${encodeURIComponent(String(runId))}`)
+    assert.equal(ratedServicesRes.status, 200)
+    assert.ok(ratedServicesRes.data.services.some((s) => s.gardener_id === gardenerId && Number(s.average_rating) === 5 && Number(s.review_count) === 1))
   })
 
   test('TC-15: User report submission, admin moderation, and immediate user deactivation enforcement', async () => {

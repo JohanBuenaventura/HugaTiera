@@ -12,6 +12,7 @@ async function request(path, options = {}) {
 }
 
 export const reviewsApi = {
+  recent: (limit = 6) => request(`/reviews/recent?limit=${limit}`),
   gardener: (id) => request(`/reviews/gardeners/${id}`),
   booking: (id) => request(`/reviews/bookings/${id}`),
   create: (details) => request('/reviews', { method: 'POST', body: JSON.stringify(details) }),

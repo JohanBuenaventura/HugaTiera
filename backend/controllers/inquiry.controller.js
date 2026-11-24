@@ -4,6 +4,35 @@ const {
   attachImagesToInquiry,
   serializeRequestImage,
 } = require('./requestImage.controller')
+const {
+  calculatePriceEstimate,
+  parseEstimatorInputs,
+  parseSelectedAddonItems,
+} = require('../utils/priceEstimator')
+
+async function resolveSelectedAddons(conn, parsedItems) {
+  if (!Array.isArray(parsedItems) || parsedItems.length === 0) return []
+  const ids = parsedItems.map((i) => i.addonId)
+  const placeholders = ids.map(() => '?').join(', ')
+  const [rows] = await conn.execute(
+    `SELECT id, name, item_type, unit, unit_price_min, unit_price_max
+     FROM pricing_addons
+     WHERE id IN (${placeholders}) AND is_active = TRUE`,
+    ids,
+  )
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const resolved = []
+  for (const item of parsedItems) {
+    const row = byId.get(item.addonId)
+    if (!row) {
+      const err = new Error('One or more selected plant or material pricing items are unavailable.')
+      err.statusCode = 400
+      throw err
+    }
+    resolved.push({ ...row, quantity: item.quantity })
+  }
+  return resolved
+}
 
 const ALLOWED_RESPONSE_TYPES = new Set([
   'offer',
@@ -15,6 +44,65 @@ const ALLOWED_RESPONSE_TYPES = new Set([
 
 function text(value) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function parseCategorySpecsInput(raw) {
+  if (raw === undefined || raw === null || raw === '') return { value: null }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: 'Category specifications must be an object.' }
+  }
+  const entries = Object.entries(raw)
+  if (entries.length > 20) {
+    return { error: 'Too many category specification fields (maximum 20).' }
+  }
+  const cleaned = {}
+  for (const [key, val] of entries) {
+    if (!/^[a-zA-Z0-9_]{1,50}$/.test(key)) {
+      return { error: `Invalid specification key "${key}".` }
+    }
+    if (val === undefined || val === null || val === '') continue
+    if (typeof val === 'boolean') {
+      cleaned[key] = val
+    } else if (typeof val === 'number') {
+      if (!Number.isFinite(val) || val < 0 || val > 10000000) {
+        return { error: `Invalid numeric value for "${key}".` }
+      }
+      cleaned[key] = Math.round(val * 100) / 100
+    } else if (typeof val === 'string') {
+      const trimmed = val.trim()
+      if (!trimmed) continue
+      if (trimmed.length > 500) {
+        return { error: `Specification "${key}" must be 500 characters or fewer.` }
+      }
+      cleaned[key] = trimmed
+    } else if (Array.isArray(val)) {
+      const items = val
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+      if (items.length === 0) continue
+      if (items.length > 20 || items.some((item) => item.length > 120)) {
+        return { error: `Specification list "${key}" contains invalid or overly long entries.` }
+      }
+      cleaned[key] = [...new Set(items)]
+    } else {
+      return { error: `Unsupported value type for specification "${key}".` }
+    }
+  }
+  return { value: Object.keys(cleaned).length > 0 ? cleaned : null }
+}
+
+function deserializeCategorySpecs(raw) {
+  if (!raw) return null
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
 }
 
 function parsePositiveInt(value) {
@@ -106,6 +194,8 @@ async function listInquiries(req, res, next) {
       const [inquiries] = await pool.execute(
         `SELECT i.id, i.request_type, i.client_id, i.gardener_id, i.service_id, i.category_id,
                 i.subject, i.description, i.ai_summary, i.requested_date, i.location,
+                i.area_sqm, i.work_complexity, i.materials_option, i.site_visit_requested,
+                i.estimated_min_amount, i.estimated_max_amount, i.price_comment,
                 i.status, i.expires_at, i.created_at, i.updated_at,
                 s.title AS service_title,
                 sc.name AS category_name,
@@ -140,6 +230,8 @@ async function listInquiries(req, res, next) {
     const [inquiries] = await pool.execute(
       `SELECT i.id, i.request_type, i.client_id, i.gardener_id, i.service_id, i.category_id,
               i.subject, i.description, i.ai_summary, i.requested_date, i.location,
+              i.area_sqm, i.work_complexity, i.materials_option, i.site_visit_requested,
+              i.estimated_min_amount, i.estimated_max_amount, i.price_comment,
               i.status, i.expires_at, i.created_at, i.updated_at,
               s.title AS service_title,
               sc.name AS category_name,
@@ -215,6 +307,11 @@ async function listOpenRequests(req, res, next) {
     ]
     const params = [req.user.id]
 
+    if (req.user.role === 'gardener') {
+      whereClauses.push('i.client_id <> ?')
+      params.push(req.user.id)
+    }
+
     if (categoryId) {
       whereClauses.push('i.category_id = ?')
       params.push(categoryId)
@@ -227,6 +324,8 @@ async function listOpenRequests(req, res, next) {
     const [rows] = await pool.execute(
       `SELECT i.id, i.request_type, i.category_id,
               i.subject, i.description, i.ai_summary, i.requested_date, i.location,
+              i.area_sqm, i.work_complexity, i.materials_option, i.site_visit_requested,
+              i.estimated_min_amount, i.estimated_max_amount, i.price_comment, i.category_specs,
               i.status, i.expires_at, i.created_at, i.updated_at,
               sc.name AS category_name,
               u.first_name AS client_first_name,
@@ -267,6 +366,7 @@ async function listOpenRequests(req, res, next) {
       }
       for (const row of rows) {
         row.images = imagesByInquiry.get(row.id) || []
+        row.category_specs = deserializeCategorySpecs(row.category_specs)
       }
     }
 
@@ -286,6 +386,9 @@ async function getInquiry(req, res, next) {
     const [inquiries] = await pool.execute(
       `SELECT i.id, i.request_type, i.client_id, i.gardener_id, i.service_id, i.category_id,
               i.subject, i.description, i.ai_summary, i.requested_date, i.location,
+              i.area_sqm, i.work_complexity, i.materials_option, i.site_visit_requested,
+              i.estimated_labor_min, i.estimated_labor_max, i.estimated_materials_min, i.estimated_materials_max,
+              i.estimated_min_amount, i.estimated_max_amount, i.price_comment, i.category_specs,
               i.status, i.expires_at, i.created_at, i.updated_at,
               CASE WHEN i.expires_at IS NOT NULL AND i.expires_at <= NOW() THEN 1 ELSE 0 END AS is_expired,
               s.title AS service_title,
@@ -307,6 +410,7 @@ async function getInquiry(req, res, next) {
     if (!inquiry) {
       return res.status(404).json({ message: 'Inquiry was not found.' })
     }
+    inquiry.category_specs = deserializeCategorySpecs(inquiry.category_specs)
 
     if (
       (inquiry.status === 'open' || inquiry.status === 'responded')
@@ -360,9 +464,10 @@ async function getInquiry(req, res, next) {
       : [inquiry.id]
 
     const [quotations] = await pool.execute(
-      `SELECT q.id, q.inquiry_id, q.gardener_id, q.amount, q.details,
-              q.availability_start, q.availability_end, q.status, q.valid_until,
-              q.response_type, q.proposed_changes, q.revision_number, q.locked_at,
+      `SELECT q.id, q.inquiry_id, q.gardener_id, q.amount, q.labor_amount, q.materials_amount, q.materials_breakdown, q.details,
+              q.availability_start, q.availability_end, q.estimated_working_days, q.estimated_hours,
+              q.status, q.valid_until,
+              q.response_type, q.proposed_changes, q.requires_site_visit, q.revision_number, q.locked_at,
               q.created_at, q.updated_at,
               COALESCE(gp.business_name, CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name,
               gp.business_name,
@@ -393,8 +498,9 @@ async function getInquiry(req, res, next) {
       const qIds = quotations.map((q) => q.id)
       const placeholders = qIds.map(() => '?').join(', ')
       const [revisions] = await pool.execute(
-        `SELECT id, quotation_id, revision_number, response_type, amount, details,
-                proposed_changes, availability_start, availability_end, valid_until, created_at
+        `SELECT id, quotation_id, revision_number, response_type, amount, labor_amount, materials_amount, materials_breakdown, details,
+                proposed_changes, requires_site_visit, availability_start, availability_end,
+                estimated_working_days, estimated_hours, valid_until, created_at
          FROM quotation_revisions
          WHERE quotation_id IN (${placeholders})
          ORDER BY revision_number DESC, id DESC`,
@@ -458,9 +564,19 @@ async function getInquiry(req, res, next) {
       [inquiry.id],
     )
 
+    const [estimateItems] = await pool.execute(
+      `SELECT id, inquiry_id, addon_id, item_name, item_type, unit, quantity,
+              unit_price_min, unit_price_max, subtotal_min, subtotal_max
+       FROM inquiry_estimate_items
+       WHERE inquiry_id = ?
+       ORDER BY id ASC`,
+      [inquiry.id],
+    )
+
     delete inquiry.is_expired
     return res.json({
       inquiry,
+      estimateItems,
       quotations,
       images,
       activeAgreement,
@@ -468,6 +584,74 @@ async function getInquiry(req, res, next) {
       events,
     })
   } catch (error) {
+    return next(error)
+  }
+}
+
+async function estimateInquiryPrice(req, res, next) {
+  const estimatorInputs = parseEstimatorInputs(req.body)
+  if (estimatorInputs.error) {
+    return res.status(400).json({ message: estimatorInputs.error })
+  }
+  if (!estimatorInputs.areaSqm) {
+    return res.status(400).json({ message: 'Please provide an estimated garden area in square meters (areaSqm).' })
+  }
+  const addonParse = parseSelectedAddonItems(req.body?.addonItems ?? req.body?.addon_items)
+  if (addonParse.error) {
+    return res.status(400).json({ message: addonParse.error })
+  }
+
+  const rawServiceId = req.body?.serviceId ?? req.body?.service_id
+  const rawCategoryId = req.body?.categoryId ?? req.body?.category_id
+  const serviceId = (rawServiceId !== undefined && rawServiceId !== null && String(rawServiceId).trim() !== '')
+    ? parsePositiveInt(rawServiceId)
+    : null
+  const categoryIdParam = (rawCategoryId !== undefined && rawCategoryId !== null && String(rawCategoryId).trim() !== '')
+    ? parsePositiveInt(rawCategoryId)
+    : null
+
+  try {
+    let service = null
+    let resolvedCategoryId = categoryIdParam
+
+    if (serviceId) {
+      const [services] = await pool.execute(
+        `SELECT s.id, s.category_id, s.indicative_price, s.price_unit
+         FROM services s
+         WHERE s.id = ? AND s.is_active = TRUE
+         LIMIT 1`,
+        [serviceId],
+      )
+      service = services[0] || null
+      if (service && !resolvedCategoryId) {
+        resolvedCategoryId = service.category_id
+      }
+    }
+
+    let category = null
+    if (resolvedCategoryId) {
+      const [cats] = await pool.execute(
+        'SELECT id, name, rate_per_sqm_min, rate_per_sqm_max, min_base_fee FROM service_categories WHERE id = ? AND is_active = TRUE LIMIT 1',
+        [resolvedCategoryId],
+      )
+      category = cats[0] || null
+    }
+
+    const selectedAddons = await resolveSelectedAddons(pool, addonParse.items)
+    const estimate = calculatePriceEstimate({
+      areaSqm: estimatorInputs.areaSqm,
+      workComplexity: estimatorInputs.workComplexity,
+      materialsOption: estimatorInputs.materialsOption,
+      category,
+      service,
+      selectedAddons,
+    })
+
+    return res.json({ estimate })
+  } catch (error) {
+    if (error && error.statusCode === 400) {
+      return res.status(400).json({ message: error.message })
+    }
     return next(error)
   }
 }
@@ -543,6 +727,19 @@ async function createInquiry(req, res, next) {
     return res.status(400).json({ message: 'imageIds must be an array of uploaded photo IDs.' })
   }
 
+  const estimatorInputs = parseEstimatorInputs(req.body)
+  if (estimatorInputs.error) {
+    return res.status(400).json({ message: estimatorInputs.error })
+  }
+  const addonParse = parseSelectedAddonItems(req.body?.addonItems ?? req.body?.addon_items)
+  if (addonParse.error) {
+    return res.status(400).json({ message: addonParse.error })
+  }
+  const categorySpecsParse = parseCategorySpecsInput(req.body?.categorySpecs ?? req.body?.category_specs)
+  if (categorySpecsParse.error) {
+    return res.status(400).json({ message: categorySpecsParse.error })
+  }
+
   let expiresInDays = requestType === 'general' ? 14 : null
   if (rawExpiresInDays !== undefined && rawExpiresInDays !== null && String(rawExpiresInDays).trim() !== '') {
     expiresInDays = parsePositiveInt(rawExpiresInDays)
@@ -557,11 +754,12 @@ async function createInquiry(req, res, next) {
 
     let resolvedGardenerId = requestType === 'general' ? null : gardenerIdParam
     let resolvedCategoryId = categoryIdParam
+    let serviceRow = null
 
     if (requestType === 'direct') {
       if (serviceId) {
         const [services] = await connection.execute(
-          `SELECT s.id, s.gardener_id, s.category_id
+          `SELECT s.id, s.gardener_id, s.category_id, s.indicative_price, s.price_unit
            FROM services s
            JOIN users u ON u.id = s.gardener_id AND u.is_active = TRUE
            JOIN gardener_profiles gp ON gp.user_id = s.gardener_id AND gp.is_approved = TRUE
@@ -578,6 +776,7 @@ async function createInquiry(req, res, next) {
           await connection.rollback()
           return res.status(400).json({ message: 'The selected service does not belong to the specified gardener.' })
         }
+        serviceRow = services[0]
         resolvedGardenerId = services[0].gardener_id
         resolvedCategoryId = resolvedCategoryId || services[0].category_id
       } else {
@@ -585,7 +784,7 @@ async function createInquiry(req, res, next) {
           `SELECT u.id
            FROM users u
            JOIN gardener_profiles gp ON gp.user_id = u.id AND gp.is_approved = TRUE
-           WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE
+           WHERE u.id = ? AND (u.role = 'gardener' OR u.can_act_as_gardener = TRUE) AND u.is_active = TRUE
            LIMIT 1
            FOR UPDATE`,
           [resolvedGardenerId],
@@ -595,18 +794,39 @@ async function createInquiry(req, res, next) {
           return res.status(404).json({ message: 'Selected gardener is unavailable or not approved.' })
         }
       }
+      if (resolvedGardenerId && resolvedGardenerId === req.user.id) {
+        await connection.rollback()
+        return res.status(409).json({
+          code: 'SELF_INQUIRY_FORBIDDEN',
+          message: 'You cannot send a service inquiry to your own gardener profile or service.',
+        })
+      }
     }
 
+    let categoryRow = null
     if (resolvedCategoryId) {
       const [cats] = await connection.execute(
-        'SELECT id FROM service_categories WHERE id = ? AND is_active = TRUE LIMIT 1',
+        'SELECT id, name, rate_per_sqm_min, rate_per_sqm_max, min_base_fee FROM service_categories WHERE id = ? AND is_active = TRUE LIMIT 1',
         [resolvedCategoryId],
       )
       if (!cats[0]) {
         await connection.rollback()
         return res.status(400).json({ message: 'Selected service category is unavailable.' })
       }
+      categoryRow = cats[0]
     }
+
+    const selectedAddons = await resolveSelectedAddons(connection, addonParse.items)
+    const estimate = estimatorInputs.areaSqm
+      ? calculatePriceEstimate({
+        areaSqm: estimatorInputs.areaSqm,
+        workComplexity: estimatorInputs.workComplexity,
+        materialsOption: estimatorInputs.materialsOption,
+        category: categoryRow,
+        service: serviceRow,
+        selectedAddons,
+      })
+      : null
 
     const expiresSql = expiresInDays ? 'DATE_ADD(NOW(), INTERVAL ? DAY)' : 'NULL'
     const insertParams = [
@@ -620,16 +840,53 @@ async function createInquiry(req, res, next) {
       aiSummary,
       requestedDate,
       location,
+      estimatorInputs.areaSqm,
+      estimatorInputs.workComplexity,
+      estimatorInputs.materialsOption,
+      estimatorInputs.siteVisitRequested ? 1 : 0,
+      estimate ? estimate.estimatedLaborMin : null,
+      estimate ? estimate.estimatedLaborMax : null,
+      estimate ? estimate.estimatedMaterialsMin : null,
+      estimate ? estimate.estimatedMaterialsMax : null,
+      estimate ? estimate.estimatedMinAmount : null,
+      estimate ? estimate.estimatedMaxAmount : null,
+      estimatorInputs.priceComment,
+      categorySpecsParse.value ? JSON.stringify(categorySpecsParse.value) : null,
       ...(expiresInDays ? [expiresInDays] : []),
     ]
 
     const [result] = await connection.execute(
       `INSERT INTO inquiries
-        (request_type, client_id, gardener_id, service_id, category_id, subject, description, ai_summary, requested_date, location, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${expiresSql})`,
+        (request_type, client_id, gardener_id, service_id, category_id, subject, description, ai_summary,
+         requested_date, location, area_sqm, work_complexity, materials_option, site_visit_requested,
+         estimated_labor_min, estimated_labor_max, estimated_materials_min, estimated_materials_max,
+         estimated_min_amount, estimated_max_amount, price_comment, category_specs, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${expiresSql})`,
       insertParams,
     )
     const inquiryId = result.insertId
+
+    if (estimate && Array.isArray(estimate.items) && estimate.items.length > 0) {
+      for (const item of estimate.items) {
+        await connection.execute(
+          `INSERT INTO inquiry_estimate_items
+            (inquiry_id, addon_id, item_name, item_type, unit, quantity, unit_price_min, unit_price_max, subtotal_min, subtotal_max)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            inquiryId,
+            item.addonId,
+            item.itemName,
+            item.itemType,
+            item.unit,
+            item.quantity,
+            item.unitPriceMin,
+            item.unitPriceMax,
+            item.subtotalMin,
+            item.subtotalMax,
+          ],
+        )
+      }
+    }
 
     let attachedImageIds = []
     if (rawImageIds.length > 0) {
@@ -665,6 +922,10 @@ async function createInquiry(req, res, next) {
       'SELECT * FROM inquiries WHERE id = ? LIMIT 1',
       [inquiryId],
     )
+    const createdInquiry = createdInquiryRows[0]
+    if (createdInquiry) {
+      createdInquiry.category_specs = deserializeCategorySpecs(createdInquiry.category_specs)
+    }
     const [attachedImageRows] = attachedImageIds.length > 0
       ? await connection.execute(
           `SELECT id, inquiry_id, uploaded_by, kind, parent_image_id, mime_type, file_size, ai_description, created_at
@@ -682,7 +943,8 @@ async function createInquiry(req, res, next) {
       gardener_id: resolvedGardenerId,
       status: 'open',
       attachedImageIds,
-      inquiry: createdInquiryRows[0],
+      estimate,
+      inquiry: createdInquiry,
       images: attachedImageRows.map(serializeRequestImage),
     })
   } catch (error) {
@@ -710,11 +972,26 @@ async function createQuotation(req, res, next) {
   }
 
   const rawAmount = req.body?.amount
-  const amount = (rawAmount === '' || rawAmount === null || rawAmount === undefined) ? null : Number(rawAmount)
+  let amount = (rawAmount === '' || rawAmount === null || rawAmount === undefined) ? null : Number(rawAmount)
+  const rawLabor = req.body?.laborAmount ?? req.body?.labor_amount
+  const laborAmount = (rawLabor === '' || rawLabor === null || rawLabor === undefined) ? null : Number(rawLabor)
+  const rawMaterials = req.body?.materialsAmount ?? req.body?.materials_amount
+  const materialsAmount = (rawMaterials === '' || rawMaterials === null || rawMaterials === undefined) ? null : Number(rawMaterials)
+  const materialsBreakdown = text(req.body?.materialsBreakdown ?? req.body?.materials_breakdown) || null
+  if (amount === null && (laborAmount !== null || materialsAmount !== null)) {
+    const sum = (Number.isFinite(laborAmount) ? laborAmount : 0) + (Number.isFinite(materialsAmount) ? materialsAmount : 0)
+    amount = Number(sum.toFixed(2))
+  }
   const details = text(req.body?.details)
   const proposedChanges = text(req.body?.proposedChanges ?? req.body?.proposed_changes) || null
+  const rawRequiresSiteVisit = req.body?.requiresSiteVisit ?? req.body?.requires_site_visit
+  const requiresSiteVisit = rawRequiresSiteVisit === true || rawRequiresSiteVisit === 'true' || rawRequiresSiteVisit === 1 || rawRequiresSiteVisit === '1'
   const availabilityStart = text(req.body?.availabilityStart ?? req.body?.availability_start) || null
   const availabilityEnd = text(req.body?.availabilityEnd ?? req.body?.availability_end) || null
+  const rawEstDays = req.body?.estimatedWorkingDays ?? req.body?.estimated_working_days
+  const estimatedWorkingDays = (rawEstDays === '' || rawEstDays === null || rawEstDays === undefined) ? null : Number(rawEstDays)
+  const rawEstHours = req.body?.estimatedHours ?? req.body?.estimated_hours
+  const estimatedHours = (rawEstHours === '' || rawEstHours === null || rawEstHours === undefined) ? null : Number(rawEstHours)
   const validUntil = text(req.body?.validUntil ?? req.body?.valid_until) || null
 
   if (!details || details.length > 5000) {
@@ -730,6 +1007,21 @@ async function createQuotation(req, res, next) {
   }
   if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
     return res.status(400).json({ message: 'Quotation amount must be a non-negative number.' })
+  }
+  if (laborAmount !== null && (!Number.isFinite(laborAmount) || laborAmount < 0)) {
+    return res.status(400).json({ message: 'Labor amount must be a non-negative number.' })
+  }
+  if (materialsAmount !== null && (!Number.isFinite(materialsAmount) || materialsAmount < 0)) {
+    return res.status(400).json({ message: 'Plants & materials amount must be a non-negative number.' })
+  }
+  if (materialsBreakdown && materialsBreakdown.length > 2000) {
+    return res.status(400).json({ message: 'Materials breakdown note must be 2,000 characters or fewer.' })
+  }
+  if (estimatedWorkingDays !== null && (!Number.isFinite(estimatedWorkingDays) || estimatedWorkingDays <= 0 || estimatedWorkingDays > 90)) {
+    return res.status(400).json({ message: 'Estimated working days must be a positive number up to 90.' })
+  }
+  if (estimatedHours !== null && (!Number.isFinite(estimatedHours) || estimatedHours <= 0 || estimatedHours > 500)) {
+    return res.status(400).json({ message: 'Estimated working hours must be a positive number up to 500.' })
   }
   if (![availabilityStart, availabilityEnd, validUntil].every(validDate)) {
     return res.status(400).json({ message: 'Quotation dates must use YYYY-MM-DD format.' })
@@ -803,21 +1095,37 @@ async function createQuotation(req, res, next) {
       })
     }
 
+    if (inquiry.client_id === req.user.id) {
+      await connection.rollback()
+      return res.status(409).json({
+        code: 'SELF_OFFER_FORBIDDEN',
+        message: 'You cannot submit a quotation on your own service request.',
+      })
+    }
+
     const [result] = await connection.execute(
       `INSERT INTO quotations
-        (inquiry_id, gardener_id, amount, details, availability_start, availability_end,
-         status, valid_until, response_type, proposed_changes, revision_number)
-       VALUES (?, ?, ?, ?, ?, ?, 'sent', ?, ?, ?, 1)`,
+        (inquiry_id, gardener_id, amount, labor_amount, materials_amount, materials_breakdown,
+         details, availability_start, availability_end,
+         estimated_working_days, estimated_hours,
+         status, valid_until, response_type, proposed_changes, requires_site_visit, revision_number)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?, ?, ?, 1)`,
       [
         inquiryId,
         req.user.id,
         amount,
+        laborAmount !== null ? Number(laborAmount.toFixed(2)) : null,
+        materialsAmount !== null ? Number(materialsAmount.toFixed(2)) : null,
+        materialsBreakdown,
         details,
         availabilityStart,
         availabilityEnd,
+        estimatedWorkingDays !== null ? Math.round(estimatedWorkingDays * 10) / 10 : null,
+        estimatedHours !== null ? Math.round(estimatedHours * 10) / 10 : null,
         validUntil,
         responseType,
         proposedChanges,
+        requiresSiteVisit ? 1 : 0,
       ],
     )
 
@@ -831,7 +1139,7 @@ async function createQuotation(req, res, next) {
       eventType: 'quotation_sent',
       fromStatus: prevStatus,
       toStatus: 'responded',
-      note: `Gardener submitted response (${responseType}) v1`,
+      note: `Gardener submitted response (${responseType}) v1${requiresSiteVisit ? ' · on-site inspection requested' : ''}`,
     })
 
     await createNotification({
@@ -884,11 +1192,26 @@ async function reviseQuotation(req, res, next) {
   }
 
   const rawAmount = req.body?.amount
-  const amount = (rawAmount === '' || rawAmount === null || rawAmount === undefined) ? null : Number(rawAmount)
+  let amount = (rawAmount === '' || rawAmount === null || rawAmount === undefined) ? null : Number(rawAmount)
+  const rawLabor = req.body?.laborAmount ?? req.body?.labor_amount
+  const laborAmount = (rawLabor === '' || rawLabor === null || rawLabor === undefined) ? null : Number(rawLabor)
+  const rawMaterials = req.body?.materialsAmount ?? req.body?.materials_amount
+  const materialsAmount = (rawMaterials === '' || rawMaterials === null || rawMaterials === undefined) ? null : Number(rawMaterials)
+  const materialsBreakdown = text(req.body?.materialsBreakdown ?? req.body?.materials_breakdown) || null
+  if (amount === null && (laborAmount !== null || materialsAmount !== null)) {
+    const sum = (Number.isFinite(laborAmount) ? laborAmount : 0) + (Number.isFinite(materialsAmount) ? materialsAmount : 0)
+    amount = Number(sum.toFixed(2))
+  }
   const details = text(req.body?.details)
   const proposedChanges = text(req.body?.proposedChanges ?? req.body?.proposed_changes) || null
+  const rawRequiresSiteVisit = req.body?.requiresSiteVisit ?? req.body?.requires_site_visit
+  const requiresSiteVisit = rawRequiresSiteVisit === true || rawRequiresSiteVisit === 'true' || rawRequiresSiteVisit === 1 || rawRequiresSiteVisit === '1'
   const availabilityStart = text(req.body?.availabilityStart ?? req.body?.availability_start) || null
   const availabilityEnd = text(req.body?.availabilityEnd ?? req.body?.availability_end) || null
+  const rawEstDays = req.body?.estimatedWorkingDays ?? req.body?.estimated_working_days
+  const estimatedWorkingDays = (rawEstDays === '' || rawEstDays === null || rawEstDays === undefined) ? null : Number(rawEstDays)
+  const rawEstHours = req.body?.estimatedHours ?? req.body?.estimated_hours
+  const estimatedHours = (rawEstHours === '' || rawEstHours === null || rawEstHours === undefined) ? null : Number(rawEstHours)
   const validUntil = text(req.body?.validUntil ?? req.body?.valid_until) || null
 
   if (!details || details.length > 5000) {
@@ -904,6 +1227,21 @@ async function reviseQuotation(req, res, next) {
   }
   if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
     return res.status(400).json({ message: 'Quotation amount must be a non-negative number.' })
+  }
+  if (laborAmount !== null && (!Number.isFinite(laborAmount) || laborAmount < 0)) {
+    return res.status(400).json({ message: 'Labor amount must be a non-negative number.' })
+  }
+  if (materialsAmount !== null && (!Number.isFinite(materialsAmount) || materialsAmount < 0)) {
+    return res.status(400).json({ message: 'Plants & materials amount must be a non-negative number.' })
+  }
+  if (materialsBreakdown && materialsBreakdown.length > 2000) {
+    return res.status(400).json({ message: 'Materials breakdown note must be 2,000 characters or fewer.' })
+  }
+  if (estimatedWorkingDays !== null && (!Number.isFinite(estimatedWorkingDays) || estimatedWorkingDays <= 0 || estimatedWorkingDays > 90)) {
+    return res.status(400).json({ message: 'Estimated working days must be a positive number up to 90.' })
+  }
+  if (estimatedHours !== null && (!Number.isFinite(estimatedHours) || estimatedHours <= 0 || estimatedHours > 500)) {
+    return res.status(400).json({ message: 'Estimated working hours must be a positive number up to 500.' })
   }
   if (![availabilityStart, availabilityEnd, validUntil].every(validDate)) {
     return res.status(400).json({ message: 'Quotation dates must use YYYY-MM-DD format.' })
@@ -979,18 +1317,25 @@ async function reviseQuotation(req, res, next) {
     // Snapshot superseded quotation version into quotation_revisions
     await connection.execute(
       `INSERT INTO quotation_revisions
-        (quotation_id, revision_number, response_type, amount, details, proposed_changes,
-         availability_start, availability_end, valid_until)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (quotation_id, revision_number, response_type, amount, labor_amount, materials_amount, materials_breakdown,
+         details, proposed_changes, requires_site_visit,
+         availability_start, availability_end, estimated_working_days, estimated_hours, valid_until)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         current.id,
         current.revision_number,
         current.response_type,
         current.amount,
+        current.labor_amount,
+        current.materials_amount,
+        current.materials_breakdown,
         current.details,
         current.proposed_changes,
+        current.requires_site_visit ? 1 : 0,
         current.availability_start,
         current.availability_end,
+        current.estimated_working_days,
+        current.estimated_hours,
         current.valid_until,
       ],
     )
@@ -999,22 +1344,34 @@ async function reviseQuotation(req, res, next) {
     await connection.execute(
       `UPDATE quotations
        SET amount = ?,
+           labor_amount = ?,
+           materials_amount = ?,
+           materials_breakdown = ?,
            details = ?,
            availability_start = ?,
            availability_end = ?,
+           estimated_working_days = ?,
+           estimated_hours = ?,
            valid_until = ?,
            response_type = ?,
            proposed_changes = ?,
+           requires_site_visit = ?,
            revision_number = ?
        WHERE id = ?`,
       [
         amount,
+        laborAmount !== null ? Number(laborAmount.toFixed(2)) : null,
+        materialsAmount !== null ? Number(materialsAmount.toFixed(2)) : null,
+        materialsBreakdown,
         details,
         availabilityStart,
         availabilityEnd,
+        estimatedWorkingDays !== null ? Math.round(estimatedWorkingDays * 10) / 10 : null,
+        estimatedHours !== null ? Math.round(estimatedHours * 10) / 10 : null,
         validUntil,
         responseType,
         proposedChanges,
+        requiresSiteVisit ? 1 : 0,
         nextRevision,
         current.id,
       ],
@@ -1027,7 +1384,7 @@ async function reviseQuotation(req, res, next) {
       eventType: 'quotation_revised',
       fromStatus: `v${current.revision_number}`,
       toStatus: `v${nextRevision}`,
-      note: `Quotation revised to v${nextRevision} (${responseType})`,
+      note: `Quotation revised to v${nextRevision} (${responseType})${requiresSiteVisit ? ' · on-site inspection requested' : ''}`,
     })
 
     await createNotification({
@@ -1525,6 +1882,7 @@ async function renewInquiry(req, res, next) {
 module.exports = {
   createInquiry,
   createQuotation,
+  estimateInquiryPrice,
   getInquiry,
   listInquiries,
   listOpenRequests,

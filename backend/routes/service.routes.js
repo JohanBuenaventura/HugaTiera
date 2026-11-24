@@ -6,6 +6,7 @@ const {
   getService,
   listCategories,
   listMyServices,
+  listPricingAddons,
   listServices,
   sendServiceImage,
   updateService,
@@ -17,6 +18,7 @@ const { requestImageUpload } = require('../middleware/upload.middleware')
 const router = express.Router()
 
 router.get('/categories', listCategories)
+router.get('/pricing-addons', listPricingAddons)
 router.get('/mine', requireAuth, requireRole('gardener'), listMyServices)
 router.get('/', listServices)
 router.get('/:serviceId/image', sendServiceImage)

@@ -1,13 +1,14 @@
 # HugaTiera — Complete REST API Reference
 
-This document provides the complete technical reference for all **15 REST API route modules** registered in `backend/app.js`.
+This document provides the complete technical reference for all **16 REST API route modules** registered in `backend/app.js` on `mergedbranchv1`.
 
 ---
 
 ## 1. Global API Conventions
 
 - **Base URL:** `http://localhost:5000/api`
-- **Authentication Mechanism:** `HttpOnly`, `SameSite=Lax` JWT cookie named `hugatiera_token` (7-day expiry). Requests from the React frontend use `withCredentials: true`.
+- **Authentication Mechanism:** `HttpOnly`, `SameSite=Lax` JWT cookie named `auth_token` (configured via `JWT_EXPIRES_IN`). Requests from the React frontend use `credentials: 'include'`.
+- **Rate Limiting & Security Headers:** `/api/auth/register` (40/15 min per IP) and `/api/auth/login` (15/15 min per IP+email) enforce in-memory rate limits (`429`). All responses emit `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy`.
 - **Account Status Verification (`requireAuth`):** Every protected request verifies that the JWT is valid **and** queries `SELECT id, role, is_active FROM users WHERE id = ?` in MySQL. Deactivated accounts (`is_active = FALSE`) immediately receive `403 Forbidden`.
 - **Role-Based Authorization (`requireRole(...roles)`):** Returns `403 Forbidden` (`{ message: 'You do not have permission to access this resource.' }`) if `req.user.role` is not in the allowed list.
 - **Standard Error Responses (`backend/app.js`):**
@@ -37,34 +38,50 @@ This document provides the complete technical reference for all **15 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `POST` | `/api/auth/register` | Public | Public (`client`, `gardener` only) | Registers a new client or gardener account, creates the matching role profile row in a transaction, and sets the `hugatiera_token` cookie. |
-| `POST` | `/api/auth/login` | Public | All active users | Authenticates email/password and sets the `hugatiera_token` cookie. |
-| `POST` | `/api/auth/logout` | Public | All | Clears the `hugatiera_token` cookie. |
-| `GET` | `/api/auth/me` | Required | `client`, `gardener`, `administrator` | Returns the currently authenticated user's profile and role. |
+| `POST` | `/api/auth/register` | Public | Public (`client`, `gardener`, `both`, `clerk`) | Registers an account with optional `middleName`, required `dateOfBirth` (18+ validation), required `phone` (10–15 digits), creates matching profile row(s), and sets the session cookie. Rate-limited. |
+| `POST` | `/api/auth/login` | Public | All active users | Authenticates email/password and sets the session cookie. Rate-limited. |
+| `POST` | `/api/auth/logout` | Public | All | Clears the session cookie. |
+| `GET` | `/api/auth/me` | Required | `client`, `gardener`, `clerk`, `administrator` | Returns the currently authenticated user's profile, active role, and dual-role flags (`canActAsClient`, `canActAsGardener`, `isDualRole`). |
+| `POST` | `/api/auth/switch-role` | Required | Dual-role accounts | Switches active session mode between `'client'` and `'gardener'` and re-issues the JWT cookie. |
+| `POST` | `/api/auth/enable-dual-role` | Required | `client`, `gardener` | Enables the secondary Client or Gardener capability on an existing account and ensures both profile rows exist. |
 | `GET` | `/api/auth/administrator-check` | Required | `administrator` | Verifies administrator role access (`{ "status": "ok" }`). |
 
 - **`POST /api/auth/register` Request Body:**
   ```json
   {
     "firstName": "Maria",
+    "middleName": "Cruz",
     "lastName": "Santos",
+    "dateOfBirth": "1998-05-14",
+    "phone": "09171234567",
+    "address": "Tetuan",
+    "city": "Zamboanga City",
     "email": "maria@example.com",
     "password": "Password123",
-    "role": "client",
-    "phone": "09171234567"
+    "role": "client"
   }
   ```
-  - **Validation & Security:** Rejects `role: "administrator"` with `403`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs` (`10` rounds). Creates `client_profiles` (`city = 'Zamboanga City'`) or `gardener_profiles` (`service_area = 'Zamboanga City'`, `is_approved = FALSE`).
+  - **Validation & Security:** Rejects `role: "administrator"` with `403`. Rejects underage registrants (`< 18` years old) and invalid mobile numbers (`< 10` or `> 15` digits) with `400`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs`. Role `'both'` enables `can_act_as_client = TRUE` and `can_act_as_gardener = TRUE` and creates both profile rows.
 
 ---
 
-## 4. Profiles & Reports Module (`/api/profiles`)
+## 4. Profiles, Avatars, Availability, My Clerks & Reports Module (`/api/profiles`)
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/profiles/me` | Required | `client`, `gardener`, `administrator` | Returns the user's account info, role-specific profile fields (`client_profiles` or `gardener_profiles`), and dashboard `counts`. |
-| `PUT` | `/api/profiles/me` | Required | `client`, `gardener`, `administrator` | Updates personal details (`firstName`, `lastName`, `phone`) and role-specific profile fields (`address`, `city`, `bio` for clients; `businessName`, `description`, `serviceArea`, `yearsOfExperience` for gardeners). |
-| `POST` | `/api/profiles/reports` | Required | `client`, `gardener`, `administrator` | Submits a moderation report against a user, service, or message. |
+| `GET` | `/api/profiles/:userId/avatar` | Public | All | Streams a user's `sharp`-sanitized profile picture (`users.avatar_path`). |
+| `GET` | `/api/profiles/me` | Required | All authenticated | Returns account info (including `middleName`, `dateOfBirth`, computed `age`, `avatarPath`, dual-role flags), role profile fields (including gardener working days, hours, `max_concurrent_jobs`, `crew_size`), and dashboard `counts`. |
+| `PUT` | `/api/profiles/me` | Required | All authenticated | Updates personal info, birthday (18+), phone, and role-specific profile/schedule/crew fields. |
+| `POST` | `/api/profiles/me/avatar` | Required | All authenticated | Uploads/replaces the user's profile picture (`multipart/form-data`, field `avatar`, max 5 MB, `sharp` EXIF-stripped). |
+| `DELETE` | `/api/profiles/me/avatar` | Required | All authenticated | Deletes the user's profile picture file and clears `users.avatar_path`. |
+| `GET` | `/api/profiles/me/unavailable-dates` | Required | `gardener` | Lists the gardener's blocked/unavailable date ranges (`gardener_unavailable_dates`). |
+| `POST` | `/api/profiles/me/unavailable-dates` | Required | `gardener` | Adds an unavailable/blocked date range (`{ startDate, endDate, reason }`). |
+| `DELETE` | `/api/profiles/me/unavailable-dates/:blockId` | Required | `gardener` | Removes a blocked date range owned by the gardener. |
+| `GET` | `/api/profiles/me/clerks` | Required | `gardener` | Lists clerks assigned to the authenticated gardener (`clerk_gardener_assignments`). |
+| `POST` | `/api/profiles/me/clerks` | Required | `gardener` | Creates a new Clerk account and links them to the gardener in a transaction. |
+| `POST` | `/api/profiles/me/clerks/assign` | Required | `gardener` | Links an existing Clerk account by email to the gardener. |
+| `DELETE` | `/api/profiles/me/clerks/:assignmentId` | Required | `gardener` | Revokes a clerk assignment from the gardener. |
+| `POST` | `/api/profiles/reports` | Required | All authenticated | Submits a moderation report against a user, service, or message. |
 
 - **Dashboard Counts Behavior (`GET /api/profiles/me` — `ISS-03`):**
   - For **Clients**: returns `{ inquiries, bookings, unreadNotifications }`.
@@ -87,12 +104,16 @@ This document provides the complete technical reference for all **15 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/services/categories` | Public | All | Lists all active service categories (`is_active = TRUE`). |
-| `GET` | `/api/services` | Public | All | Searches and paginates public gardening services from active, approved gardeners. |
+| `GET` | `/api/services/categories` | Public | All | Lists all active service categories (`is_active = TRUE`) including per-sq.m baseline rates (`rate_per_sqm_min`, `rate_per_sqm_max`, `min_base_fee`). |
+| `GET` | `/api/services/pricing-addons` | Public | All | Lists active configurable plant, material, equipment, and disposal pricing add-ons (`pricing_addons`). |
+| `GET` | `/api/services` | Public | All | Searches and paginates public gardening services from active, approved gardeners (includes `image_path`, `workers_required`, and `gardener_avatar_path`). |
+| `GET` | `/api/services/:serviceId/image` | Public | All | Streams the service's cover/business design photo (`services.image_path`). |
 | `GET` | `/api/services/:serviceId` | Public | All | Returns details of a single public service listing. |
 | `GET` | `/api/services/mine` | Required | `gardener` | Lists all services owned by the authenticated gardener (including inactive or pending-approval listings). |
-| `POST` | `/api/services` | Required | `gardener` | Creates a new service listing for the authenticated gardener. |
+| `POST` | `/api/services` | Required | `gardener` | Creates a new service listing (including `workersRequired`) for the authenticated gardener. |
 | `PUT` | `/api/services/:serviceId` | Required | `gardener` | Updates an existing service listing owned by the authenticated gardener. |
+| `POST` | `/api/services/:serviceId/image` | Required | `gardener` | Uploads/replaces a service cover/design photo (`multipart/form-data`, field `image`, max 5 MB, `sharp` EXIF-stripped). |
+| `DELETE` | `/api/services/:serviceId/image` | Required | `gardener` | Removes a service cover photo and clears `services.image_path`. |
 | `DELETE` | `/api/services/:serviceId` | Required | `gardener` | Soft-deactivates (`is_active = FALSE`) a service owned by the authenticated gardener. |
 
 - **`GET /api/services` Query Parameters:**
@@ -109,7 +130,9 @@ This document provides the complete technical reference for all **15 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/gardeners/:gardenerId` | Public | All | Returns an approved, active gardener's public profile, active services, portfolio items (`portfolios`), and rating summary (`average_rating`, `review_count`). |
+| `GET` | `/api/gardeners/:gardenerId` | Public | All | Returns an approved, active gardener's public profile (including avatar, schedule, crew size), active services, portfolio items (`portfolios`), and rating summary (`average_rating`, `review_count`). |
+| `GET` | `/api/gardeners/:gardenerId/availability` | Public | All | Returns the gardener's working days/hours, `crew_size`, `max_concurrent_jobs`, upcoming blocked dates, and computed fully-booked dates. |
+| `POST` | `/api/gardeners/:gardenerId/availability/check` | Public | All | Validates a proposed `{ scheduledStart, scheduledEnd, serviceId }` window against working days, blocked dates, simultaneous job cap, and daily worker crew capacity. |
 
 - Returns `404` if the gardener does not exist, is inactive, or has `is_approved = FALSE`.
 
@@ -150,7 +173,8 @@ This document provides the complete technical reference for all **15 REST API ro
 |---|---|---|---|---|
 | `GET` | `/api/inquiries` | Required | `client`, `gardener` | Lists inquiries for the authenticated client or gardener (including Case 1 requests where the gardener submitted an offer). Administrators are blocked (`403` — use `/api/admin/activity`). |
 | `GET` | `/api/inquiries/open` | Required | `gardener`, `administrator` | Lists non-expired open Case 1 general service requests (`request_type = 'general'`, `status IN ('open', 'responded')`) for approved gardeners (`403` if unapproved). |
-| `POST` | `/api/inquiries` | Required | `client` | Creates a Case 1 (`general`) or Case 2 (`direct`) service request and transactionally attaches up to 5 draft `imageIds`. |
+| `POST` | `/api/inquiries/estimate` | Required | `client`, `gardener`, `administrator` | Computes an itemized per-sq.m price estimate (`estimatedLaborMin/Max`, `estimatedMaterialsMin/Max`, `estimatedMin/MaxAmount`, duration estimate) from category, `areaSqm`, `workComplexity`, `materialsOption`, and selected `addonItems`. |
+| `POST` | `/api/inquiries` | Required | `client` | Creates a Case 1 (`general`) or Case 2 (`direct`) service request with optional price predictor inputs, `priceComment`, `categorySpecs` JSON, itemized `addonItems`, and up to 5 draft `imageIds`. |
 | `GET` | `/api/inquiries/:inquiryId` | Required | `client`, `gardener`, `administrator` | Returns inquiry details, attached `images`, `quotations` (filtered by role), `agreements`, `events`, and `booking`. |
 | `POST` | `/api/inquiries/:inquiryId/renew` | Required | `client` | Renews an expired or active request by extending `expires_at` (`expiresInDays`: `1`–`90`, default `14`) and restoring `'expired'` status to `'responded'` or `'open'`. |
 | `PATCH` | `/api/inquiries/:inquiryId/status` | Required | `client`, `gardener`, `administrator` | Updates inquiry status to `'closed'` (client, assigned gardener, or admin) or `'cancelled'` (client or admin). Blocked once `'in_agreement'` or `'confirmed'` (`409`). |
@@ -182,14 +206,23 @@ This document provides the complete technical reference for all **15 REST API ro
 
 ---
 
-## 11. Bookings Module (`/api/bookings`)
+## 11. Bookings, Payments, Gateway Checkout, Reschedules & Closure Module (`/api/bookings`)
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/bookings` | Required | `client`, `gardener` | Lists bookings belonging to the authenticated client or gardener, including joined agreement summary fields (`agreement_version`, `agreed_amount`, `agreed_price_basis`, `agreement_status`). Administrators receive `403`. |
+| `GET` | `/api/bookings/payment-gateway/config` | Required | `client`, `gardener`, `clerk`, `administrator` | Returns active payment gateway configuration (`paymongo` vs built-in `sandbox_demo` mode and supported methods). |
+| `GET` | `/api/bookings` | Required | `client`, `gardener` | Lists bookings belonging to the authenticated client or gardener, including agreement summary, `booking_stage` (`reserved` \| `booked`), `payment_status`, `transaction_status`, and computed `schedule_urgency` fields. Administrators receive `403`. |
 | `POST` | `/api/bookings` | Required | All authenticated | **Retired in Step R3:** Always returns `409 Conflict` (`code: 'MUTUAL_AGREEMENT_REQUIRED'`). Bookings are created exclusively via mutual agreement approval. |
-| `GET` | `/api/bookings/:bookingId` | Required | `client`, `gardener` | Returns booking details plus full mutual agreement details (`agreement_version`, `agreed_scope_of_work`, `agreed_amount`, `agreed_price_basis`, `agreed_conditions`, `client_approved_at`, `gardener_approved_at`, `agreement_status`). Administrators receive `403`. |
-| `PATCH` | `/api/bookings/:bookingId/status` | Required | `client`, `gardener` | Updates booking status (`in_progress` or `completed` by gardener; `cancelled` by client on `pending`/`accepted` bookings; `accepted`/`declined` by gardener on legacy `pending` rows). |
+| `GET` | `/api/bookings/:bookingId` | Required | `client`, `gardener` | Returns full booking details, Mutual Agreement Summary, `payments` (`booking_payments` with `TXN-...` codes), `rescheduleRequests` (`booking_reschedule_requests`), and completion closure status. |
+| `PATCH` | `/api/bookings/:bookingId/status` | Required | `client`, `gardener` | Updates booking status (`in_progress` / `completed` by gardener on paid bookings; event-based `cancelled` with `cancellationReasonType` and `cancellationReason` by client or gardener). |
+| `POST` | `/api/bookings/:bookingId/complete-transaction` | Required | `client`, `gardener` | Records client or gardener sign-off on the **Transaction Completion Agreement** (requires `status = 'completed'` and `payment_status = 'fully_paid'`). Once both sign off, sets `transaction_status = 'closed'` and unlocks client review submission. |
+| `POST` | `/api/bookings/:bookingId/reschedule-requests` | Required | `client`, `gardener` | Submits an event-based reschedule request (`reasonType`, `reasonDetails`, `proposedStart`, `proposedEnd`). |
+| `PATCH` | `/api/bookings/:bookingId/reschedule-requests/:requestId` | Required | `client`, `gardener` | Counterparty approves (`approved` — re-validates schedule/crew capacity and updates booking dates), declines, or requester cancels a reschedule request. |
+| `POST` | `/api/bookings/:bookingId/payments/checkout` | Required | `client` | Creates a PayMongo Checkout session (or built-in Sandbox/Demo session) for partial deposit, full payment, or remaining balance and stores a `booking_payments` record with unique `TXN-...` code. |
+| `POST` | `/api/bookings/:bookingId/payments/:paymentId/confirm-gateway` | Required | `client` | Verifies the PayMongo or Sandbox/Demo checkout session, marks payment verified, updates `amount_paid` / `payment_status`, and upgrades `'reserved'` to `'booked'` when deposit threshold is met. |
+| `POST` | `/api/bookings/:bookingId/payments` | Required | `client` | Submits manual/offline payment proof (`multipart/form-data`, optional `receipt` image `sharp`-sanitized) with `paymentType`, `paymentMethod`, `amount`, and `referenceNumber`. |
+| `PATCH` | `/api/bookings/:bookingId/payments/:paymentId` | Required | `gardener` | Approves (`verified`) or rejects (`rejected`, with `rejectionReason`) a client's manual payment proof and updates `booking_stage` / `payment_status`. |
+| `GET` | `/api/bookings/:bookingId/payments/:paymentId/receipt` | Required | `client`, `gardener`, `clerk`, `administrator` | Streams an uploaded payment receipt image after verifying authorization. |
 
 ---
 
@@ -197,9 +230,10 @@ This document provides the complete technical reference for all **15 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
+| `GET` | `/api/reviews/recent` | Public | All | Returns recent visible verified reviews across the platform for the Client Discovery dashboard showcase. |
 | `GET` | `/api/reviews/gardeners/:gardenerId` | Public | All | Lists visible reviews (`is_visible = TRUE`) and rating summary (`average_rating`, `review_count`) for a gardener. |
 | `GET` | `/api/reviews/bookings/:bookingId` | Required | `client`, `gardener`, `administrator` | Returns the review submitted for a specific booking (or `null` if none). |
-| `POST` | `/api/reviews` | Required | `client` | Submits a one-time rating (`1`–`5`) and optional `reviewText` for a `'completed'` booking owned by the client. Duplicate reviews return `409`. |
+| `POST` | `/api/reviews` | Required | `client` | Submits a one-time rating (`1`–`5`) and optional `reviewText`. Strictly gated: booking must be `status = 'completed'`, `payment_status = 'fully_paid'`, and `transaction_status = 'closed'`. Duplicate reviews return `409`. |
 
 ---
 
@@ -224,30 +258,56 @@ This document provides the complete technical reference for all **15 REST API ro
 
 ---
 
-## 15. AI Garden Planning Assistant Module (`/api/ai`)
+## 15. AI Garden Planning & Smart Matching Module (`/api/ai`)
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
 | `GET` | `/api/ai/usage` | Required | `client`, `gardener`, `administrator` | Returns the user's rolling 60-minute AI quota status (`limit`, `used`, `remaining`, `windowHours`) and `recentUsage` log entries from `ai_usage_log`. |
+| `GET` | `/api/ai/recommendations` | Required | `client`, `gardener`, `administrator` | Ranks nearby services or open leads using hybrid Zamboanga City barangay proximity, verified review scores, and clean conduct metrics (`smartMatching.js`). |
+| `POST` | `/api/ai/recommendations/summary` | Required | `client`, `gardener`, `administrator` | Generates an optional Gemini-powered advisory summary explaining top recommended services or leads. |
 | `POST` | `/api/ai/garden-plan` | Required | `client`, `gardener`, `administrator` | Generates a structured tropical garden planning guide from `{ prompt }` (max `3,000` chars). |
 | `POST` | `/api/ai/requirements` | Required | `client`, `gardener`, `administrator` | Generates editable JSON requirement suggestions (`structuredSummary`, `refinedDescription`, `suggestedCategoryId`, `suggestedCategoryName`, `gardeningIdeas`, `followUpQuestions`) from `{ prompt, location, requestType, imageIds }`. |
 | `POST` | `/api/ai/photo-analysis` | Required | `client`, `gardener`, `administrator` | Analyzes a client's uploaded garden photo (`{ imageId, note }`) using multimodal Gemini (`gemini-3.8-flash` primary, `gemini-3.5-flash-lite` automatic fallback) and stores the description in `request_images.ai_description`. |
 
 ---
 
-## 16. Administrator Module (`/api/admin`)
+## 16. Assigned Clerk Operations Module (`/api/clerk`)
+
+All endpoints in `/api/clerk` require `requireAuth` and `requireRole('clerk')` and strictly verify that `:gardenerId` is linked to the clerk in `clerk_gardener_assignments`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/clerk/workspace` | Returns all gardeners assigned to the clerk, their schedules, unavailable dates, services, bookings, and pending payment proofs. |
+| `PUT` | `/api/clerk/gardeners/:gardenerId/schedule` | Updates an assigned gardener's working days, working hours, `maxConcurrentJobs`, `crewSize`, and `availabilityNotes`. |
+| `POST` | `/api/clerk/gardeners/:gardenerId/unavailable-dates` | Adds a blocked/unavailable date range for an assigned gardener. |
+| `DELETE` | `/api/clerk/gardeners/:gardenerId/unavailable-dates/:blockId` | Removes a blocked date range for an assigned gardener. |
+| `POST` | `/api/clerk/gardeners/:gardenerId/services` | Creates a service listing on behalf of an assigned gardener. |
+| `PATCH` | `/api/clerk/gardeners/:gardenerId/services/:serviceId/status` | Activates or deactivates an assigned gardener's service listing. |
+| `PATCH` | `/api/clerk/gardeners/:gardenerId/bookings/:bookingId/payments/:paymentId` | Verifies or rejects a manual payment proof on an assigned gardener's booking. |
+
+---
+
+## 17. Administrator Module (`/api/admin`)
 
 All endpoints in `/api/admin` require `requireAuth` and `requireRole('administrator')` (`403` for non-administrators).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/admin/summary` | Returns platform `counts` (`totalUsers`, `activeServices`, `pendingGardeners`, `openInquiries`, `totalInquiries`, `completedBookings`, `totalBookings`, `openReports`) and the `users` account list. |
+| `GET` | `/api/admin/summary` | Returns platform `counts` and the `users` account list (including `phone`, `avatar_path`, `middle_name`, `date_of_birth`, dual-role flags). |
+| `PATCH` | `/api/admin/users/:userId` | Edits a user's `firstName`, `middleName`, `lastName`, `phone`, `dateOfBirth`, `role` (`client` \| `gardener` \| `clerk` \| `administrator`), dual-role flags, and `isActive` inside a transaction (blocks self-demotion/self-deactivation). |
 | `PATCH` | `/api/admin/users/:userId/status` | Activates or deactivates a user account (`{ isActive: boolean }`). Rejects self-deactivation (`400`). |
+| `DELETE` | `/api/admin/users/:userId` | Deletes an unreferenced user account (`204`) + cleans up avatar; blocks self-deletion (`400`) and returns `409 Conflict` when referenced by inquiries/bookings (`ON DELETE RESTRICT`). |
+| `GET` | `/api/admin/clerk-assignments` | Lists all `clerk_gardener_assignments` along with available clerks and gardeners. |
+| `POST` | `/api/admin/clerk-assignments` | Assigns a clerk to manage a gardener (`{ clerkId, gardenerId, notes }`). |
+| `DELETE` | `/api/admin/clerk-assignments/:assignmentId` | Removes a clerk-to-gardener assignment. |
 | `GET` | `/api/admin/gardeners/pending` | Lists gardener profiles awaiting administrator approval (`is_approved = FALSE`). |
 | `PATCH` | `/api/admin/gardeners/:userId/approval` | Approves (`isApproved: true`) or requests changes (`isApproved: false`, optional `feedback`) on a gardener profile and sends an in-app notification. |
-| `GET` | `/api/admin/categories` | Lists all service categories (`active` and `inactive`). |
-| `POST` | `/api/admin/categories` | Creates a new service category (`{ name, description }`). |
-| `PATCH` | `/api/admin/categories/:categoryId` | Updates a category's `name`, `description`, or `isActive` status. |
+| `GET` | `/api/admin/categories` | Lists all service categories (`active` and `inactive`) with per-sq.m baseline rates. |
+| `POST` | `/api/admin/categories` | Creates a new service category (`{ name, description, ratePerSqmMin, ratePerSqmMax, minBaseFee }`). |
+| `PATCH` | `/api/admin/categories/:categoryId` | Updates a category's name, description, baseline sq.m rates, or `isActive` status. |
+| `GET` | `/api/admin/pricing-addons` | Lists all `pricing_addons` items (`plant`, `material`, `equipment`, `disposal`). |
+| `POST` | `/api/admin/pricing-addons` | Creates a configurable pricing add-on item. |
+| `PATCH` | `/api/admin/pricing-addons/:addonId` | Updates a pricing add-on's rates, unit, type, description, or active status. |
 | `GET` | `/api/admin/services` | Lists all gardener service listings across the platform for moderation. |
 | `PATCH` | `/api/admin/services/:serviceId/status` | Activates or deactivates a service listing (`{ isActive: boolean }`). |
 | `GET` | `/api/admin/activity` | Returns recent platform-wide `inquiries` (including unassigned Case 1 general requests via `LEFT JOIN` with `'Open General Request'` label) and `bookings`. |

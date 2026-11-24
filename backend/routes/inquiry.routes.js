@@ -2,6 +2,7 @@ const express = require('express')
 const {
   createInquiry,
   createQuotation,
+  estimateInquiryPrice,
   getInquiry,
   listInquiries,
   listOpenRequests,
@@ -22,6 +23,7 @@ const router = express.Router()
 router.use(requireAuth)
 router.get('/', requireRole('client', 'gardener'), listInquiries)
 router.get('/open', requireRole('gardener', 'administrator'), listOpenRequests)
+router.post('/estimate', requireRole('client', 'gardener', 'administrator'), estimateInquiryPrice)
 router.get('/:inquiryId', getInquiry)
 router.get('/:inquiryId/agreements', listInquiryAgreements)
 router.post('/:inquiryId/agreements', proposeAgreement)

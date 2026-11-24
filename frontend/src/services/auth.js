@@ -34,4 +34,6 @@ export const authApi = {
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   logout: () => request('/auth/logout', { method: 'POST' }),
   register: (details) => request('/auth/register', { method: 'POST', body: JSON.stringify(details) }),
+  switchRole: (targetRole) => request('/auth/switch-role', { method: 'POST', body: JSON.stringify({ targetRole }) }),
+  enableDualRole: (details = {}) => request('/auth/enable-dual-role', { method: 'POST', body: JSON.stringify(details) }),
 }

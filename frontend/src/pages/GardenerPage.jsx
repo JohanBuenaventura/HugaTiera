@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Leaf } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, Clock, Leaf, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
-import { profileApi } from '../services/profiles'
+import { formatWorkingDaysLabel, profileApi } from '../services/profiles'
 
 export default function GardenerPage() {
   const { gardenerId } = useParams()
   const { user } = useAuth()
   const [data, setData] = useState(null)
+  const [availability, setAvailability] = useState(null)
   const [error, setError] = useState('')
   const [reporting, setReporting] = useState(false)
   const [reportForm, setReportForm] = useState({ reason: '', details: '' })
   const [reportStatus, setReportStatus] = useState({ error: '', message: '', submitting: false })
 
   useEffect(() => {
-    servicesApi.gardener(gardenerId).then(setData).catch((loadError) => setError(loadError.message))
+    let active = true
+    servicesApi.gardener(gardenerId).then((res) => { if (active) setData(res) }).catch((loadError) => { if (active) setError(loadError.message) })
+    servicesApi.gardenerAvailability(gardenerId).then((avail) => { if (active) setAvailability(avail) }).catch(() => {})
+    return () => { active = false }
   }, [gardenerId])
 
   async function submitReport(event) {
@@ -53,7 +57,13 @@ export default function GardenerPage() {
       )}
       <section className="container detail-content">
         {error && <div className="form-error">{error}</div>}
-        {!data && !error && <p>Loading gardener profile...</p>}
+        {!data && !error && (
+          <div className="dashboard-panel skeleton-stack" aria-busy="true">
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+          </div>
+        )}
         {data && (
           <>
             <Link className="back-link" to="/services"><ArrowLeft size={15} /> Back to services</Link>
@@ -96,6 +106,44 @@ export default function GardenerPage() {
                 </form>
               )}
             </div>
+
+            <section className="dashboard-panel schedule-public-card" style={{ marginTop: '20px' }}>
+              <p className="eyebrow">Working schedule &amp; availability</p>
+              <div className="estimate-meta-grid">
+                <span><CalendarDays size={14} style={{ verticalAlign: 'text-bottom' }} /> <strong>Working days:</strong> {formatWorkingDaysLabel(data.gardener.working_days)}</span>
+                <span><Clock size={14} style={{ verticalAlign: 'text-bottom' }} /> <strong>Hours:</strong> {data.gardener.work_start_time || '08:00'} – {data.gardener.work_end_time || '17:00'}</span>
+                <span>
+                  <Users size={14} style={{ verticalAlign: 'text-bottom' }} /> <strong>Daily crew:</strong>{' '}
+                  {availability?.schedule?.crewSize || data.gardener.crew_size || 1} worker(s)/day ·{' '}
+                  {Number(data.gardener.max_concurrent_jobs) > 1
+                    ? `Up to ${data.gardener.max_concurrent_jobs} simultaneous jobs`
+                    : '1 job at a time'}
+                </span>
+              </div>
+              {Array.isArray(availability?.fullyBookedDates) && availability.fullyBookedDates.length > 0 && (
+                <div className="fully-booked-row" style={{ marginTop: '10px' }}>
+                  <strong>Fully booked (no service available):</strong>
+                  <div className="fully-booked-chips">
+                    {availability.fullyBookedDates.slice(0, 6).map((d) => (
+                      <span className="fully-booked-pill" key={d.date || d}>{d.date || d}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {data.gardener.availability_notes && (
+                <p className="form-note" style={{ margin: '8px 0 0' }}>
+                  <strong>Provider note:</strong> {data.gardener.availability_notes}
+                </p>
+              )}
+              {Array.isArray(data.gardener.unavailable_dates) && data.gardener.unavailable_dates.length > 0 && (
+                <p className="field-note" style={{ margin: '8px 0 0' }}>
+                  <strong>Upcoming unavailable dates:</strong>{' '}
+                  {data.gardener.unavailable_dates
+                    .map((d) => (d.start_date === d.end_date ? d.start_date : `${d.start_date} to ${d.end_date}`))
+                    .join(', ')}
+                </p>
+              )}
+            </section>
 
             <h2 className="profile-section-title">Services offered</h2>
             {data.services?.length ? (

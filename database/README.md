@@ -12,15 +12,15 @@ This directory contains the authoritative relational schema, migration scripts, 
 | **Automated Test Database** | `hugatiera_db_migration_test` |
 | **Database Engine** | MySQL 8.0.16+ / MariaDB 10.4.32 (XAMPP) — `InnoDB` |
 | **Character Set & Collation** | `utf8mb4` / `utf8mb4_unicode_ci` |
-| **Total Tables** | `19` |
-| **Total Foreign Key Constraints** | `46` |
+| **Total Tables** | `25` |
+| **Total Foreign Key Constraints** | `59` |
 | **Fresh-Install Schema** | `database/schema/hugatiera_schema.sql` |
-| **Migration 001 Forward Script** | `database/migrations/001_unified_requests_and_agreements.sql` |
-| **Migration 001 Structural Rollback** | `database/migrations/001_unified_requests_and_agreements_rollback.sql` |
+| **Migrations Directory** | `database/migrations/` (`001` through `013`, each with a `_rollback.sql` script) |
+| **Full 25-Table ERD & DFDs** | [docs/erd-and-dfd.md](../docs/erd-and-dfd.md) |
 | **Local Backups Directory** | `database/backups/` (git-ignored) |
 
 > [!CAUTION]
-> **Production Migration 001 Status:** Migration 001 (`001_unified_requests_and_agreements.sql`) was **executed and verified on `hugatiera_db` on November 12, 2026**. Both `hugatiera_db` and `hugatiera_db_migration_test` are at the complete 19-table schema (`46` foreign key constraints). **Do NOT rerun `001_unified_requests_and_agreements.sql` on `hugatiera_db`.**
+> **Database Migration Status (`mergedbranchv1`):** Migrations `001`–`013` have been backed up (`hugatiera_db_pre_migrations003_013_20261124_1950.sql`), applied, and verified on both `hugatiera_db_migration_test` and local `hugatiera_db` (`25` tables, `59` foreign keys). **Do NOT rerun already-applied migrations.** For brand-new installations, import `database/schema/hugatiera_schema.sql` directly.
 
 ---
 
@@ -869,7 +869,13 @@ erDiagram
 | `quotations` | `2` | `inquiries`, `users` |
 | `quotation_revisions` | `1` | `quotations` |
 | `agreements` | `6` | `inquiries`, `quotations`, `users` (×3), `agreements` (self) |
-| `bookings` | `6` | `inquiries`, `quotations`, `users` (×2), `services`, `agreements` |
+| `bookings` | `7` | `inquiries`, `quotations`, `users` (×3 incl. `cancelled_by`), `services`, `agreements` |
+| `booking_payments` | `3` | `bookings`, `users` (×2: `submitted_by`, `verified_by`) |
+| `booking_reschedule_requests` | `3` | `bookings`, `users` (×2: `requested_by`, `responded_by`) |
+| `gardener_unavailable_dates` | `1` | `users` |
+| `clerk_gardener_assignments` | `3` | `users` (×3: `clerk_id`, `gardener_id`, `assigned_by`) |
+| `inquiry_estimate_items` | `2` | `inquiries`, `pricing_addons` |
+| `pricing_addons` | `0` | — |
 | `reviews` | `3` | `bookings`, `users` (×2) |
 | `conversations` | `3` | `users` (×2), `inquiries` |
 | `messages` | `2` | `conversations`, `users` |
@@ -879,7 +885,7 @@ erDiagram
 | `ai_usage_log` | `1` | `users` |
 | `users` | `0` | — |
 | `service_categories` | `0` | — |
-| **Total** | **`46`** | — |
+| **Total (25 tables)** | **`59`** | — |
 
 ---
 
@@ -924,5 +930,26 @@ Migration 001 (`database/migrations/001_unified_requests_and_agreements.sql`) up
 
 ### 5.4 Important Operational & Rollback Notes
 - **Do NOT Rerun Migration 001:** Running `001_unified_requests_and_agreements.sql` a second time against `hugatiera_db` or `hugatiera_db_migration_test` will fail with duplicate column/table/constraint errors (`ER_DUP_FIELDNAME` / `ER_TABLE_EXISTS_ERROR`).
-- **Fresh Installations:** On a brand-new environment with no existing database, run `database/schema/hugatiera_schema.sql` directly. It already creates all `19` tables and `46` foreign keys in their final post-Migration-001 state.
-- **MariaDB DDL Auto-Commit & Authoritative Recovery:** In MySQL and MariaDB, `ALTER TABLE`, `CREATE TABLE`, and `DROP TABLE` statements cause an implicit commit and cannot be wrapped in a single atomic SQL rollback transaction. While `001_unified_requests_and_agreements_rollback.sql` is provided to reverse the structural changes on an empty/rehearsal database, **the authoritative production recovery mechanism is restoring the pre-migration dump (`database/backups/hugatiera_db_pre_migration001_final_20261112_202700.sql`)**.
+- **Fresh Installations:** On a brand-new environment with no existing database, run `database/schema/hugatiera_schema.sql` directly. It already creates all `25` tables and `59` foreign keys in their final post-Migration-013 state.
+- **MariaDB DDL Auto-Commit & Authoritative Recovery:** In MySQL and MariaDB, `ALTER TABLE`, `CREATE TABLE`, and `DROP TABLE` statements cause an implicit commit and cannot be wrapped in a single atomic SQL rollback transaction. While each migration ships with a `_rollback.sql` script for rehearsal databases, **the authoritative production recovery mechanism is restoring the pre-migration dump from `database/backups/`**.
+
+---
+
+## 6. Migrations `002`–`013` Summary (`mergedbranchv1`)
+
+All 12 incremental migrations after Migration 001 include matching `_rollback.sql` scripts and are already reflected in [hugatiera_schema.sql](schema/hugatiera_schema.sql) and [docs/erd-and-dfd.md](../docs/erd-and-dfd.md):
+
+| Migration | Script | Key Schema Additions |
+|---|---|---|
+| `002` | `002_avatars_service_images.sql` | Adds `users.avatar_path` and `services.image_path`. |
+| `003` | `003_user_basic_info.sql` | Adds optional `users.middle_name` and `users.date_of_birth` (18+ registration enforcement). |
+| `004` | `004_inquiry_price_estimator.sql` | Adds per-sq.m baseline rates (`rate_per_sqm_min`, `rate_per_sqm_max`, `min_base_fee`) on `service_categories`, price predictor fields (`area_sqm`, `work_complexity`, `materials_option`, `site_visit_requested`, `estimated_min_amount`, `estimated_max_amount`, `price_comment`) on `inquiries`, and `requires_site_visit` on `quotations` / `quotation_revisions`. |
+| `005` | `005_scheduling_availability_capacity.sql` | Adds `working_days`, `work_start_time`, `work_end_time`, `max_concurrent_jobs`, `availability_notes` on `gardener_profiles`; creates `gardener_unavailable_dates`; adds `estimated_working_days` / `estimated_hours` on `quotations`, `quotation_revisions`, and `agreements`. |
+| `006` | `006_itemized_pricing_settings.sql` | Creates `pricing_addons` (plants/materials/equipment/disposal catalog) and `inquiry_estimate_items`; adds labor/materials estimate split on `inquiries` and `labor_amount`, `materials_amount`, `materials_breakdown` on `quotations` / `quotation_revisions`. |
+| `007` | `007_reservation_payment_workflow.sql` | Adds `agreements.required_deposit_amount` (30% default); adds `booking_stage` (`reserved` \| `booked`), `payment_status`, `required_deposit_amount`, `amount_paid`, `paid_at` on `bookings`; creates `booking_payments`. |
+| `008` | `008_transaction_completion_agreement.sql` | Adds unique `booking_payments.transaction_code` (`TXN-...`); adds `transaction_status` (`open` \| `pending_closure` \| `closed`), `client_completion_confirmed_at`, `gardener_completion_confirmed_at`, `transaction_closed_at`, and `completion_agreement_notes` on `bookings`. |
+| `009` | `009_event_cancellation_and_reschedule.sql` | Adds `cancellation_reason_type`, `cancellation_reason`, `cancelled_by`, `cancelled_at` on `bookings`; creates `booking_reschedule_requests`. |
+| `010` | `010_inquiry_category_specs.sql` | Adds `inquiries.category_specs` (`JSON`) for dynamic per-category Open Request specifications. |
+| `011` | `011_crew_capacity_workers.sql` | Adds `gardener_profiles.crew_size` and `services.workers_required` for worker-level daily capacity and "Fully Booked" detection. |
+| `012` | `012_dual_role_and_assigned_clerk.sql` | Extends `users.role` ENUM with `'clerk'`; adds `can_act_as_client` and `can_act_as_gardener` flags; creates `clerk_gardener_assignments`. |
+| `013` | `013_payment_gateway_sessions.sql` | Extends `booking_payments.payment_method` (`gcash`, `maya`, `grab_pay`, `card`, `bank_transfer`, `cash`, `other`) and adds `gateway_provider` (`manual` \| `paymongo` \| `sandbox_demo`), `gateway_session_id`, `gateway_checkout_url`, `gateway_status`, and `gateway_paid_at`. |

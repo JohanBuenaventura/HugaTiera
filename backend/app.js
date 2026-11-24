@@ -8,6 +8,7 @@ const aiRoutes = require('./routes/ai.routes')
 const bookingRoutes = require('./routes/booking.routes')
 const conversationRoutes = require('./routes/conversation.routes')
 const adminRoutes = require('./routes/admin.routes')
+const clerkRoutes = require('./routes/clerk.routes')
 const healthRoutes = require('./routes/health.routes')
 const inquiryRoutes = require('./routes/inquiry.routes')
 const gardenerRoutes = require('./routes/gardener.routes')
@@ -29,11 +30,19 @@ const dbUnavailableCodes = new Set([
   'ER_ACCESS_DENIED_ERROR',
 ])
 
+app.disable('x-powered-by')
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  return next()
+})
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }))
-app.use(express.json())
+app.use(express.json({ limit: '256kb' }))
 app.use(cookieParser())
 
 app.use('/api/health', healthRoutes)
@@ -41,6 +50,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/ai', aiRoutes)
 app.use('/api/profiles', profileRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/clerk', clerkRoutes)
 app.use('/api/services', serviceRoutes)
 app.use('/api/gardeners', gardenerRoutes)
 app.use('/api/portfolios', portfolioRoutes)

@@ -96,6 +96,10 @@ describe('Step R3 – Mutual Agreement Engine, Versioning, Concurrency & Booking
         body: {
           firstName: u.firstName,
           lastName: 'R3Test',
+          dateOfBirth: '1994-06-15',
+          phone: '09171234567',
+          address: 'Tetuan, Zamboanga City',
+          serviceArea: 'Zamboanga City',
           email: `r3.${u.key}.${runId}@hugatiera.test`,
           password: 'Password123',
           role: u.role,
