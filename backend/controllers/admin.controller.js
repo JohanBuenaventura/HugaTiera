@@ -330,7 +330,7 @@ async function updateUser(req, res, next) {
     const finalDateOfBirth = hasDateOfBirth ? nextDobValue : formatDateOnly(existing[0].date_of_birth)
     const nextCanClient = req.body.canActAsClient !== undefined
       ? Boolean(req.body.canActAsClient === true || req.body.canActAsClient === 'true')
-      : (role === 'client' ? true : (role === 'clerk' || role === 'administrator' ? false : Boolean(existing[0].can_act_as_client)))
+      : ((role === 'client' || role === 'gardener') ? true : (role === 'clerk' || role === 'administrator' ? false : Boolean(existing[0].can_act_as_client)))
     const nextCanGardener = req.body.canActAsGardener !== undefined
       ? Boolean(req.body.canActAsGardener === true || req.body.canActAsGardener === 'true')
       : (role === 'gardener' ? true : (role === 'clerk' || role === 'administrator' ? false : Boolean(existing[0].can_act_as_gardener)))
