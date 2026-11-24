@@ -1,6 +1,6 @@
 # HugaTiera – Folder Structure
 
-This document reflects the **actual current repository structure** of HugaTiera (verified November 23, 2026).
+This document reflects the **actual current repository structure** of HugaTiera (verified November 24, 2026 on `mergedbranchv1`).
 
 ```text
 HugaTiera/
@@ -191,7 +191,8 @@ HugaTiera/
 ├── project_progress.md
 ├── README.md
 ├── recommended_changes.md
-└── system_bug_and_missing_features.md
+├── system_bug_and_missing_features.md
+└── TEAM_SYNC_GUIDE.md
 ```
 
 ## Notes
