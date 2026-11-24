@@ -16,11 +16,12 @@ This directory contains the authoritative relational schema, migration scripts, 
 | **Total Foreign Key Constraints** | `59` |
 | **Fresh-Install Schema** | `database/schema/hugatiera_schema.sql` |
 | **Migrations Directory** | `database/migrations/` (`001` through `013`, each with a `_rollback.sql` script) |
+| **Optional Local Demo Seed** | `database/seeds/zamboanga_demo_data.sql` (idempotent Zamboanga City providers/services/bookings/reviews for `hugatiera_db` only; keep `hugatiera_db_migration_test` clean) |
 | **Full 25-Table ERD & DFDs** | [docs/erd-and-dfd.md](../docs/erd-and-dfd.md) |
 | **Local Backups Directory** | `database/backups/` (git-ignored) |
 
 > [!CAUTION]
-> **Database Migration Status (`mergedbranchv1`):** Migrations `001`–`013` have been backed up (`hugatiera_db_pre_migrations003_013_20261124_1950.sql`), applied, and verified on both `hugatiera_db_migration_test` and local `hugatiera_db` (`25` tables, `59` foreign keys). **Do NOT rerun already-applied migrations.** For brand-new installations, import `database/schema/hugatiera_schema.sql` directly.
+> **Database Migration Status (`main`):** Migrations `001`–`013` have been backed up (`hugatiera_db_pre_migrations003_013_20261124_1950.sql`), applied, and verified on both `hugatiera_db_migration_test` and local `hugatiera_db` (`25` tables, `59` foreign keys). **Do NOT rerun already-applied migrations.** For brand-new installations, import `database/schema/hugatiera_schema.sql` directly.
 
 ---
 
