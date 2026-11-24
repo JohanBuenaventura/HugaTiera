@@ -1,6 +1,6 @@
 # HugaTiera – Folder Structure
 
-This document reflects the **actual current repository structure** of HugaTiera (verified November 24, 2026 on `mergedbranchv1`).
+This document reflects the **actual current repository structure** of HugaTiera (verified November 24, 2026 on `main`).
 
 ```text
 HugaTiera/
@@ -116,6 +116,8 @@ HugaTiera/
 │   │   └── 013_payment_gateway_sessions_rollback.sql
 │   ├── schema/
 │   │   └── hugatiera_schema.sql
+│   ├── seeds/
+│   │   └── zamboanga_demo_data.sql
 │   └── README.md
 │
 ├── docs/
@@ -123,7 +125,8 @@ HugaTiera/
 │   │   └── implementation-plan.md
 │   ├── api-reference.md
 │   ├── architecture-and-workflows.md
-│   └── erd-and-dfd.md
+│   ├── erd-and-dfd.md
+│   └── system-functionalities.md
 │
 ├── frontend/
 │   ├── public/
