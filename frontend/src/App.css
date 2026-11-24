@@ -5023,6 +5023,43 @@ tbody tr:hover {
   border-color: #39734b;
   box-shadow: 0 0 0 3px rgba(57, 115, 75, .12);
 }
+.structured-address-grid {
+  display: grid;
+  gap: 14px;
+}
+.structured-address-grid select {
+  display: block;
+  width: 100%;
+  min-height: 49px;
+  margin-top: 7px;
+  padding: 12px 14px;
+  border: 1px solid #C8D2C6;
+  border-radius: 10px;
+  outline: 0;
+  color: var(--ink);
+  background: #FFFFFF;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.structured-address-grid select:focus {
+  border-color: var(--forest);
+  box-shadow: 0 0 0 3px rgba(36, 75, 54, .14);
+}
+.structured-address-preview {
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px dashed #B9CEBE;
+  border-radius: 10px;
+  background: #F5FAF6;
+  color: var(--forest);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.structured-address-preview span {
+  font-weight: 700;
+  margin-right: 4px;
+}
 @media (max-width: 640px) {
   .role-options-3 {
     grid-template-columns: 1fr;
