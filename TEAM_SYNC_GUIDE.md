@@ -6,16 +6,19 @@ Use this guide whenever you pull **`main`** (which includes merged `mergedbranch
 
 ## 1. Quick Copy-Paste Prompt for Your AI Coding Agent
 
-If you are using an AI coding agent (Antigravity, Cursor, Copilot, Claude Code, etc.), paste this prompt right after pulling `main`:
+If you are using an AI coding agent (**Antigravity, Codex, OpenCode, GitHub Copilot Agent Mode, Cursor, Claude Code**), first run `git pull origin main`, then paste this prompt so it syncs your database, imports the Zamboanga City test data, and verifies your setup without accidentally re-editing code:
 
 ```text
-Read TEAM_SYNC_GUIDE.md and AGENTS.md, then sync my local environment for branch main:
+Read ONLY TEAM_SYNC_GUIDE.md and AGENTS.md (do NOT edit application code). Sync my local environment for branch main:
 1. Verify I am on main (latest origin/main) and check git status without discarding any of my uncommitted work.
 2. Inspect my local hugatiera_db and hugatiera_db_migration_test table/column counts (read-only) to determine which migrations from database/migrations/001..013 are missing.
 3. Ask my approval first, then back up hugatiera_db to database/backups/ and apply ONLY the missing migrations in numerical order (do NOT rerun already-applied migrations).
-4. Sync backend/.env keys against backend/.env.example without overwriting my existing secrets, and run npm install in backend and frontend if needed.
-5. Restart the backend/frontend dev servers if stale, verify GET http://localhost:5000/api/health, and run frontend lint/build + backend tests against hugatiera_db_migration_test.
+4. Import database/seeds/zamboanga_demo_data.sql into hugatiera_db ONLY so I have the Zamboanga City demo providers/services/bookings/reviews (do NOT import it into hugatiera_db_migration_test, which must stay clean for automated tests).
+5. Sync missing keys from backend/.env.example into backend/.env without overwriting my existing secrets, and run npm install in backend and frontend if needed.
+6. Restart the backend/frontend dev servers if stale, verify GET http://localhost:5000/api/health, and run frontend lint/build + backend tests against hugatiera_db_migration_test.
 ```
+
+> **Tip:** Avoid telling your AI *"read all `.md` files and apply needed changes"* — the repo includes historical roadmap/audit notes, and the application code is already synced when you pull `main`. Pointing directly to `TEAM_SYNC_GUIDE.md` keeps the agent focused strictly on your local DB, demo data (`DemoPass123!`), `.env`, and servers.
 
 ---
 
