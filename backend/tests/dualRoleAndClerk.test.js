@@ -190,7 +190,7 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
     }
   })
 
-  it('blocks public administrator registration, allows public Clerk sign-up (0 gardeners initially), and allows a Gardener to assign a Clerk during sign-up', async () => {
+  it('blocks public administrator and clerk registration, while allowing provider-created clerks to be linked', async () => {
     const stamp = Date.now()
     // 1. Public administrator registration remains strictly blocked
     const adminAttempt = await api('/auth/register', {
@@ -208,7 +208,7 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
     })
     assert.equal(adminAttempt.status, 400)
 
-    // 2. Public Clerk sign-up succeeds with zero assigned gardeners initially
+    // 2. Public Clerk self-registration is blocked (clerks belong under a service provider)
     const publicClerkEmail = `public_clerk_${stamp}@test.local`
     const clerkReg = await api('/auth/register', {
       method: 'POST',
@@ -223,15 +223,23 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
         confirmPassword: 'Password123!',
       },
     })
-    assert.equal(clerkReg.status, 201, `Expected 201 got ${clerkReg.status}: ${JSON.stringify(clerkReg.data)}`)
-    assert.equal(clerkReg.data.user.role, 'clerk')
-    createdUserIds.push(clerkReg.data.user.id)
+    assert.equal(clerkReg.status, 400, `Expected 400 got ${clerkReg.status}: ${JSON.stringify(clerkReg.data)}`)
 
-    const emptyWs = await api('/clerk/workspace', { headers: { Cookie: clerkReg.cookie } })
+    // 3. A clerk account created internally starts with zero assigned gardeners until linked
+    const existingClerkEmail = `internal_clerk_${stamp}@test.local`
+    const seededClerk = await seedUser({
+      email: existingClerkEmail,
+      password: 'Password123!',
+      role: 'clerk',
+      firstName: 'Internal',
+      lastName: 'Clerk',
+    })
+
+    const emptyWs = await api('/clerk/workspace', { headers: { Cookie: seededClerk.cookie } })
     assert.equal(emptyWs.status, 200)
     assert.equal(emptyWs.data.gardeners.length, 0)
 
-    // 3. Gardener sign-up with a non-clerk assignedClerkEmail fails with 400 INVALID_CLERK_EMAIL
+    // 4. Gardener sign-up with a non-clerk assignedClerkEmail fails with 400 INVALID_CLERK_EMAIL
     const [clientRows] = await pool.query('SELECT email FROM users WHERE id = ?', [singleClientId])
     const badAssignReg = await api('/auth/register', {
       method: 'POST',
@@ -251,7 +259,7 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
     assert.equal(badAssignReg.status, 400)
     assert.equal(badAssignReg.data.code, 'INVALID_CLERK_EMAIL')
 
-    // 4. Gardener sign-up with the valid Clerk email atomically assigns that clerk
+    // 5. Gardener sign-up with a valid existing Clerk email atomically assigns that clerk
     const goodGardenerReg = await api('/auth/register', {
       method: 'POST',
       body: {
@@ -262,7 +270,7 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
         phone: '09171115555',
         businessName: 'Linked Gardens',
         serviceArea: 'Tetuan, Zamboanga City',
-        assignedClerkEmail: publicClerkEmail,
+        assignedClerkEmail: existingClerkEmail,
         assignedClerkNotes: 'Assigned during sign-up',
         email: `linked_gardener_${stamp}@test.local`,
         password: 'Password123!',
@@ -272,7 +280,7 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
     assert.equal(goodGardenerReg.status, 201, `Expected 201 got ${goodGardenerReg.status}: ${JSON.stringify(goodGardenerReg.data)}`)
     createdUserIds.push(goodGardenerReg.data.user.id)
 
-    const linkedWs = await api('/clerk/workspace', { headers: { Cookie: clerkReg.cookie } })
+    const linkedWs = await api('/clerk/workspace', { headers: { Cookie: seededClerk.cookie } })
     assert.equal(linkedWs.status, 200)
     assert.equal(linkedWs.data.gardeners.length, 1)
     assert.equal(linkedWs.data.gardeners[0].id, goodGardenerReg.data.user.id)
