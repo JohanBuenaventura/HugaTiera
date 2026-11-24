@@ -10,8 +10,14 @@ UPDATE users
   WHERE role = 'client';
 
 UPDATE users
-  SET can_act_as_gardener = TRUE
+  SET can_act_as_client = TRUE,
+      can_act_as_gardener = TRUE
   WHERE role = 'gardener';
+
+INSERT IGNORE INTO client_profiles (user_id, city)
+SELECT id, 'Zamboanga City'
+FROM users
+WHERE role = 'gardener';
 
 CREATE TABLE clerk_gardener_assignments (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
