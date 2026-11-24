@@ -1,6 +1,6 @@
 # HugaTiera — Backend API (`backend/`)
 
-The Node.js + Express 5 REST API backend for **HugaTiera** (`mergedbranchv1`), providing 18+ registration & dual-role/clerk RBAC, unified Case 1 / Case 2 service requests with per-sq.m price estimation and category specs, gardener scheduling & crew capacity validation, versioned mutual agreements, reservation vs. paid booking with PayMongo/Sandbox checkout and mutual Transaction Completion Agreements, `sharp`-sanitized image uploads, Gemini AI + smart recommendations, and MySQL persistence (`25` tables, `59` FKs).
+The Node.js + Express 5 REST API backend for **HugaTiera** (`main`), providing 18+ registration & dual-role/provider-managed clerk RBAC, unified Case 1 / Case 2 service requests with per-sq.m price estimation and category specs, gardener scheduling & crew capacity validation, versioned mutual agreements, reservation vs. paid booking with PayMongo/Sandbox checkout and mutual Transaction Completion Agreements, `sharp`-sanitized image uploads, Gemini AI + category-filtered smart recommendations, and MySQL persistence (`25` tables, `59` FKs).
 
 ---
 
@@ -74,7 +74,7 @@ Additional feature test suites in `backend/tests/` (run via `node --test --test-
 For full request/response schemas and authorization rules, see [docs/api-reference.md](file:///c:/xampp/htdocs/HugaTiera/docs/api-reference.md).
 
 - `GET /api/health` — Server and MySQL connectivity check (`health.routes.js`)
-- `/api/auth` — `register` (18+, mobile, dual-role/clerk), `login`, `logout`, `me`, `switch-role`, `enable-dual-role`, `administrator-check` (`auth.routes.js`)
+- `/api/auth` — `register` (18+, mobile, Client/Gardener with automatic dual-role for Gardeners; blocks public `administrator` & `clerk`), `login`, `logout`, `me`, `switch-role`, `enable-dual-role`, `administrator-check` (`auth.routes.js`)
 - `/api/profiles` — `GET/PUT /me`, avatars (`/:userId/avatar`, `/me/avatar`), unavailable dates (`/me/unavailable-dates`), gardener My Clerks (`/me/clerks`), `POST /reports` (`profile.routes.js`)
 - `/api/services` — Public search, categories with per-sq.m rates, `/pricing-addons`, service cover images (`/:serviceId/image`), and gardener service CRUD (`service.routes.js`)
 - `/api/gardeners` — `GET /:gardenerId` public profile, `GET /:gardenerId/availability`, `POST /:gardenerId/availability/check` (`gardener.routes.js`)
