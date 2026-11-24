@@ -38,7 +38,7 @@ Use this guide for onboarding teammates, QA walkthroughs, user manuals, and Soft
   - Public registration strictly blocks `administrator` and `clerk` accounts (`400` on `POST /api/auth/register`).
 - **Step-by-Step Flow with Progress Stepper & Per-Step Validation:**
   - **Step 1 (`About you`):** Choose role card, enter First name, optional Middle name, Last name, and Birthday with **live auto-calculated Age** (18+ required).
-  - **Step 2 (`Details`):** Enter Mobile number (10–15 digits) + either Client Street/Barangay & City (`Zamboanga City` default) OR Gardener Business Name (optional), Years of Experience (optional), Service Area (`Zamboanga City` default), and Short Bio (optional).
+  - **Step 2 (`Details`):** Enter Mobile number (10–15 digits) + either **Client structured billing-style address** (`StructuredAddressFields.jsx`: House/Unit/Purok & Street, Zamboanga City Barangay dropdown synced with `smartMatching.js` + manual `Other` option, optional Subdivision/Landmark, City/Municipality defaulting to `Zamboanga City`, optional Province defaulting to `Zamboanga del Sur`, optional 4-digit ZIP defaulting to `7000`, with live formatted preview) OR Gardener Business Name (optional), Years of Experience (optional), Service Area (`Zamboanga City` default), and Short Bio (optional).
   - **Step 3 (`Account`):** Compact review summary strip (with quick **Edit info** link), Email address, Password (8–72 chars with show/hide eye toggle), and Confirm Password (with live mismatch indicator).
 - Clicking completed steps or **Back** preserves all entered inputs; submitting calls `POST /api/auth/register` once.
 
@@ -61,7 +61,7 @@ Use this guide for onboarding teammates, QA walkthroughs, user manuals, and Soft
   - Filter by **Your barangay / area**, **What do you need?** (**live Service Category dropdown** backed by `categoryId`), sort modes (**AI Smart Match**, **Nearest First**, **Highest Rated**, **Best Service Conduct**), and quick toggles (**Nearby only**, **4.0★+ rated**, **Clean conduct only**).
   - Optional **AI Explain Top Picks** button (`POST /api/ai/recommendations/summary`) generates a Gemini advisory summary.
 - **Recent Verified Reviews Feed:** Showcases recent completed-booking reviews across local gardeners (`GET /api/reviews/recent`).
-- **Profile & Settings (`/profile` or Dashboard tab):** Edit name (including optional middle name), 18+ birthday, mobile number, street/barangay address, city, bio, and upload/delete a `sharp`-sanitized profile avatar (`/api/profiles/me/avatar`).
+- **Profile & Settings (`/profile` or Dashboard tab):** Edit name (including optional middle name), 18+ birthday, mobile number, independent billing-style address details (House/Unit/Purok & Street, Zamboanga City Barangay dropdown + manual fallback, Subdivision/Landmark, City/Municipality, Province, and 4-digit ZIP code with automatic parsing of existing addresses), bio, and upload/delete a `sharp`-sanitized profile avatar (`/api/profiles/me/avatar`).
 
 ### 2.2 Service Requests: Case 1 (General) & Case 2 (Direct) (`/inquiries/new`, `/inquiries`, `/inquiries/:inquiryId`)
 - **Case 1 — General Service Request (`request_type = 'general'`):**
