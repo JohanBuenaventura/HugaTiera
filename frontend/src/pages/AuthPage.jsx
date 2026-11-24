@@ -289,7 +289,7 @@ export function RegisterPage() {
               <input type="radio" name="role" value="gardener" checked={form.role === 'gardener'} onChange={updateField('role')} />
               <span className="role-option-copy">
                 <strong>Offer services</strong>
-                <small>Gardener (can assign a clerk)</small>
+                <small>Gardener (includes Client mode &amp; clerks)</small>
               </span>
             </label>
             <label className={form.role === 'both' ? 'selected' : ''}>
