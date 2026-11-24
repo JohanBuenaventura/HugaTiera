@@ -224,6 +224,9 @@ describe('Registration Basic Info, Optional Middle Name & 18+ Birthday Validatio
     createdUserIds.push(gardenerId)
     assert.equal(res.data.user.middleName, null)
     assert.equal(res.data.user.dateOfBirth, dob)
+    assert.equal(res.data.user.canActAsGardener, true)
+    assert.equal(res.data.user.canActAsClient, true)
+    assert.equal(res.data.user.isDualRole, true)
 
     const profileRes = await api('/profiles/me', { headers: { Cookie: res.cookie } })
     assert.equal(profileRes.status, 200)
