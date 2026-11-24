@@ -1,6 +1,6 @@
 # HugaTiera — Entity-Relationship Diagram (ERD) and Data Flow Diagrams (DFD)
 
-This document describes the database structure and data flows of **HugaTiera**, grounded directly in the **25-table, 59-foreign-key** MySQL schema ([hugatiera_schema.sql](../database/schema/hugatiera_schema.sql), updated through **Migrations `001`–`013`** on `mergedbranchv1`).
+This document describes the database structure and data flows of **HugaTiera**, grounded directly in the **25-table, 59-foreign-key** MySQL schema ([hugatiera_schema.sql](../database/schema/hugatiera_schema.sql), updated through **Migrations `001`–`013`** on `main`).
 
 ---
 
