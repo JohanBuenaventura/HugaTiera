@@ -170,11 +170,7 @@ export function RegisterPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const roleParam = params.get('role')
-  const initialRole = roleParam === 'clerk'
-    ? 'clerk'
-    : (roleParam === 'gardener' || roleParam === 'both')
-      ? 'gardener'
-      : 'client'
+  const initialRole = (roleParam === 'gardener' || roleParam === 'both') ? 'gardener' : 'client'
 
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
@@ -190,9 +186,6 @@ export function RegisterPage() {
     serviceArea: 'Zamboanga City',
     yearsOfExperience: '',
     description: '',
-    assignClerkNow: false,
-    assignedClerkEmail: '',
-    assignedClerkNotes: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -214,9 +207,7 @@ export function RegisterPage() {
 
   const roleSummaryLabel = form.role === 'gardener'
     ? 'Offer services (Gardener + Client mode)'
-    : form.role === 'clerk'
-      ? 'Assigned Clerk account'
-      : 'Find a gardener (Client)'
+    : 'Find a gardener (Client)'
 
   function updateField(field) {
     return (event) => {
@@ -228,9 +219,7 @@ export function RegisterPage() {
   function selectRole(nextRole) {
     setError('')
     setForm((current) => ({ ...current, role: nextRole }))
-    if (nextRole === 'clerk') {
-      setParams({ role: 'clerk' }, { replace: true })
-    } else if (params.get('role')) {
+    if (params.get('role')) {
       setParams({}, { replace: true })
     }
   }
@@ -254,11 +243,8 @@ export function RegisterPage() {
       if (!form.address.trim()) return 'Please enter your street or barangay address.'
       if (!form.city.trim()) return 'Please enter your city.'
     }
-    if (form.role === 'gardener') {
-      if (!form.serviceArea.trim()) return 'Please enter your service area.'
-      if (form.assignClerkNow && !EMAIL_PATTERN.test(form.assignedClerkEmail.trim())) {
-        return 'Please enter a valid Clerk email address, or uncheck the optional clerk assignment.'
-      }
+    if (form.role === 'gardener' && !form.serviceArea.trim()) {
+      return 'Please enter your service area.'
     }
     return ''
   }
@@ -330,12 +316,6 @@ export function RegisterPage() {
           serviceArea: form.serviceArea,
           yearsOfExperience: form.yearsOfExperience === '' ? null : Number(form.yearsOfExperience),
           description: form.description,
-          ...(form.assignClerkNow && form.assignedClerkEmail.trim()
-            ? {
-              assignedClerkEmail: form.assignedClerkEmail.trim(),
-              assignedClerkNotes: form.assignedClerkNotes.trim(),
-            }
-            : {}),
         }
         : {}),
     }
@@ -390,60 +370,42 @@ export function RegisterPage() {
 
         {step === 1 && (
           <>
-            {form.role === 'clerk' ? (
-              <div className="register-clerk-banner">
-                <div className="register-clerk-banner-head">
-                  <strong>Registering as an Assigned Clerk</strong>
-                  <button
-                    type="button"
-                    className="register-inline-link"
-                    onClick={() => selectRole('client')}
-                  >
-                    Switch to Client or Gardener signup
-                  </button>
-                </div>
-                <p>
-                  Clerks manage schedules, crew capacity, services, and payment checks for gardeners who link them to their account.
-                </p>
+            <fieldset>
+              <legend>I want to...</legend>
+              <div className="role-options role-options-2">
+                <label className={form.role === 'client' ? 'selected' : ''}>
+                  <input
+                    type="radio"
+                    name="role"
+                    value="client"
+                    checked={form.role === 'client'}
+                    onChange={() => selectRole('client')}
+                  />
+                  <span className="role-option-copy">
+                    <strong>Find a gardener</strong>
+                    <small>Hire &amp; book gardening services</small>
+                  </span>
+                </label>
+                <label className={form.role === 'gardener' ? 'selected' : ''}>
+                  <input
+                    type="radio"
+                    name="role"
+                    value="gardener"
+                    checked={form.role === 'gardener'}
+                    onChange={() => selectRole('gardener')}
+                  />
+                  <span className="role-option-copy">
+                    <strong>Offer services</strong>
+                    <small>Gardener (includes Client mode &amp; staff clerks)</small>
+                  </span>
+                </label>
               </div>
-            ) : (
-              <fieldset>
-                <legend>I want to...</legend>
-                <div className="role-options role-options-2">
-                  <label className={form.role === 'client' ? 'selected' : ''}>
-                    <input
-                      type="radio"
-                      name="role"
-                      value="client"
-                      checked={form.role === 'client'}
-                      onChange={() => selectRole('client')}
-                    />
-                    <span className="role-option-copy">
-                      <strong>Find a gardener</strong>
-                      <small>Hire &amp; book gardening services</small>
-                    </span>
-                  </label>
-                  <label className={form.role === 'gardener' ? 'selected' : ''}>
-                    <input
-                      type="radio"
-                      name="role"
-                      value="gardener"
-                      checked={form.role === 'gardener'}
-                      onChange={() => selectRole('gardener')}
-                    />
-                    <span className="role-option-copy">
-                      <strong>Offer services</strong>
-                      <small>Gardener (includes Client mode &amp; clerks)</small>
-                    </span>
-                  </label>
-                </div>
-                {form.role === 'gardener' && (
-                  <p className="field-note" style={{ marginTop: '6px' }}>
-                    Gardener accounts automatically include Client mode — switch anytime with one click in your sidebar.
-                  </p>
-                )}
-              </fieldset>
-            )}
+              {form.role === 'gardener' && (
+                <p className="field-note" style={{ marginTop: '6px' }}>
+                  Gardener accounts include Client mode (switch anytime in your sidebar) and let you add Clerk staff under Dashboard → My Clerks.
+                </p>
+              )}
+            </fieldset>
 
             <div className="auth-form-section">
               <p className="auth-section-title">Step 1 of 3 · Personal information</p>
@@ -516,19 +478,6 @@ export function RegisterPage() {
               </div>
             </div>
 
-            {form.role !== 'clerk' && (
-              <div className="register-clerk-invite-bar">
-                <span>Invited by a gardener to help manage bookings?</span>
-                <button
-                  type="button"
-                  className="register-inline-link"
-                  onClick={() => selectRole('clerk')}
-                >
-                  Register as a Clerk
-                </button>
-              </div>
-            )}
-
             <div className="register-step-actions">
               <button className="button" type="submit" disabled={isUnderage}>
                 <span>Continue to details</span>
@@ -541,7 +490,7 @@ export function RegisterPage() {
         {step === 2 && (
           <>
             <div className="auth-form-section">
-              <p className="auth-section-title">Step 2 of 3 · Contact &amp; {form.role === 'gardener' ? 'gardener' : form.role === 'clerk' ? 'clerk' : 'location'} details</p>
+              <p className="auth-section-title">Step 2 of 3 · Contact &amp; {form.role === 'gardener' ? 'gardener' : 'location'} details</p>
               <label>
                 Mobile number
                 <input
@@ -634,58 +583,7 @@ export function RegisterPage() {
                       onChange={updateField('description')}
                     />
                   </label>
-
-                  <div className="signup-clerk-box">
-                    <label className="signup-clerk-toggle">
-                      <input
-                        type="checkbox"
-                        checked={form.assignClerkNow}
-                        onChange={(e) => {
-                          setError('')
-                          setForm((current) => ({ ...current, assignClerkNow: e.target.checked }))
-                        }}
-                      />
-                      <span>
-                        <strong>Assign an existing Clerk to manage my account (Optional)</strong>
-                        <small>You can link a clerk right now or create/assign clerks anytime later in Dashboard → My Clerks.</small>
-                      </span>
-                    </label>
-                    {form.assignClerkNow && (
-                      <div className="form-row" style={{ marginTop: '10px' }}>
-                        <label>
-                          Clerk email address
-                          <input
-                            name="assignedClerkEmail"
-                            type="email"
-                            required
-                            maxLength="255"
-                            placeholder="clerk@example.com"
-                            value={form.assignedClerkEmail}
-                            onChange={updateField('assignedClerkEmail')}
-                          />
-                        </label>
-                        <label>
-                          Clerk role note <span className="label-note">(Optional)</span>
-                          <input
-                            name="assignedClerkNotes"
-                            maxLength="255"
-                            placeholder="e.g., Handles schedules & payment checks"
-                            value={form.assignedClerkNotes}
-                            onChange={updateField('assignedClerkNotes')}
-                          />
-                        </label>
-                      </div>
-                    )}
-                  </div>
                 </>
-              )}
-
-              {form.role === 'clerk' && (
-                <div className="signup-clerk-box">
-                  <p className="field-note" style={{ margin: 0 }}>
-                    Once your Clerk account is created, share your email address with a Gardener (so they can link you under <strong>Gardener Dashboard → My Clerks</strong>) or with an Administrator. Until assigned, you will have access to zero gardener accounts.
-                  </p>
-                </div>
               )}
             </div>
 
