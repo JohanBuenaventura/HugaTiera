@@ -7,6 +7,13 @@ import {
   calculateAgeFromDob,
   getMaxBirthDateForAge,
 } from '../services/profiles'
+import StructuredAddressFields from '../components/StructuredAddressFields'
+import {
+  DEFAULT_ADDRESS_PARTS,
+  composeStructuredAddress,
+  formatAddressPreview,
+  validateStructuredAddress,
+} from '../utils/zamboangaAddress'
 import editorialAbout from '../assets/editorial-about.jpg'
 
 function AuthLayout({ title, children, footer, wide = false }) {
@@ -180,8 +187,7 @@ export function RegisterPage() {
     lastName: '',
     dateOfBirth: '',
     phone: '',
-    address: '',
-    city: 'Zamboanga City',
+    addressParts: { ...DEFAULT_ADDRESS_PARTS },
     businessName: '',
     serviceArea: 'Zamboanga City',
     yearsOfExperience: '',
@@ -209,11 +215,18 @@ export function RegisterPage() {
     ? 'Offer services (Gardener + Client mode)'
     : 'Find a gardener (Client)'
 
+  const clientAddressSummary = formatAddressPreview(form.addressParts)
+
   function updateField(field) {
     return (event) => {
       setError('')
       setForm((current) => ({ ...current, [field]: event.target.value }))
     }
+  }
+
+  function updateAddressParts(nextParts) {
+    setError('')
+    setForm((current) => ({ ...current, addressParts: nextParts }))
   }
 
   function selectRole(nextRole) {
@@ -240,8 +253,8 @@ export function RegisterPage() {
       return 'Please enter a valid mobile number (10 to 15 digits).'
     }
     if (form.role === 'client') {
-      if (!form.address.trim()) return 'Please enter your street or barangay address.'
-      if (!form.city.trim()) return 'Please enter your city.'
+      const addrError = validateStructuredAddress(form.addressParts, { requireFields: true })
+      if (addrError) return addrError
     }
     if (form.role === 'gardener' && !form.serviceArea.trim()) {
       return 'Please enter your service area.'
@@ -306,8 +319,8 @@ export function RegisterPage() {
       confirmPassword: form.confirmPassword,
       ...(includeClientFields
         ? {
-          address: form.address,
-          city: form.city,
+          address: composeStructuredAddress(form.addressParts),
+          city: (form.addressParts.city || 'Zamboanga City').trim(),
         }
         : {}),
       ...(includeGardenerFields
@@ -506,33 +519,11 @@ export function RegisterPage() {
               </label>
 
               {form.role === 'client' && (
-                <div className="form-row">
-                  <label>
-                    Street / Barangay address
-                    <input
-                      name="address"
-                      required
-                      maxLength="255"
-                      autoComplete="street-address"
-                      placeholder="e.g., 123 Tetuan Hwy, Brgy. Tetuan"
-                      value={form.address}
-                      onChange={updateField('address')}
-                    />
-                  </label>
-                  <label>
-                    City
-                    <input
-                      name="city"
-                      aria-label="City"
-                      required
-                      maxLength="100"
-                      autoComplete="address-level2"
-                      placeholder="Zamboanga City"
-                      value={form.city}
-                      onChange={updateField('city')}
-                    />
-                  </label>
-                </div>
+                <StructuredAddressFields
+                  value={form.addressParts}
+                  onChange={updateAddressParts}
+                  required
+                />
               )}
 
               {form.role === 'gardener' && (
@@ -607,7 +598,7 @@ export function RegisterPage() {
                 <strong>{fullNameDisplay || 'New account'}</strong>
                 <small>
                   {roleSummaryLabel}
-                  {form.role === 'client' && form.address ? ` · ${form.address}, ${form.city}` : ''}
+                  {form.role === 'client' && clientAddressSummary ? ` · ${clientAddressSummary}` : ''}
                   {form.role === 'gardener' && form.serviceArea ? ` · ${form.serviceArea}` : ''}
                 </small>
               </div>
