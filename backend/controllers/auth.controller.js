@@ -10,7 +10,7 @@ const {
   validateNameParts,
 } = require('../utils/userProfile')
 
-const publicRoles = new Set(['client', 'gardener', 'both', 'clerk'])
+const publicRoles = new Set(['client', 'gardener', 'both'])
 
 function validateCredentials({ email, password }) {
   const normalizedEmail = normalizeText(email).toLowerCase()
@@ -90,7 +90,7 @@ async function register(req, res, next) {
     return res.status(400).json({ message: 'Passwords do not match.' })
   }
   if (!publicRoles.has(role)) {
-    return res.status(400).json({ message: 'Choose a client, gardener, dual (client & gardener), or clerk account.' })
+    return res.status(400).json({ message: 'Choose a client or gardener account. Clerk accounts are created by a service provider under Dashboard -> My Clerks.' })
   }
 
   const isDual = role === 'both'
