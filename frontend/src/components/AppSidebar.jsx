@@ -32,6 +32,7 @@ export default function AppSidebar() {
   const navigate = useNavigate()
   const [unreadCounts, setUnreadCounts] = useState({})
   const [switchingRole, setSwitchingRole] = useState(false)
+  const [roleSwitchError, setRoleSwitchError] = useState('')
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('hugatiera.sidebar.collapsed') === 'true')
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -98,12 +99,13 @@ export default function AppSidebar() {
     if (!user?.isDualRole || switchingRole) return
     const nextRole = user.role === 'client' ? 'gardener' : 'client'
     setSwitchingRole(true)
+    setRoleSwitchError('')
     try {
       await switchRole(nextRole)
       closeMobile()
       navigate('/dashboard')
-    } catch {
-      // ignore; user stays in current mode
+    } catch (error) {
+      setRoleSwitchError(error?.message || 'Unable to switch role right now.')
     } finally {
       setSwitchingRole(false)
     }
@@ -186,20 +188,27 @@ export default function AppSidebar() {
             </span>
           </div>
           {user.isDualRole && (
-            <button
-              className="app-sidebar-switch-role"
-              type="button"
-              disabled={switchingRole}
-              onClick={handleRoleSwitch}
-              title={collapsed ? `Switch to ${user.role === 'client' ? 'Gardener' : 'Client'} mode` : undefined}
-            >
-              <ArrowLeftRight size={15} />
-              <span className="app-sidebar-link-label">
-                {switchingRole
-                  ? 'Switching...'
-                  : `Switch to ${user.role === 'client' ? 'Gardener' : 'Client'}`}
-              </span>
-            </button>
+            <>
+              <button
+                className="app-sidebar-switch-role"
+                type="button"
+                disabled={switchingRole}
+                onClick={handleRoleSwitch}
+                title={collapsed ? `Switch to ${user.role === 'client' ? 'Gardener' : 'Client'} mode` : undefined}
+              >
+                <ArrowLeftRight size={15} />
+                <span className="app-sidebar-link-label">
+                  {switchingRole
+                    ? 'Switching...'
+                    : `Switch to ${user.role === 'client' ? 'Gardener' : 'Client'}`}
+                </span>
+              </button>
+              {roleSwitchError && (
+                <small className="form-error" role="alert" style={{ padding: '6px 8px', margin: '4px 0 0' }}>
+                  {roleSwitchError}
+                </small>
+              )}
+            </>
           )}
           <button
             className="app-sidebar-logout"
