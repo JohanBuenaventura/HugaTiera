@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, CalendarDays, Leaf, MapPin } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, Leaf, MapPin, Search } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
 import {
   bookingsApi,
   buildBookingAgreementSummary,
+  formatBookingStatusLabel,
   formatStatusLabel,
+  getBookingProgress,
   getStatusBadgeClass,
 } from '../services/bookings'
 import { inquiriesApi } from '../services/inquiries'
@@ -15,6 +17,26 @@ import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
+
+function BookingProgress({ status, compact = false }) {
+  const progress = getBookingProgress(status)
+  return (
+    <div className={`booking-progress${compact ? ' is-compact' : ''}`} aria-label="Booking progress">
+      {progress.cancelled && <p className="form-note">This service booking was cancelled or declined.</p>}
+      <ol>
+        {progress.steps.map((step, index) => (
+          <li
+            className={progress.cancelled ? 'is-cancelled' : index < progress.currentIndex ? 'is-complete' : index === progress.currentIndex ? 'is-current' : ''}
+            key={step}
+          >
+            <span>{index + 1}</span>
+            <small>{step}</small>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
 
 function BookingForm() {
   const [params] = useSearchParams()
@@ -194,7 +216,7 @@ function BookingDetails({ id }) {
       <p className="eyebrow">Booking #{booking.id}</p>
       <h1>{booking.service_title || 'Gardening service'}</h1>
       <div className="booking-status-row">
-        <span className={getStatusBadgeClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
+        <span className={getStatusBadgeClass(booking.status)}>{formatBookingStatusLabel(booking.status)}</span>
         <span>{gardener ? booking.client_name : booking.gardener_name}</span>
         {agreementSummary.inquiryPath && (
           <Link className="text-link" to={agreementSummary.inquiryPath}>
@@ -203,6 +225,7 @@ function BookingDetails({ id }) {
         )}
         <button className="table-action" type="button" onClick={openConversation}>Open conversation</button>
       </div>
+      <BookingProgress status={booking.status} />
       {statusMessage && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{statusMessage}</div>}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <article className="dashboard-panel booking-detail-card">
@@ -305,8 +328,12 @@ function BookingList() {
   const [bookings, setBookings] = useState([])
   const [covers, setCovers] = useState({})
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   useEffect(() => {
     let active = true
+    setLoading(true)
     bookingsApi.list()
       .then(async (result) => {
         if (!active) return
@@ -327,20 +354,64 @@ function BookingList() {
         setCovers(nextCovers)
       })
       .catch((loadError) => { if (active) setError(loadError.message) })
+      .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [])
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const visibleBookings = bookings.filter((booking) => {
+    const statusMatches = !statusFilter || String(booking.status || '').toLowerCase() === statusFilter
+    const searchable = [
+      booking.service_title,
+      booking.client_name,
+      booking.gardener_name,
+      booking.location,
+      booking.notes,
+      booking.agreed_scope,
+    ].filter(Boolean).join(' ').toLowerCase()
+    return statusMatches && (!normalizedQuery || searchable.includes(normalizedQuery))
+  })
 
   return (
     <section className="container booking-content">
       <p className="eyebrow">Agreements & schedule</p>
-      <h1>Bookings and agreements.</h1>
+      <h1>Booking status.</h1>
       <p className="booking-note">
         Track confirmed service arrangements, agreed pricing, and mutual agreement versions.
       </p>
+      <div className="marketplace-filters booking-filters">
+        <span className="search-field">
+          <Search size={15} aria-hidden="true" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search service, person, or location"
+            aria-label="Search bookings"
+          />
+        </span>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter booking status">
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="in_progress">In progress</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
       {error && <div className="form-error">{error}</div>}
-      {!error && bookings.length === 0 && <div className="empty-state">You do not have any bookings yet.</div>}
+      {loading && !error && <div className="loading-state" role="status">Loading booking status<span /></div>}
+      {!loading && !error && bookings.length === 0 && (
+        <div className="empty-state">
+          You do not have any bookings yet.
+          <Link className="text-link" to="/inquiries">Review inquiries and proposals</Link>
+        </div>
+      )}
+      {!loading && !error && bookings.length > 0 && visibleBookings.length === 0 && (
+        <div className="empty-state">No bookings match your search or status filter.</div>
+      )}
       <div className="marketplace-grid marketplace-card-grid">
-        {bookings.map((booking) => {
+        {!loading && visibleBookings.map((booking) => {
           const coverUrl = booking.inquiry_id ? covers[booking.inquiry_id] : null
           const otherParty = user?.role === 'gardener' ? booking.client_name : booking.gardener_name
           return (
@@ -355,11 +426,12 @@ function BookingList() {
                   </div>
                 )}
                 <span className={`${getStatusBadgeClass(booking.status)} media-status-badge`}>
-                  {formatStatusLabel(booking.status)}
+                  {formatBookingStatusLabel(booking.status)}
                 </span>
               </div>
               <div className="marketplace-card-body">
                 <h2>{booking.service_title || 'Gardening service'}</h2>
+                <BookingProgress status={booking.status} compact />
                 <p>
                   {booking.agreed_scope || booking.notes || 'Confirmed gardening service arrangement.'}
                 </p>

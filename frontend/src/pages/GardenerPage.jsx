@@ -101,14 +101,20 @@ export default function GardenerPage() {
             {data.services?.length ? (
               <div className="marketplace-grid">
                 {data.services.map((service) => (
-                  <article className="marketplace-card" key={service.id}>
+                  <article className="marketplace-card service-listing-card" key={service.id}>
                     <h2>{service.title}</h2>
                     <p>{service.description}</p>
                     <div className="service-meta">
                       <span>{service.service_area}</span>
                       <span>{service.indicative_price ? `From ₱${service.indicative_price}` : 'Quotation available'}</span>
                     </div>
-                    <Link to={`/services/${service.id}`}>View service <ArrowRight size={15} /></Link>
+                    <Link
+                      className="service-card-click-target"
+                      to={`/services/${service.id}`}
+                      aria-label={`View ${service.title} service details`}
+                    >
+                      <span className="card-cta">View service <ArrowRight size={15} /></span>
+                    </Link>
                   </article>
                 ))}
               </div>

@@ -64,6 +64,7 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 ## Completed Features
 - Approved React + Vite, Node.js + Express.js, and MySQL architecture.
 - 19-table MySQL schema in `database/schema/hugatiera_schema.sql` and Migration 001 in `database/migrations/001_unified_requests_and_agreements.sql` (applied to both `hugatiera_db_migration_test` and `hugatiera_db`).
+- Password recovery with short-lived, single-use hashed reset tokens (`password_reset_tokens`) and provider-neutral SMTP delivery. Migration 004 was backed up and applied to `hugatiera_db` on 2026-11-24; development mode logs the reset URL when SMTP is not configured.
 - Backend health endpoint at `GET /api/health`.
 - Client and gardener registration with validation, optional middle name in signup and editable profiles, required client address at signup and profile updates, hashed passwords, and `HttpOnly` JWT cookies.
 - Required private date-of-birth validation for new accounts (18+ by Manila-local date), optional phone at signup, and continued exclusion of date of birth from auth/profile responses.
@@ -102,5 +103,6 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 - [x] R7 (Automated Suites) & Post-Migration Audit Phases 1–3 (`ISS-01` through `ISS-10`) – All 10 audit findings implemented and verified (`53/53` backend tests passing, frontend lint & build passing).
 
 ## Next Tasks
-- User reviews the updated project documentation (`README.md`, `database/README.md`, `docs/architecture-and-workflows.md`, `docs/api-reference.md`, `project_progress.md`, `system_bug_and_missing_features.md`, `folder_structure.md`).
+- Configure real SMTP credentials and verify password-reset email delivery.
+- Continue the approved recommendation order with external notification delivery.
 - Perform final live browser/presentation walk-through and confirm readiness for Phase 16 sign-off.

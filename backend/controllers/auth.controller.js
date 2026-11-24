@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const crypto = require('crypto')
+const nodemailer = require('nodemailer')
 const { pool } = require('../config/database')
 const { validateDateOfBirth } = require('../utils/dateOfBirth')
 
@@ -62,6 +64,142 @@ function sanitizeUser(user) {
     middleName: user.middle_name,
     lastName: user.last_name,
     phone: user.phone,
+  }
+}
+
+function hashResetToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+function getPasswordResetTtlMinutes() {
+  const parsed = Number(process.env.PASSWORD_RESET_TTL_MINUTES || 30)
+  return Number.isInteger(parsed) && parsed >= 5 && parsed <= 180 ? parsed : 30
+}
+
+async function sendPasswordResetEmail(email, resetUrl) {
+  if (!process.env.SMTP_HOST) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[development] Password reset URL:', resetUrl)
+    }
+    return
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: process.env.SMTP_USER ? {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD,
+    } : undefined,
+  })
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || 'HugaTiera <no-reply@hugatiera.local>',
+    to: email,
+    subject: 'Reset your HugaTiera password',
+    text: `Use this link within ${getPasswordResetTtlMinutes()} minutes to reset your password:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+    html: `<p>Use this link within ${getPasswordResetTtlMinutes()} minutes to reset your password:</p><p><a href="${resetUrl}">Reset password</a></p><p>If you did not request this, ignore this email.</p>`,
+  })
+}
+
+async function forgotPassword(req, res, next) {
+  const email = normalizeText(req.body.email).toLowerCase()
+
+  if (!/^[^\s@]+@[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: 'A valid email address is required.' })
+  }
+
+  try {
+    const [users] = await pool.execute(
+      'SELECT id, email, is_active FROM users WHERE email = ? LIMIT 1',
+      [email],
+    )
+    const user = users[0]
+
+    if (user && user.is_active) {
+      const token = crypto.randomBytes(32).toString('hex')
+      const tokenHash = hashResetToken(token)
+      const ttlMinutes = getPasswordResetTtlMinutes()
+      const connection = await pool.getConnection()
+
+      try {
+        await connection.beginTransaction()
+        await connection.execute(
+          'UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL',
+          [user.id],
+        )
+        await connection.execute(
+          `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+           VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ${ttlMinutes} MINUTE))`,
+          [user.id, tokenHash],
+        )
+        await connection.commit()
+      } catch (error) {
+        await connection.rollback()
+        throw error
+      } finally {
+        connection.release()
+      }
+
+      const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')
+      await sendPasswordResetEmail(user.email, `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`)
+    }
+
+    return res.json({ message: 'If an active account exists for that email, a password reset link has been sent.' })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+async function resetPassword(req, res, next) {
+  const token = normalizeText(req.body.token)
+  const password = req.body.password
+
+  if (!/^[a-f0-9]{64}$/i.test(token)) {
+    return res.status(400).json({ message: 'The password reset link is invalid or has expired.' })
+  }
+  if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
+    return res.status(400).json({ message: 'Password must be between 8 and 72 characters.' })
+  }
+
+  const tokenHash = hashResetToken(token)
+  const connection = await pool.getConnection()
+
+  try {
+    await connection.beginTransaction()
+    const [rows] = await connection.execute(
+      `SELECT rt.id, rt.user_id
+       FROM password_reset_tokens rt
+       INNER JOIN users u ON u.id = rt.user_id
+       WHERE rt.token_hash = ? AND rt.used_at IS NULL
+         AND rt.expires_at > NOW() AND u.is_active = TRUE
+       LIMIT 1
+       FOR UPDATE`,
+      [tokenHash],
+    )
+
+    if (rows.length === 0) {
+      await connection.rollback()
+      return res.status(400).json({ message: 'The password reset link is invalid or has expired.' })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12)
+    await connection.execute(
+      'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [passwordHash, rows[0].user_id],
+    )
+    await connection.execute(
+      'UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL',
+      [rows[0].user_id],
+    )
+    await connection.commit()
+    return res.json({ message: 'Your password has been reset. You can now sign in.' })
+  } catch (error) {
+    await connection.rollback()
+    return next(error)
+  } finally {
+    connection.release()
   }
 }
 
@@ -176,7 +314,9 @@ function currentUser(req, res) {
 
 module.exports = {
   currentUser,
+  forgotPassword,
   login,
   logout,
   register,
+  resetPassword,
 }

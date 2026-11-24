@@ -123,7 +123,7 @@ export default function ServicesPage() {
               : (gardenerCovers[service.gardener_id] || null)
             const gardenerName = service.business_name || `${service.first_name} ${service.last_name}`
             return (
-              <article className="marketplace-card visual-market-card" key={service.id}>
+              <article className="marketplace-card visual-market-card service-listing-card" key={service.id}>
                 <div className="marketplace-card-media">
                   {coverUrl ? (
                     <img src={coverUrl} alt={`${service.title} by ${gardenerName}`} loading="lazy" />
@@ -139,18 +139,22 @@ export default function ServicesPage() {
                   <h2>{service.title}</h2>
                   <p>{service.description}</p>
                   <div className="service-meta">
-                    <Link to={`/gardeners/${service.gardener_id}`}>{gardenerName}</Link>
+                    <Link className="service-provider-link" to={`/gardeners/${service.gardener_id}`}>{gardenerName}</Link>
                     <strong className="card-price">
                       {service.indicative_price ? `From ₱${Number(service.indicative_price).toLocaleString()}` : 'Quotation available'}
                     </strong>
                   </div>
                   <div className="marketplace-card-footer">
                     <span className="card-area"><MapPin size={13} /> {service.service_area}</span>
-                    <Link className="card-cta" to={`/services/${service.id}`}>
-                      View service <ArrowRight size={15} />
-                    </Link>
                   </div>
                 </div>
+                <Link
+                  className="service-card-click-target"
+                  to={`/services/${service.id}`}
+                  aria-label={`View ${service.title} service details`}
+                >
+                  <span className="card-cta">View service <ArrowRight size={15} /></span>
+                </Link>
               </article>
             )
           })}

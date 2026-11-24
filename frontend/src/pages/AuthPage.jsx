@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Eye, EyeOff, Leaf } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { authApi } from '../services/auth'
 import editorialAbout from '../assets/editorial-about.jpg'
 
 function getLatestEligibleDateOfBirth() {
@@ -161,6 +162,133 @@ export function LoginPage() {
         </div>
       </label>
       <button className="button" type="submit" disabled={submitting}>{submitting ? 'Signing in...' : 'Sign in'}</button>
+      <Link className="auth-inline-link" to="/forgot-password">Forgot password?</Link>
+    </form>
+  </AuthLayout>
+}
+
+export function ForgotPasswordPage() {
+  const [email, setEmail] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+    setSuccess('')
+    setSubmitting(true)
+    try {
+      const result = await authApi.forgotPassword(email)
+      setSuccess(result.message)
+    } catch (submitError) {
+      setError(submitError.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return <AuthLayout title="Reset your password." footer={<Link to="/login">Back to sign in</Link>}>
+    <form className="auth-form" onSubmit={handleSubmit}>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {success && <div className="form-success" role="status">{success}</div>}
+      <label>
+        Email address
+        <input
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+      </label>
+      <button className="button" type="submit" disabled={submitting}>
+        {submitting ? 'Sending...' : 'Send reset link'}
+      </button>
+    </form>
+  </AuthLayout>
+}
+
+export function ResetPasswordPage() {
+  const [searchParams] = useSearchParams()
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const token = searchParams.get('token') || ''
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+    setSuccess('')
+    if (!token) {
+      setError('The password reset link is invalid or missing.')
+      return
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result = await authApi.resetPassword(token, password)
+      setSuccess(result.message)
+      setPassword('')
+      setConfirmPassword('')
+    } catch (submitError) {
+      setError(submitError.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return <AuthLayout title="Choose a new password." footer={<Link to="/login">Back to sign in</Link>}>
+    <form className="auth-form" onSubmit={handleSubmit}>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {success && <div className="form-success" role="status">{success}</div>}
+      <label>
+        New password
+        <div className="password-input-wrap">
+          <input
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            required
+            minLength="8"
+            maxLength="72"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <button
+            className="password-toggle"
+            type="button"
+            onClick={() => setShowPassword((visible) => !visible)}
+            aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}
+          >
+            {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+          </button>
+        </div>
+      </label>
+      <label>
+        Confirm password
+        <input
+          name="confirmPassword"
+          type={showPassword ? 'text' : 'password'}
+          required
+          minLength="8"
+          maxLength="72"
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+        />
+      </label>
+      <button className="button" type="submit" disabled={submitting}>
+        {submitting ? 'Updating...' : 'Reset password'}
+      </button>
     </form>
   </AuthLayout>
 }

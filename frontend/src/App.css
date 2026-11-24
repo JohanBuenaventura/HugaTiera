@@ -1796,6 +1796,16 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
 .auth-footer a {
   color: var(--forest);
 }
+.auth-inline-link {
+  margin: -3px auto 0;
+  color: var(--forest);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.auth-inline-link:hover {
+  text-decoration: underline;
+}
 
 /* Public Header for Unauthenticated Marketplace / Detail Pages */
 .public-header {
@@ -1829,6 +1839,48 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+}
+.inquiry-request-card {
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.inquiry-request-card:hover {
+  border-color: var(--sage);
+  box-shadow: var(--shadow-md);
+}
+.inquiry-request-card:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+.service-listing-card {
+  position: relative;
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.service-listing-card:hover {
+  border-color: var(--sage);
+  box-shadow: var(--shadow-md);
+}
+.service-card-click-target {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.service-card-click-target .card-cta {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+}
+.service-listing-card:focus-within {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+.service-provider-link {
+  position: relative;
+  z-index: 2;
 }
 .marketplace-card-media {
   position: relative;
@@ -2015,6 +2067,160 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   opacity: .55;
   cursor: not-allowed;
   transform: none;
+}
+
+.dashboard-summary-strip {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.dashboard-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 72px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--forest);
+  background: var(--surface);
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+}
+.dashboard-summary-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.dashboard-summary-card strong {
+  font-family: Georgia, serif;
+  font-size: 28px;
+}
+.dashboard-summary-card:hover {
+  border-color: var(--sage);
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.loading-state span {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line);
+  border-top-color: var(--forest);
+  border-radius: 50%;
+  animation: hugatiera-spin .8s linear infinite;
+}
+@keyframes hugatiera-spin {
+  to { transform: rotate(360deg); }
+}
+
+.booking-filters {
+  grid-template-columns: 2fr 1fr;
+  max-width: 760px;
+  margin: 22px 0 18px;
+}
+.booking-progress {
+  margin: 18px 0;
+  overflow-x: auto;
+}
+.booking-progress ol {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(70px, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.booking-progress li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  color: #8a968d;
+  text-align: center;
+}
+.booking-progress li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 13px;
+  left: calc(50% + 18px);
+  width: calc(100% - 36px);
+  height: 2px;
+  background: #dfe6dc;
+}
+.booking-progress li > span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 2px solid #dfe6dc;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.booking-progress li small {
+  font-size: 10px;
+  font-weight: 700;
+}
+.booking-progress li.is-complete,
+.booking-progress li.is-current {
+  color: var(--forest);
+}
+.booking-progress li.is-complete > span {
+  border-color: var(--forest);
+  color: #fff;
+  background: var(--forest);
+}
+.booking-progress li.is-current > span {
+  border-color: var(--amber);
+  color: var(--forest);
+  background: #fff7df;
+}
+.booking-progress li.is-complete:not(:last-child)::after {
+  background: var(--forest);
+}
+.booking-progress li.is-cancelled {
+  color: #a65a4d;
+}
+.booking-progress li.is-cancelled > span {
+  border-color: #b66a5d;
+  color: #a65a4d;
+  background: #fff4f1;
+}
+.booking-progress.is-compact {
+  margin: 4px 0 14px;
+}
+.booking-progress.is-compact ol {
+  grid-template-columns: repeat(4, minmax(54px, 1fr));
+}
+.booking-progress.is-compact li small {
+  font-size: 9px;
+}
+
+@media (max-width: 760px) {
+  .dashboard-summary-strip,
+  .booking-filters {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-summary-strip {
+    grid-column: 1;
+  }
+  .booking-filters .search-field {
+    grid-column: auto;
+  }
+  .dashboard-summary-card {
+    min-height: 62px;
+  }
 }
 
 .request-photo-grid {
@@ -2489,6 +2695,188 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
 }
 .dashboard-hero-actions {
   flex-shrink: 0;
+}
+
+.dashboard-overview-action-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.action-required-row,
+.notification-preview-row,
+.next-booking-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.action-required-row strong,
+.action-required-row small,
+.notification-preview-row strong,
+.notification-preview-row small,
+.next-booking-card strong,
+.next-booking-card span,
+.next-booking-card small {
+  display: block;
+}
+
+.action-required-row small,
+.notification-preview-row small,
+.next-booking-card small,
+.next-booking-card > span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.action-required-row:hover strong,
+.notification-preview-row:hover strong,
+.next-booking-card:hover strong {
+  color: var(--forest);
+}
+
+.action-required-empty {
+  display: grid;
+  gap: 5px;
+  min-height: 92px;
+  place-content: center;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.action-required-empty strong {
+  color: var(--forest);
+  font-size: 14px;
+}
+
+.next-booking-card {
+  align-items: flex-start;
+  flex-direction: column;
+  border-top: 0;
+}
+
+.next-booking-card strong {
+  color: var(--forest);
+  font-size: 16px;
+}
+
+.notification-preview-row {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.notification-preview-row > span:last-child {
+  min-width: 0;
+}
+
+.notification-preview-row small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.notification-preview-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.profile-completion-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 2fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-completion-panel h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+}
+
+.profile-completion-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--line);
+}
+
+.profile-completion-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--forest);
+}
+
+.profile-completion-panel > strong {
+  color: var(--forest);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.profile-task-link {
+  grid-column: 2;
+  width: fit-content;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.profile-task-link:hover {
+  text-decoration: underline;
+}
+
+.profile-complete-label {
+  grid-column: 2;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-overview-action-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .unread-preview-panel {
+    grid-column: 1 / -1;
+  }
+  .profile-completion-panel {
+    grid-template-columns: minmax(160px, 1fr) minmax(180px, 2fr) auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-overview-action-grid {
+    grid-template-columns: 1fr;
+  }
+  .unread-preview-panel {
+    grid-column: auto;
+  }
+  .profile-completion-panel {
+    grid-template-columns: 1fr;
+  }
+  .profile-completion-panel > strong,
+  .profile-task-link,
+  .profile-complete-label {
+    grid-column: 1;
+  }
+  .action-required-row {
+    align-items: flex-start;
+  }
 }
 
 /* Eliminate Wasted Right-Side Gaps Across All Forms, Detail Cards & Inbox */

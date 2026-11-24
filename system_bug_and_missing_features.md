@@ -67,7 +67,7 @@ All ten audit findings identified after Production Migration 001 (November 12, 2
 
 ## 4. Optional Post-MVP Enhancements (Out of Current Academic Scope)
 
-- **Password Reset via Email (`FEAT-01`):** Forgot-password token and external email delivery.
+- **Password Reset Email Delivery (`FEAT-01`):** The secure forgot/reset flow is implemented. Live email delivery still requires SMTP credentials and a delivery check.
 - **External Email / SMS Notifications (`FEAT-02`):** Notifications are currently stored and delivered in-app via MySQL.
 - **Dedicated Admin Audit Table (`FEAT-03`):** Request/offer/agreement events are logged in `request_events` and AI calls in `ai_usage_log`; a separate table for admin category/account toggles is optional.
 - **Gardener Working Hours Calendar (`FEAT-08`):** The backend enforces schedule conflict detection across active bookings and agreements, without requiring gardeners to pre-populate weekly shift calendars.

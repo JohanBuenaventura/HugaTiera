@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Leaf, MapPin, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Leaf, MapPin, Search, Sparkles } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -930,6 +930,8 @@ function InquiryList() {
   const [filters, setFilters] = useState({ categoryId: '', area: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   useEffect(() => {
     if (user?.role === 'gardener') {
@@ -977,6 +979,21 @@ function InquiryList() {
     run()
     return () => { active = false }
   }, [activeTab, filters, user?.role])
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const visibleInquiries = inquiries.filter((inquiry) => {
+    const statusMatches = !statusFilter || String(inquiry.status || '').toLowerCase() === statusFilter
+    const searchable = [
+      inquiry.subject,
+      inquiry.description,
+      inquiry.ai_summary,
+      inquiry.location,
+      inquiry.gardener_name,
+      inquiry.category_name,
+      inquiry.service_title,
+    ].filter(Boolean).join(' ').toLowerCase()
+    return statusMatches && (!normalizedQuery || searchable.includes(normalizedQuery))
+  })
 
   return (
     <section className="container inquiry-content">
@@ -1033,22 +1050,56 @@ function InquiryList() {
         </div>
       )}
 
-      {loading && <p>Loading requests...</p>}
+      {activeTab === 'mine' && (
+        <div className="marketplace-filters booking-filters">
+          <span className="search-field">
+            <Search size={15} aria-hidden="true" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search request, provider, or location"
+              aria-label="Search inquiries"
+            />
+          </span>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter inquiry status">
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="responded">Responded</option>
+            <option value="provider_selected">Provider selected</option>
+            <option value="in_agreement">Agreement in progress</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="expired">Expired</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      )}
+
+      {loading && <div className="loading-state" role="status">Loading requests<span /></div>}
       {error && <div className="form-error" role="alert">{error}</div>}
 
       {!loading && !error && activeTab === 'mine' && inquiries.length === 0 && (
         <div className="empty-state">You do not have any inquiries yet.</div>
       )}
 
-      {!loading && !error && activeTab === 'mine' && inquiries.length > 0 && (
+      {!loading && !error && activeTab === 'mine' && inquiries.length > 0 && visibleInquiries.length === 0 && (
+        <div className="empty-state">No inquiries match your search or status filter.</div>
+      )}
+
+      {!loading && !error && activeTab === 'mine' && visibleInquiries.length > 0 && (
         <div className="marketplace-grid marketplace-card-grid" style={{ marginTop: '20px' }}>
-          {inquiries.map((inquiry) => {
+          {visibleInquiries.map((inquiry) => {
             const coverUrl = inquiryCovers[inquiry.id] || null
             const partnerLabel = user?.role === 'gardener'
               ? `${inquiry.client_first_name || ''} ${inquiry.client_last_name || ''}`.trim() || 'Client'
               : inquiry.gardener_name || (inquiry.offer_count > 0 ? `${inquiry.offer_count} provider ${Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}` : 'Open to providers')
             return (
-              <article className="marketplace-card visual-market-card" key={inquiry.id}>
+              <Link
+                className="marketplace-card visual-market-card inquiry-request-card"
+                to={`/inquiries/${inquiry.id}`}
+                aria-label={`View details for ${inquiry.subject}`}
+                key={inquiry.id}
+              >
                 <div className="marketplace-card-media">
                   {coverUrl ? (
                     <img
@@ -1082,12 +1133,12 @@ function InquiryList() {
                   </div>
                   <div className="marketplace-card-footer">
                     <span className="card-area"><MapPin size={13} /> {inquiry.location || 'Zamboanga City'}</span>
-                    <Link className="card-cta" to={`/inquiries/${inquiry.id}`}>
+                    <span className="card-cta" aria-hidden="true">
                       View details <ArrowRight size={15} />
-                    </Link>
+                    </span>
                   </div>
                 </div>
-              </article>
+              </Link>
             )
           })}
         </div>
@@ -1103,7 +1154,12 @@ function InquiryList() {
             const firstImageId = Array.isArray(reqItem.images) && reqItem.images[0]?.id
             const coverUrl = firstImageId ? getRequestImageUrl(firstImageId) : null
             return (
-              <article className="marketplace-card visual-market-card" key={reqItem.id}>
+              <Link
+                className="marketplace-card visual-market-card inquiry-request-card"
+                to={`/inquiries/${reqItem.id}`}
+                aria-label={`View details for ${reqItem.subject}`}
+                key={reqItem.id}
+              >
                 <div className="marketplace-card-media">
                   {coverUrl ? (
                     <img
@@ -1137,12 +1193,12 @@ function InquiryList() {
                   </div>
                   <div className="marketplace-card-footer">
                     <span className="card-area"><MapPin size={13} /> {reqItem.location || 'Zamboanga City'}</span>
-                    <Link className="card-cta" to={`/inquiries/${reqItem.id}`}>
+                    <span className="card-cta" aria-hidden="true">
                       View details <ArrowRight size={15} />
-                    </Link>
+                    </span>
                   </div>
                 </div>
-              </article>
+              </Link>
             )
           })}
         </div>

@@ -38,10 +38,31 @@ export function formatStatusLabel(status) {
     .join(' ')
 }
 
+export function formatBookingStatusLabel(status) {
+  return String(status || '').toLowerCase() === 'accepted'
+    ? 'Confirmed'
+    : formatStatusLabel(status)
+}
+
 export function getStatusBadgeClass(status) {
   const raw = status === null || status === undefined ? '' : String(status).trim().toLowerCase()
   const safeSlug = raw && /^[a-z0-9_]+$/.test(raw) ? raw : 'unknown'
   return `inquiry-status status-${safeSlug}`
+}
+
+export function getBookingProgress(status) {
+  const steps = ['Pending', 'Confirmed', 'In Progress', 'Completed']
+  const normalized = String(status || '').toLowerCase()
+  const cancelled = normalized === 'cancelled' || normalized === 'declined'
+  if (cancelled) return { steps, currentIndex: -1, cancelled: true }
+  const index = {
+    pending: 0,
+    accepted: 1,
+    confirmed: 1,
+    in_progress: 2,
+    completed: 3,
+  }[normalized]
+  return { steps, currentIndex: index ?? 0, cancelled: false }
 }
 
 function formatApprovalState(timestamp) {

@@ -19,6 +19,7 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
 - **Role-Based Authentication & Security:**
   - Client and Gardener registration with `bcryptjs` password hashing and `HttpOnly` JWT cookies (`hugatiera_token`).
   - Live account status verification (`users.is_active = TRUE`) on every protected request; administrator self-registration is blocked.
+  - Forgot-password and reset-password flows with 30-minute, single-use hashed reset tokens stored in MySQL.
 - **Public Marketplace & Gardener Portfolios:**
   - Keyword, category, and service-area filtering with sorting (`newest`, `price_low`, `price_high`) and pagination (`/services`).
   - Public visibility gated by administrator gardener approval (`gardener_profiles.is_approved = TRUE`).
@@ -97,6 +98,7 @@ flowchart LR
 | `/services/:serviceId` | Public | `pages/ServiceDetailPage.jsx` | Service details, gardener summary, direct inquiry link, priced-service agreement modal, and report form. |
 | `/gardeners/:gardenerId` | Public | `pages/GardenerPage.jsx` | Approved gardener profile, active services, portfolio gallery, reviews, direct inquiry action, and report form. |
 | `/login`, `/register` | Public | `pages/AuthPage.jsx` | Sign-in (with password visibility toggle and smart recent-email quick fill) and Client/Gardener registration forms. |
+| `/forgot-password`, `/reset-password` | Public | `pages/AuthPage.jsx` | Request and complete password recovery with a short-lived reset token. |
 | `/dashboard` | Protected (`client`, `gardener`, `administrator`) | `pages/DashboardPage.jsx` | Role-specific dashboard with profile picture upload (`users.avatar_path`), gardener service cover photos (`services.image_path`) & portfolio tabs, and separated Administrator tabs (`Overview`, `Analytics`, `Approvals`, `Activity`, `Reports`, `Accounts` with edit/role-change/delete). |
 | `/inquiries` | Protected (`client`, `gardener`) | `pages/InquiryPage.jsx` (`InquiriesPage`) | Client request list or Gardener assigned inquiries + Open Service Requests Board tab. |
 | `/inquiries/new` | Protected (`client`) | `pages/InquiryPage.jsx` (`InquiryFormPage`) | Case 1 / Case 2 request creation wizard with garden photo upload, AI photo analysis, and AI requirement assistant. |

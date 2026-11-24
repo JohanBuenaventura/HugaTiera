@@ -27,7 +27,7 @@ import editorialWhy from './assets/editorial-why.jpg'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import { useAuth } from './hooks/useAuth'
-import { LoginPage, RegisterPage } from './pages/AuthPage'
+import { ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
 import ServicesPage from './pages/ServicesPage'
 import ServiceDetailPage from './pages/ServiceDetailPage'
@@ -303,6 +303,8 @@ function App() {
           <Route path="/gardeners/:gardenerId" element={<GardenerPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/assistant" element={<AssistantPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />

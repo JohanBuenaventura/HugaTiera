@@ -10,8 +10,10 @@ import {
 } from '../services/profiles'
 import { servicesApi } from '../services/services'
 import { inquiriesApi } from '../services/inquiries'
+import { communicationApi } from '../services/communication'
 import {
   bookingsApi,
+  formatBookingStatusLabel,
   formatStatusLabel,
   getStatusBadgeClass,
 } from '../services/bookings'
@@ -336,19 +338,180 @@ function formatInquirySubtitle(inquiry, role) {
 function DashboardActivity({ role }) {
   const [inquiries, setInquiries] = useState([])
   const [bookings, setBookings] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([inquiriesApi.list(), bookingsApi.list()])
-      .then(([inquiryData, bookingData]) => {
-        setInquiries(inquiryData.inquiries.slice(0, 5))
-        setBookings(bookingData.bookings.slice(0, 5))
+    Promise.all([
+      inquiriesApi.list(),
+      bookingsApi.list(),
+      communicationApi.notifications(),
+    ])
+      .then(([inquiryData, bookingData, notificationData]) => {
+        setInquiries(inquiryData.inquiries)
+        setBookings(bookingData.bookings)
+        setNotifications(notificationData.notifications || [])
+        setUnreadCount(notificationData.unreadCount || 0)
       })
       .catch((loadError) => setError(loadError.message))
+      .finally(() => setLoading(false))
   }, [])
+
+  const pendingInquiries = inquiries.filter((inquiry) =>
+    ['open', 'responded', 'sent', 'pending'].includes(String(inquiry.status || '').toLowerCase())
+  ).length
+  const agreementCount = inquiries.filter((inquiry) =>
+    ['provider_selected', 'in_agreement'].includes(String(inquiry.status || '').toLowerCase())
+  ).length
+  const upcomingBookings = bookings.filter((booking) =>
+    ['pending', 'accepted', 'in_progress'].includes(String(booking.status || '').toLowerCase())
+  )
+  const sortedUpcomingBookings = [...upcomingBookings].sort((left, right) => {
+    const leftTime = left.scheduled_start ? new Date(left.scheduled_start).getTime() : Number.MAX_SAFE_INTEGER
+    const rightTime = right.scheduled_start ? new Date(right.scheduled_start).getTime() : Number.MAX_SAFE_INTEGER
+    return leftTime - rightTime
+  })
+  const nextBooking = sortedUpcomingBookings[0]
+
+  const agreementActions = inquiries.filter((inquiry) =>
+    ['provider_selected', 'in_agreement'].includes(String(inquiry.status || '').toLowerCase())
+  )
+  const offerActions = inquiries.filter((inquiry) =>
+    role === 'client'
+      ? ['responded'].includes(String(inquiry.status || '').toLowerCase()) && Number(inquiry.offer_count) > 0
+      : ['sent', 'pending'].includes(String(inquiry.status || '').toLowerCase())
+  )
+  const unreadNotifications = notifications.filter((notification) => !notification.read_at).slice(0, 3)
 
   return (
     <section className="dashboard-activity">
+      <div className="dashboard-summary-strip">
+        <Link className="dashboard-summary-card" to="/inquiries">
+          <span>{role === 'gardener' ? 'Pending inquiries' : 'Pending requests'}</span>
+          <strong>{loading ? '—' : pendingInquiries}</strong>
+        </Link>
+        <Link className="dashboard-summary-card" to="/inquiries">
+          <span>Needs agreement</span>
+          <strong>{loading ? '—' : agreementCount}</strong>
+        </Link>
+        <Link className="dashboard-summary-card" to="/bookings">
+          <span>Active services</span>
+          <strong>{loading ? '—' : upcomingBookings.length}</strong>
+        </Link>
+      </div>
+      <div className="dashboard-overview-action-grid">
+        <div className="dashboard-panel action-required-panel">
+          <div className="activity-heading">
+            <div>
+              <p className="eyebrow">Priority</p>
+              <h2>Action required.</h2>
+            </div>
+            <span className="panel-count">{loading ? '—' : agreementActions.length + offerActions.length + unreadCount}</span>
+          </div>
+          {loading && <div className="loading-state" role="status">Checking priorities<span /></div>}
+          {!loading && agreementActions.length === 0 && offerActions.length === 0 && unreadCount === 0 && (
+            <div className="action-required-empty">
+              <strong>You are all caught up.</strong>
+              <span>There are no agreements or offers that need action right now.</span>
+            </div>
+          )}
+          {!loading && agreementActions.map((inquiry) => (
+            <Link className="action-required-row" to={`/inquiries/${inquiry.id}`} key={`agreement-${inquiry.id}`}>
+              <span>
+                <strong>Review mutual agreement</strong>
+                <small>{inquiry.subject}</small>
+              </span>
+              <span className={getStatusBadgeClass(inquiry.status)}>
+                {formatStatusLabel(inquiry.status)}
+              </span>
+            </Link>
+          ))}
+          {!loading && offerActions.map((inquiry) => (
+            <Link className="action-required-row" to={`/inquiries/${inquiry.id}`} key={`offer-${inquiry.id}`}>
+              <span>
+                <strong>{role === 'client' ? 'Compare or accept an offer' : 'Follow up on an offer'}</strong>
+                <small>{inquiry.subject}</small>
+              </span>
+              <span className={getStatusBadgeClass(inquiry.status)}>
+                {formatStatusLabel(inquiry.status)}
+              </span>
+            </Link>
+          ))}
+          {!loading && unreadCount > 0 && (
+            <Link className="action-required-row" to="/notifications">
+              <span>
+                <strong>Review unread updates</strong>
+                <small>{unreadCount} notification{unreadCount === 1 ? '' : 's'} may need your attention.</small>
+              </span>
+              <span className="inquiry-status status-pending">Unread</span>
+            </Link>
+          )}
+        </div>
+
+        <div className="dashboard-panel next-booking-panel">
+          <div className="activity-heading">
+            <div>
+              <p className="eyebrow">Next service</p>
+              <h2>Upcoming booking.</h2>
+            </div>
+            <Link className="text-link" to="/bookings">View all</Link>
+          </div>
+          {loading && <div className="loading-state" role="status">Loading schedule<span /></div>}
+          {!loading && !nextBooking && (
+            <div className="action-required-empty">
+              <strong>No upcoming booking.</strong>
+              <span>Confirmed bookings appear here after both parties approve an agreement.</span>
+            </div>
+          )}
+          {!loading && nextBooking && (
+            <Link className="next-booking-card" to={`/bookings/${nextBooking.id}`}>
+              <strong>{nextBooking.service_title || 'Gardening service'}</strong>
+              <span>{nextBooking.scheduled_start
+                ? new Date(nextBooking.scheduled_start).toLocaleString([], {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })
+                : 'Schedule to be confirmed'}
+              </span>
+              <small>{role === 'gardener' ? nextBooking.client_name : nextBooking.gardener_name}</small>
+              <span className={getStatusBadgeClass(nextBooking.status)}>
+                {formatBookingStatusLabel(nextBooking.status)}
+              </span>
+            </Link>
+          )}
+        </div>
+
+        <div className="dashboard-panel unread-preview-panel">
+          <div className="activity-heading">
+            <div>
+              <p className="eyebrow">Inbox</p>
+              <h2>Unread notifications.</h2>
+            </div>
+            <Link className="text-link" to="/notifications">{unreadCount} unread</Link>
+          </div>
+          {loading && <div className="loading-state" role="status">Loading notifications<span /></div>}
+          {!loading && unreadNotifications.length === 0 && (
+            <div className="action-required-empty">
+              <strong>No unread notifications.</strong>
+              <span>New offers, agreements, and booking updates will appear here.</span>
+            </div>
+          )}
+          {!loading && unreadNotifications.map((notification) => (
+            <Link className="notification-preview-row" to="/notifications" key={notification.id}>
+              <span className="notification-preview-dot" />
+              <span>
+                <strong>{notification.title}</strong>
+                <small>{notification.message}</small>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
       <div className="dashboard-panel">
         <div className="activity-heading">
           <div>
@@ -363,14 +526,15 @@ function DashboardActivity({ role }) {
           </div>
         </div>
         {error && <div className="form-error" role="alert">{error}</div>}
-        {!error && inquiries.length === 0 && (
+        {loading && !error && <div className="loading-state" role="status">Loading activity<span /></div>}
+        {!loading && !error && inquiries.length === 0 && (
           <p className="form-note">
             {role === 'gardener'
               ? 'No inquiries or submitted offers yet. Browse the open requests board to submit offers.'
               : 'No service requests yet. Start by exploring local services or posting a general request.'}
           </p>
         )}
-        {inquiries.map((inquiry) => (
+        {!loading && inquiries.slice(0, 5).map((inquiry) => (
           <Link className="activity-row" to={`/inquiries/${inquiry.id}`} key={inquiry.id}>
             <span>
               <strong>{inquiry.subject}</strong>
@@ -386,16 +550,17 @@ function DashboardActivity({ role }) {
         <div className="activity-heading">
           <div>
             <p className="eyebrow">Schedule</p>
-            <h2>{role === 'gardener' ? 'Booking requests.' : 'Upcoming bookings.'}</h2>
+            <h2>{role === 'gardener' ? 'Booking status.' : 'Upcoming bookings.'}</h2>
           </div>
           <Link className="text-link" to="/bookings">View all</Link>
         </div>
-        {!error && bookings.length === 0 && (
+        {loading && !error && <div className="loading-state" role="status">Loading booking status<span /></div>}
+        {!loading && !error && bookings.length === 0 && (
           <p className="form-note">
             No confirmed bookings yet. Bookings are created when both parties approve a mutual service agreement.
           </p>
         )}
-        {bookings.map((booking) => (
+        {!loading && bookings.slice(0, 5).map((booking) => (
           <Link className="activity-row" to={`/bookings/${booking.id}`} key={booking.id}>
             <span>
               <strong>{booking.service_title || 'Gardening service'}</strong>
@@ -407,7 +572,7 @@ function DashboardActivity({ role }) {
               </small>
             </span>
             <span className={getStatusBadgeClass(booking.status)}>
-              {formatStatusLabel(booking.status)}
+              {formatBookingStatusLabel(booking.status)}
             </span>
           </Link>
         ))}
@@ -425,6 +590,21 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   const displayName = role === 'gardener'
     ? (form.businessName || `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim())
     : `${form.firstName || user.firstName} ${form.lastName || user.lastName}`.trim()
+  const profileTasks = role === 'gardener'
+    ? [
+        { done: Boolean(form.avatarPath), label: 'Add a profile photo', to: '/dashboard?tab=profile' },
+        { done: Boolean(form.description), label: 'Add a professional description', to: '/dashboard?tab=profile' },
+        { done: Boolean(form.serviceArea), label: 'Confirm your service area', to: '/dashboard?tab=profile' },
+        { done: counts.services > 0, label: 'Add an active service', to: '/dashboard?tab=services' },
+      ]
+    : [
+        { done: Boolean(form.avatarPath), label: 'Add a profile photo', to: '/dashboard?tab=profile' },
+        { done: Boolean(form.phone), label: 'Add a phone number', to: '/dashboard?tab=profile' },
+        { done: Boolean(form.address), label: 'Confirm your address', to: '/dashboard?tab=profile' },
+        { done: Boolean(form.bio), label: 'Add a short profile bio', to: '/dashboard?tab=profile' },
+      ]
+  const profileDoneCount = profileTasks.filter((task) => task.done).length
+  const profileCompletion = Math.round((profileDoneCount / profileTasks.length) * 100)
 
   return (
     <main className="dashboard-page">
@@ -528,65 +708,21 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
         ) : (
           <>
             <Stats role={role} counts={counts} />
-            <div className="dashboard-grid dashboard-overview-grid" style={{ marginBottom: '20px' }}>
-              <section className="dashboard-panel dashboard-next">
-                <p className="eyebrow">{role === 'gardener' ? 'Provider workspace' : 'Quick actions'}</p>
-                <h2>{role === 'gardener' ? 'Respond to requests and grow your profile.' : 'Start or manage a garden project.'}</h2>
-                <p>
-                  {role === 'gardener'
-                    ? 'Browse open client requests in Zamboanga City to submit offers, manage your services and portfolio in dedicated tabs, and coordinate confirmed bookings.'
-                    : 'Browse local gardening services for a direct inquiry, post an open general request with garden photos to compare offers, or chat with the AI Garden Assistant on the bottom right.'}
-                </p>
-                {role === 'client' && (
-                  <div className="inline-actions dashboard-action-wrap">
-                    <Link className="button" to="/services">Explore services</Link>
-                    <Link className="button button-outline" to="/inquiries/new?type=general">Post general request</Link>
-                    <Link className="button button-outline" to="/assistant"><Sparkles size={15} /> AI Garden Assistant</Link>
-                  </div>
-                )}
-                {role === 'gardener' && (
-                  <div className="inline-actions dashboard-action-wrap">
-                    <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
-                    <Link className="button button-outline" to="/dashboard?tab=services">Manage services</Link>
-                    <Link className="button button-outline" to="/dashboard?tab=portfolio">Manage portfolio</Link>
-                    <Link className="text-link" to={`/gardeners/${user.id}`}>View public profile</Link>
-                  </div>
-                )}
-              </section>
-              <aside className="dashboard-panel profile-summary-card">
-                <p className="eyebrow">Account & profile</p>
+            <div className="profile-completion-panel dashboard-panel">
+              <div>
+                <p className="eyebrow">Profile completion</p>
                 <h2>{displayName || 'Your profile'}</h2>
-                <dl className="profile-summary-list">
-                  <div>
-                    <dt>Email</dt>
-                    <dd>{form.email || user.email}</dd>
-                  </div>
-                  <div>
-                    <dt>Phone</dt>
-                    <dd>{form.phone || 'Not set'}</dd>
-                  </div>
-                  {role === 'client' ? (
-                    <div>
-                      <dt>Location</dt>
-                      <dd>{[form.address, form.city].filter(Boolean).join(', ') || 'Zamboanga City'}</dd>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <dt>Service area</dt>
-                        <dd>{form.serviceArea || 'Zamboanga City'}</dd>
-                      </div>
-                      <div>
-                        <dt>Experience</dt>
-                        <dd>{form.yearsOfExperience !== '' && form.yearsOfExperience !== null ? `${form.yearsOfExperience} yr(s)` : 'Not set'}</dd>
-                      </div>
-                    </>
-                  )}
-                </dl>
-                <Link className="button button-outline" to="/dashboard?tab=profile">
-                  <Pencil size={15} /> Edit profile & settings
+              </div>
+              <div className="profile-completion-progress" aria-label={`${profileCompletion}% profile completed`}>
+                <span style={{ width: `${profileCompletion}%` }} />
+              </div>
+              <strong>{profileCompletion}% complete</strong>
+              {profileTasks.filter((task) => !task.done).slice(0, 2).map((task) => (
+                <Link className="profile-task-link" to={task.to} key={task.label}>
+                  {task.label}
                 </Link>
-              </aside>
+              ))}
+              {profileCompletion === 100 && <span className="profile-complete-label">Your profile is complete.</span>}
             </div>
             <DashboardActivity role={role} />
           </>
