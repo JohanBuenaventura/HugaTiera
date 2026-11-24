@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CalendarDays, CheckCircle2, Clock, CreditCard, ExternalLink, FileCheck2, Leaf, Lock, MapPin, Printer, ShieldAlert, ShieldCheck, Upload } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CalendarDays, Check, CheckCircle2, Clock, CreditCard, ExternalLink, FileCheck2, Leaf, Lock, MapPin, Printer, ShieldAlert, ShieldCheck, Star, Upload } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -20,6 +20,13 @@ import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
+import StarRating from '../components/StarRating'
+
+const AGREEMENT_STEPS = [
+  { id: 1, label: 'Scope & price' },
+  { id: 2, label: 'Schedule & location' },
+  { id: 3, label: 'Review & propose' },
+]
 
 function BookingForm() {
   const [params] = useSearchParams()
@@ -46,6 +53,7 @@ function BookingForm() {
   const [checkingSchedule, setCheckingSchedule] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [agreementStep, setAgreementStep] = useState(1)
 
   useEffect(() => {
     if (direct) {
@@ -125,8 +133,31 @@ function BookingForm() {
     }
   }
 
+  function validateAgreementStep(formEl) {
+    const panel = formEl?.querySelector('.agreement-step-panel')
+    if (!panel) return true
+    const fields = Array.from(panel.querySelectorAll('[required]'))
+    const invalid = fields.find((field) => !field.checkValidity())
+    if (invalid) {
+      invalid.reportValidity()
+      return false
+    }
+    return true
+  }
+
+  function handleAgreementBackStep() {
+    setError('')
+    setAgreementStep((current) => Math.max(1, current - 1))
+  }
+
   async function submit(event) {
     event.preventDefault()
+    if (agreementStep < AGREEMENT_STEPS.length) {
+      if (!validateAgreementStep(event.currentTarget)) return
+      setError('')
+      setAgreementStep((current) => Math.min(AGREEMENT_STEPS.length, current + 1))
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -205,11 +236,40 @@ function BookingForm() {
       )}
       {error && <div className="form-error" role="alert">{error}</div>}
       <form className="dashboard-panel profile-form booking-form" onSubmit={submit}>
-        <label>Agreed scope of work
-          <textarea required rows="4" maxLength="5000" value={form.scopeOfWork} onChange={change('scopeOfWork')} placeholder="Describe the exact gardening tasks and deliverables agreed upon." />
-        </label>
+        <nav className="register-stepper agreement-stepper" aria-label="Agreement steps">
+          {AGREEMENT_STEPS.map((item) => {
+            const isActive = agreementStep === item.id
+            const isDone = agreementStep > item.id
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`register-step-pill${isActive ? ' is-active' : ''}${isDone ? ' is-done is-clickable' : ''}`}
+                disabled={!isDone}
+                aria-current={isActive ? 'step' : undefined}
+                onClick={() => {
+                  if (isDone) {
+                    setError('')
+                    setAgreementStep(item.id)
+                  }
+                }}
+              >
+                <span className="register-step-num" aria-hidden="true">
+                  {isDone ? <Check size={12} strokeWidth={3} /> : item.id}
+                </span>
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
+        </nav>
+        {agreementStep === 1 && (
+          <div className="agreement-step-panel">
+            <p className="auth-section-title">Step 1 of 3 · Scope &amp; price</p>
+            <label>Agreed scope of work <span className="required-mark" aria-hidden="true">*</span>
+              <textarea required rows="4" maxLength="5000" value={form.scopeOfWork} onChange={change('scopeOfWork')} placeholder="Describe the exact gardening tasks and deliverables agreed upon." />
+            </label>
         <div className="form-row form-row-3">
-          <label>Agreed price (PHP)
+          <label>Agreed price (PHP) <span className="required-mark" aria-hidden="true">*</span>
             <input required type="number" min="0" step="0.01" value={form.amount} onChange={change('amount')} placeholder="e.g. 1500.00" />
           </label>
           <label>Required deposit (PHP) <span className="label-note">(Defaults to 30%)</span>
@@ -227,8 +287,19 @@ function BookingForm() {
             <input maxLength="100" value={form.priceBasis} onChange={change('priceBasis')} placeholder="e.g. per visit, fixed project" />
           </label>
         </div>
-        <div className="form-row form-row-3">
-          <label>Start date and time
+            <div className="register-step-actions">
+              <button className="button" type="submit">
+                <span>Continue to schedule &amp; location</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+        {agreementStep === 2 && (
+          <div className="agreement-step-panel">
+            <p className="auth-section-title">Step 2 of 3 · Schedule &amp; location</p>
+            <div className="form-row form-row-3">
+          <label>Start date and time <span className="required-mark" aria-hidden="true">*</span>
             <input required type="datetime-local" value={form.scheduledStart} onChange={change('scheduledStart')} />
           </label>
           <label>Estimated working days <span className="label-note">(Optional)</span>
@@ -242,7 +313,7 @@ function BookingForm() {
               onChange={change('estimatedWorkingDays')}
             />
           </label>
-          <label>Estimated end date and time
+          <label>Estimated end date and time <span className="required-mark" aria-hidden="true">*</span>
             <input required type="datetime-local" value={form.scheduledEnd} onChange={change('scheduledEnd')} />
           </label>
         </div>
@@ -260,15 +331,48 @@ function BookingForm() {
             <span>{activeScheduleCheck.message}</span>
           </div>
         )}
-        <label>Exact service location
+        <label>Exact service location <span className="required-mark" aria-hidden="true">*</span>
           <input required maxLength="255" value={form.location} onChange={change('location')} placeholder="Complete address or barangay location in Zamboanga City" />
         </label>
         <label>Special conditions or notes (optional)
           <textarea rows="3" maxLength="5000" value={form.conditions} onChange={change('conditions')} placeholder="Materials, access instructions, or weather conditions." />
         </label>
-        <button className="button" type="submit" disabled={saving || (activeScheduleCheck && !activeScheduleCheck.available)}>
-          {saving ? 'Submitting proposal...' : 'Propose mutual agreement (v1)'}
-        </button>
+            <div className="register-step-actions">
+              <button type="button" className="register-back-btn" onClick={handleAgreementBackStep}>
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button className="button" type="submit">
+                <span>Review agreement</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+        {agreementStep === 3 && (
+          <div className="agreement-step-panel">
+            <p className="auth-section-title">Step 3 of 3 · Review &amp; propose</p>
+            <dl className="inquiry-review-summary">
+              <div><dt>Scope of work</dt><dd>{form.scopeOfWork || 'Not provided'}</dd></div>
+              <div><dt>Agreed price</dt><dd>{form.amount ? `₱${Number(form.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Not provided'}</dd></div>
+              <div><dt>Required deposit</dt><dd>{form.requiredDepositAmount ? `₱${Number(form.requiredDepositAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Default (30%)'}</dd></div>
+              <div><dt>Schedule</dt><dd>{form.scheduledStart && form.scheduledEnd ? `${form.scheduledStart} to ${form.scheduledEnd}` : 'Not provided'}</dd></div>
+              <div><dt>Location</dt><dd>{form.location || 'Not provided'}</dd></div>
+            </dl>
+            <p className="form-note">
+              Both parties must approve this same version. Approval creates a Reservation holding the slot; verifying the deposit upgrades it to a Confirmed Booking.
+            </p>
+            <div className="register-step-actions">
+              <button type="button" className="register-back-btn" onClick={handleAgreementBackStep}>
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button className="button" type="submit" disabled={saving || (activeScheduleCheck && !activeScheduleCheck.available)}>
+                {saving ? 'Submitting proposal...' : 'Propose mutual agreement (v1)'}
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </section>
   )
@@ -308,6 +412,7 @@ function BookingDetails({ id }) {
     receiptFile: null,
   })
   const [paymentChannel, setPaymentChannel] = useState('online')
+  const [paymentStep, setPaymentStep] = useState(1)
   const [gatewayConfig, setGatewayConfig] = useState(null)
   const [activeCheckoutModal, setActiveCheckoutModal] = useState(null)
   const [rejectPaymentTarget, setRejectPaymentTarget] = useState(null)
@@ -320,6 +425,8 @@ function BookingDetails({ id }) {
   const [review, setReview] = useState(null)
   const [reviewForm, setReviewForm] = useState({ rating: 5, reviewText: '' })
   const [submittingReview, setSubmittingReview] = useState(false)
+  const [openReviewBookingId, setOpenReviewBookingId] = useState(null)
+  const reviewOpen = openReviewBookingId === id
   const [searchParams] = useSearchParams()
 
   const load = useCallback(() => bookingsApi.get(id).then((result) => {
@@ -626,6 +733,7 @@ function BookingDetails({ id }) {
     try {
       await reviewsApi.create({ bookingId: id, ...reviewForm })
       setReview({ rating: reviewForm.rating, review_text: reviewForm.reviewText })
+      setOpenReviewBookingId(null)
       setStatusMessage('Thank you! Your review has been published.')
     } catch (reviewError) {
       setError(reviewError.message)
@@ -651,6 +759,7 @@ function BookingDetails({ id }) {
     )
   }
   const gardener = Number(booking.gardener_id) === Number(user.id)
+  const showReviewForm = !gardener && Boolean(booking.can_review) && !review && reviewOpen
   const roleModeMismatch = Boolean(
     user.isDualRole && ((gardener && user.role !== 'gardener') || (!gardener && user.role !== 'client')),
   )
@@ -677,29 +786,29 @@ function BookingDetails({ id }) {
   const workflowSteps = [
     {
       num: 1,
-      label: 'Reserved',
-      sub: 'Agreement signed',
+      label: 'Terms agreed',
+      sub: 'Slot reserved',
       done: true,
       active: !isBookedPaid && booking.status !== 'cancelled',
     },
     {
       num: 2,
-      label: 'Paid & Confirmed',
-      sub: isBookedPaid ? 'Deposit verified' : 'Awaiting deposit',
+      label: 'Deposit paid',
+      sub: isBookedPaid ? 'Booking confirmed' : 'Awaiting deposit',
       done: isBookedPaid,
       active: isBookedPaid && !isWorkCompleted && booking.status !== 'cancelled',
     },
     {
       num: 3,
-      label: 'Service Completed',
+      label: 'Service completed',
       sub: isWorkCompleted ? 'Work finished' : (booking.status === 'in_progress' ? 'In progress' : 'Scheduled'),
       done: isWorkCompleted,
       active: isWorkCompleted && !isTransactionClosed,
     },
     {
       num: 4,
-      label: 'Closed & Rated',
-      sub: isTransactionClosed ? (review ? 'Rated' : 'Ready to rate') : 'Full pay + closing',
+      label: 'Closed & reviewed',
+      sub: isTransactionClosed ? (review ? 'Rated' : 'Ready to rate') : 'Pay balance & sign closing',
       done: isTransactionClosed,
       active: isTransactionClosed && !review,
     },
@@ -791,7 +900,7 @@ function BookingDetails({ id }) {
     nextStepGuidance = {
       tone: 'success',
       title: 'Transaction Closed — Share Your Review',
-      text: 'Both parties finalized the closing agreement. You can now rate and review the gardener at the bottom of this page.',
+      text: 'Both parties finalized the closing agreement. Rate the gardener when you are ready using the review step below.',
     }
   } else if (isTransactionClosed) {
     nextStepGuidance = {
@@ -799,6 +908,47 @@ function BookingDetails({ id }) {
       title: 'Transaction Completed & Closed',
       text: 'Work completed, full payment verified, and closing agreement signed by both parties.',
     }
+  }
+
+  if (showReviewForm) {
+    return (
+      <section
+        className="container booking-content review-standalone"
+        style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', paddingTop: '32px', paddingBottom: '48px' }}
+      >
+        <form className="dashboard-panel profile-form review-form" onSubmit={submitReview} style={{ width: '100%', maxWidth: '520px', margin: '0 auto' }}>
+          <p className="eyebrow" style={{ textAlign: 'center' }}>Final step</p>
+          <h2 style={{ textAlign: 'center' }}>Review this service</h2>
+          <div className="review-rating-field" style={{ justifyItems: 'center', textAlign: 'center' }}>
+            <span className="review-rating-label">Rating</span>
+            <StarRating
+              value={reviewForm.rating}
+              size={32}
+              label="Rating"
+              onChange={(rating) => setReviewForm((current) => ({ ...current, rating }))}
+            />
+            <small className="field-note">Click a star to choose your rating · {reviewForm.rating} out of 5 stars</small>
+          </div>
+          <label>Written feedback (optional)
+            <textarea rows="4" maxLength="2000" value={reviewForm.reviewText} onChange={(event) => setReviewForm({ ...reviewForm, reviewText: event.target.value })} />
+          </label>
+          {error && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{error}</div>}
+          <div className="register-step-actions" style={{ justifyContent: 'center' }}>
+            <button type="button" className="register-back-btn" onClick={() => setOpenReviewBookingId(null)}>
+              <ArrowLeft size={16} />
+              <span>Back to booking</span>
+            </button>
+            <button className="button" type="submit" disabled={submittingReview}>
+              <CheckCircle2 size={16} />
+              <span>{submittingReview ? 'Submitting...' : 'Submit & publish review'}</span>
+            </button>
+          </div>
+          <p className="field-note" style={{ textAlign: 'center', marginTop: '10px' }}>
+            Nothing is published until you submit. You can go back and change your rating.
+          </p>
+        </form>
+      </section>
+    )
   }
 
   return (
@@ -838,7 +988,10 @@ function BookingDetails({ id }) {
           </p>
         </div>
       )}
-      {booking.status !== 'cancelled' && booking.status !== 'declined' && (
+      {booking.status !== 'cancelled' && booking.status !== 'declined' && !showReviewForm && (
+        <p className="field-note booking-stepper-caption">Where you are — each stage unlocks the next.</p>
+      )}
+      {booking.status !== 'cancelled' && booking.status !== 'declined' && !showReviewForm && (
         <ol className="booking-stepper" aria-label="Booking progress">
           {workflowSteps.map((step) => (
             <li
@@ -862,21 +1015,40 @@ function BookingDetails({ id }) {
           <p>{nextStepGuidance.text}</p>
         </div>
       )}
+      {!gardener && booking?.can_review && !review && !reviewOpen && (
+        <div className="review-entry-panel">
+          <div>
+            <strong>Final step — share your review</strong>
+            <p>Choose a star rating and optionally add feedback. Your review is published only after you submit it.</p>
+          </div>
+          <button className="button" type="button" onClick={() => setOpenReviewBookingId(id)}>
+            <Star size={16} />
+            <span>Rate this service</span>
+          </button>
+        </div>
+      )}
       {statusMessage && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{statusMessage}</div>}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <article className="dashboard-panel booking-detail-card">
         <div className="payment-status-panel">
-          <div className="price-predictor-range-row">
+          <div className="payment-status-heading">
             <div>
               <p className="eyebrow" style={{ margin: 0 }}>Reservation &amp; payment status</p>
-              <strong style={{ fontSize: '18px', color: 'var(--forest)' }}>
+              <strong>
                 {isBookedPaid
                   ? 'Confirmed Paid Booking — Eligible for Service Execution'
                   : 'Reserved Slot Only — Partial Deposit or Full Payment Required to Confirm Booking'}
               </strong>
             </div>
+            <div className="payment-due-chip">
+              <small>Amount to pay now</small>
+              <strong>₱{(isBookedPaid
+                ? Math.max(0, Number(booking.remaining_balance || 0))
+                : Math.max(0, Number(booking.required_deposit_amount || 0) - Number(booking.amount_paid || 0))
+              ).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+            </div>
           </div>
-          <div className="detail-facts">
+          <div className="detail-facts payment-facts-grid">
             <span><strong>Agreed total</strong>₱{Number(booking.agreed_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             <span><strong>Required deposit</strong>₱{Number(booking.required_deposit_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             <span><strong>Verified paid</strong>₱{Number(booking.amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -894,10 +1066,10 @@ function BookingDetails({ id }) {
                   onClick={() => setPaymentChannel('online')}
                 >
                   <CreditCard size={15} />
-                  <span>Pay Online (GCash / Maya / Card)</span>
-                  <small className="gateway-mode-tag">
-                    {gatewayConfig?.provider === 'paymongo' ? 'PayMongo' : 'Sandbox Demo'}
-                  </small>
+                  <span className="payment-tab-copy">
+                    <span>Pay Online (GCash / Maya / Card)</span>
+                    <small>Instant checkout · {gatewayConfig?.provider === 'paymongo' ? 'PayMongo' : 'Sandbox Demo'}</small>
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -907,11 +1079,38 @@ function BookingDetails({ id }) {
                   onClick={() => setPaymentChannel('manual')}
                 >
                   <Upload size={15} />
-                  <span>Manual Cash / Receipt Upload</span>
+                  <span className="payment-tab-copy">
+                    <span>Manual Cash / Receipt Upload</span>
+                    <small>Upload proof for verification</small>
+                  </span>
                 </button>
               </div>
 
-              {paymentChannel === 'online' ? (
+              {paymentStep === 1 ? (
+                <div className="register-step-actions payment-step-actions">
+                  <button
+                    className="button"
+                    type="button"
+                    onClick={() => setPaymentStep(2)}
+                  >
+                    <span>Continue to payment details</span>
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="auth-section-title">Step 2 of 2 · Payment details</p>
+                  <div className="register-step-actions payment-step-actions">
+                    <button
+                      type="button"
+                      className="register-back-btn"
+                      onClick={() => setPaymentStep(1)}
+                    >
+                      <ArrowLeft size={16} />
+                      <span>Back to payment options</span>
+                    </button>
+                  </div>
+                  {paymentChannel === 'online' ? (
                 <form className="profile-form payment-submit-form" onSubmit={handleOnlineCheckoutStart}>
                   <div className="gateway-info-strip">
                     <ShieldCheck size={16} />
@@ -946,7 +1145,8 @@ function BookingDetails({ id }) {
                       <input required type="number" min="20" step="0.01" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} />
                     </label>
                   </div>
-                  <div className="inline-actions" style={{ marginBottom: '4px' }}>
+                  <div className="inline-actions payment-quick-actions">
+                    <span className="field-note">Quick amounts</span>
                     {!isBookedPaid && Number(booking.required_deposit_amount || 0) > Number(booking.amount_paid || 0) && (
                       <button
                         type="button"
@@ -1003,9 +1203,38 @@ function BookingDetails({ id }) {
                         <option value="other">Other</option>
                       </select>
                     </label>
-                    <label>Amount paid (PHP)
+                    <label>Amount paid (PHP) <span className="required-mark" aria-hidden="true">*</span>
                       <input required type="number" min="1" step="0.01" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} />
                     </label>
+                  </div>
+                  <div className="inline-actions payment-quick-actions">
+                    <span className="field-note">Quick amounts</span>
+                    {!isBookedPaid && Number(booking.required_deposit_amount || 0) > Number(booking.amount_paid || 0) && (
+                      <button
+                        type="button"
+                        className="table-action"
+                        onClick={() => setPaymentForm({
+                          ...paymentForm,
+                          paymentType: 'partial',
+                          amount: String(Math.max(20, Number((Number(booking.required_deposit_amount) - Number(booking.amount_paid || 0)).toFixed(2)))),
+                        })}
+                      >
+                        Fill Required Deposit (₱{Math.max(0, Number(booking.required_deposit_amount) - Number(booking.amount_paid || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                      </button>
+                    )}
+                    {Number(booking.remaining_balance || 0) >= 20 && (
+                      <button
+                        type="button"
+                        className="table-action"
+                        onClick={() => setPaymentForm({
+                          ...paymentForm,
+                          paymentType: isBookedPaid ? 'balance' : 'full',
+                          amount: String(Number(Number(booking.remaining_balance).toFixed(2))),
+                        })}
+                      >
+                        Fill Full Remaining Balance (₱{Number(booking.remaining_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                      </button>
+                    )}
                   </div>
                   <div className="form-row">
                     <label>Reference / transaction no. <span className="label-note">(Optional)</span>
@@ -1024,6 +1253,8 @@ function BookingDetails({ id }) {
                     </button>
                   </div>
                 </form>
+              )}
+                </>
               )}
             </div>
           )}
@@ -1080,9 +1311,14 @@ function BookingDetails({ id }) {
 
           {payments.length > 0 && (
             <div className="payment-history-list">
-              <strong>Payment transactions ({payments.length})</strong>
+              <div className="payment-history-intro">
+                <strong>Payment transactions ({payments.length})</strong>
+                <p className="field-note">
+                  Each card is one payment. Pending still needs checkout or verification. Verified counts toward this booking. Rejected does not count until a new proof is accepted.
+                </p>
+              </div>
               {payments.map((pay) => (
-                <div className="payment-record-card" key={pay.id}>
+                <article className="payment-record-card" key={pay.id}>
                   <div className="price-predictor-range-row">
                     <div className="payment-record-title">
                       {pay.transaction_code && <span className="txn-code-badge">{pay.transaction_code}</span>}
@@ -1092,16 +1328,37 @@ function BookingDetails({ id }) {
                         </span>
                       )}
                       <strong>
-                        ₱{Number(pay.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} · {formatStatusLabel(pay.payment_type)} ({PAYMENT_METHOD_LABELS[pay.payment_method] || pay.payment_method})
+                        ₱{Number(pay.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </strong>
                     </div>
                     <span className={getStatusBadgeClass(pay.status)}>{formatStatusLabel(pay.status)}</span>
                   </div>
-                  <small>
-                    Submitted {new Date(pay.created_at).toLocaleString()}
-                    {pay.reference_number ? ` · Ref: ${pay.reference_number}` : ''}
-                    {pay.notes ? ` · ${pay.notes}` : ''}
-                  </small>
+                  <dl className="payment-record-facts">
+                    <div>
+                      <dt>Type</dt>
+                      <dd>{formatStatusLabel(pay.payment_type)}</dd>
+                    </div>
+                    <div>
+                      <dt>Method</dt>
+                      <dd>{PAYMENT_METHOD_LABELS[pay.payment_method] || pay.payment_method}</dd>
+                    </div>
+                    <div>
+                      <dt>Submitted</dt>
+                      <dd>{new Date(pay.created_at).toLocaleString()}</dd>
+                    </div>
+                    {pay.reference_number && (
+                      <div>
+                        <dt>Reference</dt>
+                        <dd>{pay.reference_number}</dd>
+                      </div>
+                    )}
+                    {pay.notes && (
+                      <div>
+                        <dt>Notes</dt>
+                        <dd>{pay.notes}</dd>
+                      </div>
+                    )}
+                  </dl>
                   {pay.rejection_reason && (
                     <p className="field-error-note" style={{ margin: '4px 0 0' }}>Rejection reason: {pay.rejection_reason}</p>
                   )}
@@ -1154,7 +1411,7 @@ function BookingDetails({ id }) {
                       </>
                     )}
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           )}
@@ -1672,26 +1929,10 @@ function BookingDetails({ id }) {
           </p>
         </div>
       )}
-      {!gardener && booking.can_review && !review && (
-        <form className="dashboard-panel profile-form review-form" onSubmit={submitReview}>
-          <h2>Review this service</h2>
-          <label>Rating
-            <select value={reviewForm.rating} onChange={(event) => setReviewForm({ ...reviewForm, rating: Number(event.target.value) })}>
-              {[5, 4, 3, 2, 1].map((value) => <option value={value} key={value}>{value} stars</option>)}
-            </select>
-          </label>
-          <label>Written feedback
-            <textarea rows="4" maxLength="2000" value={reviewForm.reviewText} onChange={(event) => setReviewForm({ ...reviewForm, reviewText: event.target.value })} />
-          </label>
-          <button className="button" type="submit" disabled={submittingReview}>
-            {submittingReview ? 'Submitting...' : 'Submit review'}
-          </button>
-        </form>
-      )}
       {!gardener && review && (
         <div className="dashboard-panel review-card">
           <h2>Your review</h2>
-          <strong>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</strong>
+          <StarRating className="review-card-stars" value={review.rating} size={20} />
           <p>{review.review_text || 'No written feedback provided.'}</p>
         </div>
       )}
