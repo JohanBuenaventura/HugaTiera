@@ -135,5 +135,9 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 - [x] R7 (Automated Suites) & Post-Migration Audit Phases 1–3 (`ISS-01` through `ISS-10`) – All 10 audit findings implemented and verified (`53/53` backend tests passing, frontend lint & build passing).
 
 ## Next Tasks
-- User reviews the updated project documentation (`README.md`, `database/README.md`, `docs/architecture-and-workflows.md`, `docs/api-reference.md`, `project_progress.md`, `system_bug_and_missing_features.md`, `folder_structure.md`).
+- **Branch `mergedbranchv1` (Created 2026-11-24 from `hugatierav2`):**
+  - Added role-switch error alert feedback in `frontend/src/components/AppSidebar.jsx` (ported from `feature/registration-profile-details`) and updated Gardener registration & Migration 012 so every Gardener account automatically includes Client mode (`can_act_as_client = TRUE` + `client_profiles` row) with 1-click sidebar switching, while Clients opting into Gardener mode still require Admin approval (`is_approved`).
+  - Synchronized all 8 project documentation files (`README.md`, `database/README.md`, `docs/erd-and-dfd.md`, `docs/api-reference.md`, `docs/architecture-and-workflows.md`, `backend/readme.md`, `folder_structure.md`, `project_progress.md`) to reflect the `25`-table / `59`-FK schema, Migrations `001`–`013`, 16 API route modules, Clerk & Dual-Role workflows, PayMongo/Sandbox payments, and 15 automated test suites.
+  - Backed up local `hugatiera_db` (`database/backups/hugatiera_db_pre_migrations003_013_20261124_1950.sql`) and applied Migrations `003`–`013` to both `hugatiera_db_migration_test` and `hugatiera_db` (`25` tables, `59` FKs).
+  - **Pending user approval:** Commit and push `mergedbranchv1` to `origin`.
 - Perform final live browser/presentation walk-through and confirm readiness for Phase 16 sign-off.
