@@ -788,6 +788,11 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                 <input type="checkbox" checked={nearbyOnly} onChange={(e) => setNearbyOnly(e.target.checked)} />
                 <span>Nearby only</span>
               </label>
+            </div>
+          </div>
+          <details className="ai-filter-more">
+            <summary className="ai-toggle-chip ai-filter-more-summary">More filters</summary>
+            <div className="ai-filter-more-body">
               <label className="ai-toggle-chip">
                 <input type="checkbox" checked={minRating >= 4} onChange={(e) => setMinRating(e.target.checked ? 4 : 0)} />
                 <span>4.0★+ rated</span>
@@ -797,7 +802,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                 <span>Clean conduct only</span>
               </label>
             </div>
-          </div>
+          </details>
         </div>
 
         {aiSummary && (
@@ -1324,6 +1329,79 @@ function DashboardActivity({ role }) {
   )
 }
 
+function OnboardingGuide({ role, form, counts }) {
+  const isClient = role === 'client'
+  const profileReady = Boolean(
+    form.phone && (isClient ? (form.address || form.city) : (form.serviceArea || form.city))
+  )
+  const hasRequests = Number(counts.inquiries || 0) > 0
+  const hasBookings = Number(counts.bookings || 0) > 0
+  const hasServices = Number(counts.services || 0) > 0
+
+  const flow = isClient
+    ? [
+      { num: 1, title: 'Send a request', text: 'Post a general request or a direct inquiry, with photos.' },
+      { num: 2, title: 'Compare offers', text: 'Approved gardeners send their price and proposed scope.' },
+      { num: 3, title: 'Agree together', text: 'Both approve the same scope, price, and schedule.' },
+      { num: 4, title: 'Get booked', text: 'A booking is created only after both approve.' },
+    ]
+    : [
+      { num: 1, title: 'Find requests', text: 'Browse open requests or reply to direct inquiries.' },
+      { num: 2, title: 'Send an offer', text: 'Share your price, scope, and availability.' },
+      { num: 3, title: 'Agree together', text: 'Both approve the same scope, price, and schedule.' },
+      { num: 4, title: 'Get booked', text: 'A booking is created only after both approve.' },
+    ]
+
+  const checklist = isClient
+    ? [
+      { label: 'Complete your profile', to: '/dashboard?tab=profile', cta: 'Set up', done: profileReady },
+      { label: 'Send your first request or inquiry', to: '/services', cta: 'Start', done: hasRequests },
+      { label: 'Confirm your first booking', to: '/bookings', cta: 'View', done: hasBookings },
+    ]
+    : [
+      { label: 'Complete your provider profile', to: '/dashboard?tab=profile', cta: 'Set up', done: profileReady },
+      { label: 'Get approved and list a service', to: '/dashboard?tab=services', cta: 'Manage', done: Boolean(form.is_approved) && hasServices },
+      { label: 'Respond to a request or send an offer', to: '/inquiries?tab=open', cta: 'Find work', done: hasRequests },
+      { label: 'Get your first booking', to: '/bookings', cta: 'View', done: hasBookings },
+    ]
+
+  return (
+    <details className="how-it-works-guide">
+      <summary>New here? How HugaTiera works</summary>
+      <div className="how-it-works-body">
+        <p>
+          {isClient
+            ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
+            : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
+        </p>
+        <ol className="booking-stepper" aria-label="How HugaTiera works">
+          {flow.map((step) => (
+            <li className="booking-step" key={step.num}>
+              <span className="booking-step-num" aria-hidden="true">{step.num}</span>
+              <span className="booking-step-copy">
+                <strong>{step.title}</strong>
+                <small>{step.text}</small>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <div>
+          <p className="field-note" style={{ margin: '0 0 8px' }}>Getting started</p>
+          <ul className="onboarding-checklist">
+            {checklist.map((item) => (
+              <li key={item.label} className={item.done ? 'is-done' : ''}>
+                <span className="check-mark" aria-hidden="true">{item.done ? '✓' : ''}</span>
+                <span className="check-label">{item.label}</span>
+                {!item.done && <Link to={item.to}>{item.cta}</Link>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </details>
+  )
+}
+
 function UserDashboard({ user, profileData, onSaved, activeTab }) {
   const { switchRole, enableDualRole } = useAuth()
   const [roleBusy, setRoleBusy] = useState(false)
@@ -1537,6 +1615,7 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
           <GardenerTools isApproved={form.is_approved} section={activeTab} />
         ) : (
           <>
+            <OnboardingGuide role={role} form={form} counts={counts} />
             <Stats role={role} counts={counts} />
             {role === 'gardener' && (
               <GardenerScheduleCalendar

@@ -3339,6 +3339,43 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
 }
 
 /* Transaction Code & Transaction Completion Agreement (Migration 008) */
+.payment-history-intro {
+  display: grid;
+  gap: 4px;
+}
+.payment-history-intro .field-note {
+  margin: 0;
+}
+.payment-record-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px 16px;
+  margin: 6px 0 0;
+}
+.payment-record-facts div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.payment-record-facts dt {
+  margin: 0;
+  color: #4A5D51;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.payment-record-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.payment-record-card .inline-actions .button,
+.payment-record-card .inline-actions .table-action {
+  min-height: 40px;
+}
 .payment-record-title {
   display: flex;
   flex-wrap: wrap;
@@ -5435,5 +5472,767 @@ tbody tr:hover {
     box-shadow: none !important;
     border: 1px solid #CBD5CE !important;
     break-inside: avoid;
+  }
+}
+
+/* ==========================================================================
+   Services Marketplace: accessibility, touch targets & spacing (no color changes)
+   ========================================================================== */
+
+.marketplace-filters {
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.marketplace-filters input,
+.marketplace-filters select,
+.marketplace-filters .search-field {
+  min-height: 44px;
+}
+.marketplace-filters input:focus-visible,
+.marketplace-filters select:focus-visible,
+.marketplace-filters .search-field:focus-within {
+  outline: 3px solid var(--forest);
+  outline-offset: 2px;
+}
+.marketplace-filters .search-field input:focus-visible {
+  outline: 0;
+}
+
+.result-count {
+  margin-bottom: 18px;
+}
+
+.marketplace-card-grid {
+  gap: 22px;
+}
+.marketplace-card-body {
+  padding: 20px 20px 22px;
+}
+.visual-market-card h2 {
+  line-height: 1.3;
+}
+.marketplace-card-footer {
+  padding-top: 12px;
+}
+.card-cta {
+  min-height: 44px;
+}
+
+.pagination {
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 40px;
+}
+.pagination button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+.pagination button:focus-visible {
+  outline: 3px solid var(--forest);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Dashboard breathing room: spacing, layout balance & touch targets
+   (non-color only; mobile padding rules left untouched)
+   ========================================================================== */
+
+.dashboard-tabs.dashboard-tabs-top .dashboard-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+@media (min-width: 761px) {
+  .dashboard-page > .dashboard-content {
+    padding-top: 44px;
+  }
+  .dashboard-panel {
+    padding: 32px;
+  }
+  .dashboard-topbar {
+    gap: 14px 24px;
+    margin-bottom: 14px;
+  }
+  .dashboard-tabs.dashboard-tabs-top {
+    gap: 8px;
+  }
+  .dashboard-tabs.dashboard-tabs-top .dashboard-tab {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .dashboard-hero-row {
+    margin-bottom: 28px;
+  }
+  .stat-grid {
+    gap: 18px;
+    margin-bottom: 32px;
+  }
+  .stat-card {
+    gap: 7px;
+    padding: 22px;
+  }
+  .dashboard-showcase-stack {
+    gap: 26px;
+    margin-bottom: 28px;
+  }
+  .showcase-panel,
+  .showcase-reviews-panel {
+    gap: 20px;
+  }
+  .dashboard-service-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 22px;
+  }
+  .dashboard-service-grid > .showcase-card {
+    flex: 1 1 300px;
+    max-width: 420px;
+  }
+  .dashboard-activity,
+  .dashboard-grid {
+    gap: 24px;
+  }
+  .admin-analytics-grid {
+    gap: 24px;
+  }
+  .dashboard-page .admin-management-grid {
+    gap: 24px;
+  }
+  .user-management {
+    margin-top: 28px;
+    margin-bottom: 28px;
+  }
+  .activity-row {
+    gap: 16px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .activity-heading .text-link {
+    white-space: nowrap;
+  }
+  .showcase-reviews-grid,
+  .trust-highlights-grid {
+    gap: 18px;
+  }
+  th,
+  td {
+    padding: 14px 14px;
+  }
+}
+
+/* ==========================================================================
+   Calmer dashboard visual hierarchy (typography & spacing only; no colors)
+   ========================================================================== */
+
+.dashboard-page .dashboard-hero-row h1 {
+  font-size: clamp(30px, 2.8vw, 36px);
+  letter-spacing: -0.6px;
+  line-height: 1.12;
+}
+
+.dashboard-page .eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+}
+
+.dashboard-page .dashboard-panel h2,
+.dashboard-page .showcase-header h2 {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
+}
+
+.dashboard-page .showcase-card h3 {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.dashboard-page .stat-card strong {
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.dashboard-page .stat-card span {
+  font-size: 12.5px;
+}
+
+.dashboard-page .button {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.dashboard-page .dashboard-tabs.dashboard-tabs-top .dashboard-tab {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dashboard-page .activity-row strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dashboard-page .inquiry-status {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dashboard-page .category-pill,
+.dashboard-page .showcase-rating-pill,
+.dashboard-page .showcase-lead-badge {
+  font-weight: 600;
+}
+
+.dashboard-page .showcase-rating-pill,
+.dashboard-page .showcase-lead-badge {
+  font-size: 11px;
+}
+
+.dashboard-page .showcase-stars {
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.dashboard-page .booking-filter-pill {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dashboard-page .ai-toggle-chip {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dashboard-page .ai-filter-bar input,
+.dashboard-page .ai-filter-bar select {
+  font-weight: 400;
+}
+
+.dashboard-page .dashboard-highlight-pill {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dashboard-page .table-action {
+  font-weight: 600;
+}
+
+.dashboard-page .showcase-cta-strip strong,
+.dashboard-page .trust-highlight-card strong,
+.dashboard-page .showcase-review-footer strong {
+  font-weight: 600;
+}
+
+@media (min-width: 761px) {
+  .dashboard-page .dashboard-showcase-stack {
+    gap: 30px;
+  }
+  .dashboard-page .dashboard-activity,
+  .dashboard-page .dashboard-grid {
+    gap: 28px;
+  }
+}
+
+/* ==========================================================================
+   Dashboard de-clutter pass: compact media, calmer floating button,
+   fewer visible filters (layout & spacing only; no colors changed)
+   ========================================================================== */
+
+/* 1. Recommendation / lead cards: shrink the tall empty media band so the
+      real information (name, rating, price) sits higher and reads first. */
+.dashboard-page .showcase-card .marketplace-card-media {
+  aspect-ratio: 16 / 7;
+}
+.dashboard-page .showcase-card .marketplace-card-placeholder {
+  gap: 6px;
+  padding: 12px;
+}
+.dashboard-page .showcase-card .marketplace-card-placeholder svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* 2. Floating AI button: collapse to an icon-only circle on mid-size
+      viewports so it stops covering card content, and reserve space at the
+      end of the dashboard so nothing is ever hidden behind it. */
+@media (min-width: 561px) and (max-width: 1200px) {
+  .ai-chat-fab span {
+    display: none;
+  }
+  .ai-chat-fab {
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+@media (min-width: 761px) {
+  .dashboard-page > .dashboard-content {
+    padding-bottom: 112px;
+  }
+}
+
+/* 3. Collapse secondary filter chips behind a native "More filters"
+      disclosure so the filter bar shows fewer controls at once. */
+.ai-filter-more-summary {
+  list-style: none;
+}
+.ai-filter-more-summary::-webkit-details-marker {
+  display: none;
+}
+.ai-filter-more-summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  transition: transform .15s ease;
+}
+.ai-filter-more[open] .ai-filter-more-summary::after {
+  transform: rotate(-135deg) translateY(-1px);
+}
+.ai-filter-more-summary:focus-visible {
+  outline: 3px solid var(--forest);
+  outline-offset: 2px;
+}
+.ai-filter-more-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+/* Show a quiet indicator when a filter inside the disclosure is active,
+   so a collapsed "More filters" never hides a switched-on filter. */
+.ai-filter-more:has(input:checked) .ai-filter-more-summary {
+  font-weight: 700;
+}
+.ai-filter-more:has(input:checked) .ai-filter-more-summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ==========================================================================
+   Guided workflow: "New here? How HugaTiera works" onboarding guide
+   (layout only — reuses the existing stepper classes and palette tokens)
+   ========================================================================== */
+
+.how-it-works-guide {
+  margin: 0 0 22px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #FFFFFF;
+}
+.how-it-works-guide > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  color: var(--forest);
+  font-size: 13.5px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+.how-it-works-guide > summary::-webkit-details-marker {
+  display: none;
+}
+.how-it-works-guide > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  transition: transform .15s ease;
+}
+.how-it-works-guide[open] > summary::after {
+  transform: rotate(-135deg) translateY(-1px);
+}
+.how-it-works-guide > summary:focus-visible {
+  outline: 3px solid var(--forest);
+  outline-offset: 2px;
+  border-radius: 14px;
+}
+.how-it-works-body {
+  display: grid;
+  gap: 14px;
+  padding: 0 18px 18px;
+}
+.how-it-works-body > p {
+  margin: 0;
+  color: #54665B;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.how-it-works-body .booking-stepper {
+  margin: 0;
+}
+.onboarding-checklist {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+.onboarding-checklist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #FFFFFF;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+.onboarding-checklist li.is-done {
+  background: #EFF7F1;
+}
+.onboarding-checklist .check-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 700;
+}
+.onboarding-checklist li.is-done .check-mark {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: #FFFFFF;
+}
+.onboarding-checklist .check-label {
+  flex: 1;
+  min-width: 160px;
+}
+.onboarding-checklist a {
+  font-size: 12.5px;
+}
+.booking-stepper-caption {
+  max-width: 960px;
+  margin: 6px 0 0;
+}
+
+/* ==========================================================================
+   Inquiry form wizard — reuses the sign-up (registration) stepper pattern.
+   Layout and typography only; existing palette tokens are reused.
+   ========================================================================== */
+
+.inquiry-form .inquiry-stepper {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 10px;
+}
+.inquiry-step-note {
+  margin: 0 0 16px;
+}
+.inquiry-form .required-mark {
+  color: var(--forest);
+  font-weight: 700;
+}
+.inquiry-step-panel {
+  display: grid;
+  gap: 16px;
+}
+.inquiry-review-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #F6F8F4;
+}
+.inquiry-review-summary > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 13.5px;
+}
+.inquiry-review-summary dt {
+  flex: 0 0 130px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.inquiry-review-summary dd {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .inquiry-form .inquiry-stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .inquiry-form .inquiry-stepper {
+    grid-template-columns: 1fr;
+  }
+  .inquiry-review-summary dt {
+    flex-basis: 100%;
+  }
+}
+
+/* ==========================================================================
+   Gardener response, mutual agreement, and payment wizards
+   (same sign-up stepper pattern; layout only, existing tokens)
+   ========================================================================== */
+
+.response-stepper,
+.agreement-stepper {
+  margin-bottom: 10px;
+}
+.response-step-panel,
+.agreement-step-panel {
+  display: grid;
+  gap: 16px;
+}
+.agreement-approval-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.approval-chip {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #F6F8F4;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.approval-chip.is-approved {
+  border-color: #B4D2BC;
+  background: #EFF7F1;
+  color: var(--forest);
+}
+
+.payment-status-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.payment-status-heading > div:first-child {
+  display: grid;
+  gap: 4px;
+  max-width: 560px;
+}
+.payment-status-heading strong {
+  color: var(--forest);
+  font-size: 16px;
+  line-height: 1.4;
+}
+.payment-due-chip {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid #B4D2BC;
+  border-radius: 12px;
+  background: #EFF7F1;
+  text-align: right;
+}
+.payment-due-chip small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.payment-due-chip strong {
+  font-size: 20px;
+}
+.payment-facts-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.payment-channel-tab {
+  align-items: flex-start;
+}
+.payment-tab-copy {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+.payment-tab-copy small {
+  font-size: 11.5px;
+  font-weight: 500;
+  opacity: .85;
+}
+.payment-step-actions {
+  margin-top: 12px;
+}
+.payment-quick-actions {
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 4px;
+}
+@media (max-width: 760px) {
+  .payment-facts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .payment-facts-grid {
+    grid-template-columns: 1fr;
+  }
+  .payment-due-chip {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+/* ==========================================================================
+   Star rating component and final review step
+   (existing palette only)
+   ========================================================================== */
+.star-rating {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  line-height: 1;
+}
+.star-rating-track,
+.star-rating-fill-icons {
+  display: flex;
+  gap: 3px;
+}
+.star-rating-track {
+  color: #C8D6CA;
+}
+.star-rating-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: #84540B;
+}
+.star-rating-fill-icons {
+  width: max-content;
+}
+.star-rating.is-interactive {
+  min-height: 36px;
+}
+.star-rating-input {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 3px;
+}
+.star-rating-input button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.star-rating-input button:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+.review-entry-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border: 1px solid #C8D6CA;
+  border-radius: 12px;
+  background: #F6F9F4;
+}
+.review-entry-panel > div {
+  display: grid;
+  gap: 4px;
+}
+.review-entry-panel strong {
+  color: var(--forest);
+  font-size: 15px;
+}
+.review-entry-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.review-form {
+  margin-bottom: 16px;
+}
+.review-form .review-rating-field {
+  display: grid;
+  gap: 6px;
+}
+.review-rating-label {
+  color: #53665a;
+  font-size: 13px;
+  font-weight: 600;
+}
+.review-form .register-step-actions {
+  justify-content: flex-end;
+}
+.review-card-stars {
+  margin: 2px 0 8px;
+}
+@media (max-width: 560px) {
+  .review-entry-panel {
+    align-items: stretch;
+  }
+  .review-entry-panel .button {
+    width: 100%;
+    justify-content: center;
+  }
+  .review-form .register-step-actions {
+    justify-content: stretch;
+  }
+}
+
+/* Obvious action buttons for card CTAs and dashboard section links */
+.card-cta,
+.dashboard-page .text-link {
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  justify-content: center;
+  text-decoration: none;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.card-cta:hover,
+.dashboard-page .text-link:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.card-cta:focus-visible,
+.dashboard-page .text-link:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+@media (max-width: 560px) {
+  .marketplace-card-footer {
+    flex-wrap: wrap;
+  }
+  .marketplace-card-footer .card-cta {
+    width: 100%;
   }
 }
