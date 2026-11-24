@@ -95,7 +95,8 @@ async function register(req, res, next) {
 
   const isDual = role === 'both'
   const activeRole = isDual ? 'client' : role
-  const canActAsClient = role === 'client' || isDual
+  const requiresClientAddress = role === 'client' || isDual
+  const canActAsClient = role === 'client' || role === 'gardener' || isDual
   const canActAsGardener = role === 'gardener' || isDual
 
   let clientDetails = null
@@ -103,7 +104,7 @@ async function register(req, res, next) {
   let assignedClerkEmail = null
   let assignedClerkNotes = null
 
-  if (canActAsClient) {
+  if (requiresClientAddress) {
     const address = normalizeText(req.body.address)
     const city = req.body.city === undefined ? 'Zamboanga City' : normalizeText(req.body.city)
     const bio = normalizeText(req.body.bio) || null
@@ -116,6 +117,11 @@ async function register(req, res, next) {
     if (bio && bio.length > 1000) {
       return res.status(400).json({ message: 'Bio must be 1,000 characters or fewer.' })
     }
+    clientDetails = { address, city, bio }
+  } else if (canActAsClient) {
+    const address = normalizeText(req.body.address) || null
+    const city = normalizeText(req.body.city) || 'Zamboanga City'
+    const bio = normalizeText(req.body.bio) || null
     clientDetails = { address, city, bio }
   }
   if (canActAsGardener) {
