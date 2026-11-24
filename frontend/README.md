@@ -1,6 +1,6 @@
 # HugaTiera — Frontend Application (`frontend/`)
 
-The React 19 + Vite 8 single-page application for **HugaTiera**, providing public service discovery, role-specific Client, Gardener, and Administrator dashboards, Case 1 & Case 2 service request wizards, offer comparison, versioned mutual agreement workspaces, booking tracking, messaging, and AI garden planning tools.
+The React 19 + Vite 8 single-page application for **HugaTiera** (`main`), providing public service discovery, a 2-card 3-step registration wizard, role-specific Client, Gardener (with built-in Client mode switcher, Schedule Calendar, and **My Clerks** panel), Assigned Clerk (`ClerkDashboard`), and Administrator dashboards, Smart AI recommendations with live category dropdown filtering, Case 1 & Case 2 service request wizards with dynamic category specs and itemized price estimation, offer comparison, versioned mutual agreement workspaces, reservation/deposit/PayMongo/Sandbox booking tracking, messaging, notifications, and AI garden planning tools.
 
 ---
 
@@ -48,14 +48,18 @@ frontend/
 │   └── icons.svg
 ├── src/
 │   ├── assets/
-│   │   ├── hero.png
-│   │   ├── react.svg
-│   │   └── vite.svg
 │   ├── components/
+│   │   ├── AiAssistantWidget.jsx
+│   │   ├── AppSidebar.jsx
+│   │   ├── ClerkDashboard.jsx
+│   │   ├── GardenerClerksPanel.jsx
+│   │   ├── GardenerScheduleCalendar.jsx
 │   │   └── ProtectedRoute.jsx
 │   ├── context/
 │   │   ├── AuthContext.jsx
 │   │   └── auth-context.js
+│   ├── hooks/
+│   │   └── useAuth.js
 │   ├── pages/
 │   │   ├── AssistantPage.jsx
 │   │   ├── AuthPage.jsx
@@ -72,10 +76,13 @@ frontend/
 │   │   ├── api.js
 │   │   ├── auth.js
 │   │   ├── bookings.js
+│   │   ├── categorySpecs.js
+│   │   ├── clerk.js
 │   │   ├── communication.js
 │   │   ├── inquiries.js
 │   │   ├── profiles.js
 │   │   ├── requestImages.js
+│   │   ├── reviews.js
 │   │   └── services.js
 │   ├── App.css
 │   ├── App.jsx
