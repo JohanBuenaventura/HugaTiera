@@ -140,7 +140,8 @@ HugaTiera/
 │   │   │   ├── ClerkDashboard.jsx
 │   │   │   ├── GardenerClerksPanel.jsx
 │   │   │   ├── GardenerScheduleCalendar.jsx
-│   │   │   └── ProtectedRoute.jsx
+│   │   │   ├── ProtectedRoute.jsx
+│   │   │   └── StructuredAddressFields.jsx
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx
 │   │   │   └── auth-context.js
@@ -170,6 +171,8 @@ HugaTiera/
 │   │   │   ├── requestImages.js
 │   │   │   ├── reviews.js
 │   │   │   └── services.js
+│   │   ├── utils/
+│   │   │   └── zamboangaAddress.js
 │   │   ├── App.css
 │   │   ├── App.jsx
 │   │   ├── index.css
