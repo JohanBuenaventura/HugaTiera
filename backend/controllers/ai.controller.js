@@ -512,6 +512,7 @@ async function getSmartRecommendations(req, res, next) {
   const goodConductOnly = parseBoolQuery(req.query.goodConductOnly)
   const minRating = req.query.minRating !== undefined && req.query.minRating !== '' ? Number(req.query.minRating) : 0
   const keyword = text(req.query.keyword || req.query.q)
+  const categoryId = parsePositiveInt(req.query.categoryId)
   const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 30)
 
   try {
@@ -563,6 +564,9 @@ async function getSmartRecommendations(req, res, next) {
       if (goodConductOnly) {
         scored = scored.filter((item) => item.ai_match.conduct.cleanConduct)
       }
+      if (categoryId) {
+        scored = scored.filter((item) => Number(item.category_id) === categoryId)
+      }
       if (keyword) {
         const kwMatched = scored.filter((item) => item.ai_match.keywordScore > 0)
         if (kwMatched.length > 0) scored = kwMatched
@@ -579,7 +583,7 @@ async function getSmartRecommendations(req, res, next) {
         mode: 'services',
         referenceLocation: userLocation,
         sortBy,
-        filters: { nearbyOnly, goodConductOnly, minRating: minRating || 0, keyword },
+        filters: { nearbyOnly, goodConductOnly, minRating: minRating || 0, keyword, categoryId: categoryId || null },
         totalCandidates: rows.length,
         recommendations: scored.slice(0, limit),
         disclaimer: AI_SAFETY_DISCLAIMER,
@@ -748,6 +752,9 @@ async function getSmartRecommendations(req, res, next) {
       }
       if (goodConductOnly) {
         scored = scored.filter((item) => item.ai_match.clientCleanConduct)
+      }
+      if (categoryId) {
+        scored = scored.filter((item) => Number(item.category_id) === categoryId)
       }
       if (keyword) {
         const q = keyword.toLowerCase()
