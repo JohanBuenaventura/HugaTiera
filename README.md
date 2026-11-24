@@ -16,9 +16,10 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
 
 ## 2. Implemented Features
 
-- **Role-Based Authentication & Security:**
-  - Client and Gardener registration with `bcryptjs` password hashing and `HttpOnly` JWT cookies (`hugatiera_token`).
-  - Live account status verification (`users.is_active = TRUE`) on every protected request; administrator self-registration is blocked.
+- **Role-Based Authentication, 3-Step Registration & Security:**
+  - Guided **3-step registration wizard** (`1. About you` → `2. Details` → `3. Account`) with **2 public role cards** (**Find a gardener** for Client, and **Offer services** for Gardener — which automatically includes Client mode and sidebar 1-click switching), optional middle name, 18+ birthday/age validation, and mobile validation.
+  - **Provider-Managed Clerks:** Public `administrator` and `clerk` self-registration are strictly blocked (`400`); Gardeners create, link, and revoke Assigned Clerk staff inside **Dashboard → My Clerks** (`GardenerClerksPanel.jsx`).
+  - `bcryptjs` password hashing, `HttpOnly` JWT cookies (`auth_token`), sliding-window auth rate limiting, security headers, and live account status verification (`users.is_active = TRUE`) on every protected request.
 - **Public Marketplace & Gardener Portfolios:**
   - Keyword, category, and service-area filtering with sorting (`newest`, `price_low`, `price_high`) and pagination (`/services`).
   - Public visibility gated by administrator gardener approval (`gardener_profiles.is_approved = TRUE`).
@@ -69,12 +70,12 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
 
 ```mermaid
 flowchart LR
-  Client["Client Browser<br/>(React 19 + Vite)"] <-->|"REST API (JSON + HttpOnly Cookie)"| API["Express 5 Backend<br/>(Controllers, Auth/RBAC, sharp)"]
-  Gardener["Gardener Browser<br/>(React 19 + Vite)"] <-->|"REST API (JSON + HttpOnly Cookie)"| API
+  Client["Client Browser<br/>(React 19 + Vite)"] <-->|"REST API (JSON + HttpOnly Cookie)"| API["Express 5 Backend<br/>(16 Route Modules, Auth/RBAC, sharp)"]
+  Gardener["Gardener & Assigned Clerk<br/>(React 19 + Vite)"] <-->|"REST API (JSON + HttpOnly Cookie)"| API
   Admin["Administrator Browser<br/>(React 19 + Vite)"] <-->|"REST API (JSON + HttpOnly Cookie)"| API
-  API <-->|"Parameterized SQL & Transactions"| DB[("MySQL / MariaDB<br/>hugatiera_db (19 Tables)")]
-  API <-->|"Sanitized Files"| Uploads[("backend/uploads/<br/>portfolios & request-images")]
-  API <-->|"HTTPS (Backend Key Only)"| Gemini["Google Gemini API<br/>(gemini-3.8-flash / 3.5-flash-lite)"]
+  API <-->|"Parameterized SQL & Transactions"| DB[("MySQL / MariaDB<br/>hugatiera_db (25 Tables, 59 FKs)")]
+  API <-->|"Sanitized Files"| Uploads[("backend/uploads/<br/>avatars, services, portfolios, receipts, request-images")]
+  API <-->|"HTTPS (Backend Keys Only)"| External["Google Gemini API &<br/>PayMongo Checkout / Sandbox"]
 ```
 
 ### Unified Request-to-Confirmation Workflow
@@ -97,8 +98,8 @@ flowchart LR
 | `/services` | Public | `pages/ServicesPage.jsx` | Marketplace search, category/area filter, sort, and pagination. |
 | `/services/:serviceId` | Public | `pages/ServiceDetailPage.jsx` | Service details, gardener summary, direct inquiry link, priced-service agreement modal, and report form. |
 | `/gardeners/:gardenerId` | Public | `pages/GardenerPage.jsx` | Approved gardener profile, active services, portfolio gallery, reviews, direct inquiry action, and report form. |
-| `/login`, `/register` | Public | `pages/AuthPage.jsx` | Sign-in (with password visibility toggle and smart recent-email quick fill) and Client/Gardener registration forms. |
-| `/dashboard` | Protected (`client`, `gardener`, `administrator`) | `pages/DashboardPage.jsx` | Role-specific dashboard with profile picture upload (`users.avatar_path`), gardener service cover photos (`services.image_path`) & portfolio tabs, and separated Administrator tabs (`Overview`, `Analytics`, `Approvals`, `Activity`, `Reports`, `Accounts` with edit/role-change/delete). |
+| `/login`, `/register` | Public | `pages/AuthPage.jsx` | Sign-in (with password visibility toggle and smart recent-email quick fill) and a **2-card, 3-step registration wizard** (**Find a gardener** for Client, **Offer services** for Gardener with built-in Client mode; Clerk accounts are provider-managed inside **My Clerks**). |
+| `/dashboard` | Protected (`client`, `gardener`, `clerk`, `administrator`) | `pages/DashboardPage.jsx` | Role-specific dashboard: Client discovery showcase with live category dropdown & Smart AI matching, Gardener schedule calendar, service covers, portfolios & **My Clerks** staff management, Assigned Clerk operations desk (`ClerkDashboard`), and separated Administrator tabs (`Overview`, `Analytics`, `Approvals`, `Activity`, `Reports`, `Accounts`). |
 | `/inquiries` | Protected (`client`, `gardener`) | `pages/InquiryPage.jsx` (`InquiriesPage`) | Client request list or Gardener assigned inquiries + Open Service Requests Board tab. |
 | `/inquiries/new` | Protected (`client`) | `pages/InquiryPage.jsx` (`InquiryFormPage`) | Case 1 / Case 2 request creation wizard with garden photo upload, AI photo analysis, and AI requirement assistant. |
 | `/inquiries/:inquiryId` | Protected (`client`, `gardener`, `administrator`) | `pages/InquiryPage.jsx` (`InquiryDetailPage`) | Provider Decision-Support View, offer submission/revision/comparison, R3 Mutual Agreement workspace, and event timeline. |
@@ -180,8 +181,11 @@ c:\xampp\mysql\bin\mysql.exe -u root < database/schema/hugatiera_schema.sql
 
 ### 8.1 Start the Backend and Frontend Servers
 ```powershell
-# Optional: seed idempotent demo data
+# Optional: seed role demo accounts (backend script)
 npm --prefix backend run seed:demo
+
+# Optional: import idempotent Zamboanga City showcase providers/services into local hugatiera_db
+Get-Content -Raw database\seeds\zamboanga_demo_data.sql | c:\xampp\mysql\bin\mysql.exe -u root hugatiera_db
 
 # Terminal 1 — Start the Express backend on http://localhost:5000
 npm --prefix backend run dev
@@ -226,7 +230,7 @@ node --test --test-concurrency=1 `
 
 - **Photo Privacy:** Client garden photos, avatars, service cover photos, portfolios, and payment receipts are validated with magic-byte checks and `sharp` EXIF/GPS stripping before disk storage and are never served from an unrestricted public static directory. The Open Service Requests Board exposes only area-level location and client first name; exact street addresses are shared inside the mutual agreement.
 - **SQL Injection, Rate Limiting & Access Control:** Every database query uses parameterized `mysql2` placeholders (`?`), auth endpoints enforce rate limits, and every protected endpoint verifies authentication, live `users.is_active = TRUE`, role permissions (`client`, `gardener`, `clerk`, `administrator`), and resource ownership.
-- **Payments & Postponed Scope:** Reservation deposit gating, manual payment proofs, and PayMongo Checkout (with automatic Sandbox/Demo fallback when `PAYMONGO_SECRET_KEY` is blank) are implemented on `mergedbranchv1`. Physical gardening product e-commerce, live GPS tracking, payroll, native mobile apps, and paid AI image generation (`501 IMAGE_GENERATION_POSTPONED`) remain out of scope.
+- **Payments & Postponed Scope:** Reservation deposit gating, manual payment proofs, and PayMongo Checkout (with automatic Sandbox/Demo fallback when `PAYMONGO_SECRET_KEY` is blank) are implemented on `main`. Physical gardening product e-commerce, live GPS tracking, payroll, native mobile apps, and paid AI image generation (`501 IMAGE_GENERATION_POSTPONED`) remain out of scope.
 
 ---
 
@@ -235,6 +239,7 @@ node --test --test-concurrency=1 `
 | Document | Description |
 |---|---|
 | [README.md](file:///c:/xampp/htdocs/HugaTiera/README.md) | Main project overview, setup, testing, and quick reference (this file). |
+| [docs/system-functionalities.md](file:///c:/xampp/htdocs/HugaTiera/docs/system-functionalities.md) | Complete role-by-role catalog of every implemented feature across Public, Client, Gardener (including **My Clerks**), Assigned Clerk, Administrator, and AI modules. |
 | [TEAM_SYNC_GUIDE.md](file:///c:/xampp/htdocs/HugaTiera/TEAM_SYNC_GUIDE.md) | Teammate & AI agent sync checklist (branch rules, DB migration checks, `.env` sync, and common error fixes). |
 | [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) | Authoritative 25-table schema reference, 59 FKs, and Migrations `001`–`013` record. |
 | [docs/erd-and-dfd.md](file:///c:/xampp/htdocs/HugaTiera/docs/erd-and-dfd.md) | Full 25-table Mermaid ERD and Level 0 / Level 1 / Level 2 DFDs. |
