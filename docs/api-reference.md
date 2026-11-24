@@ -1,6 +1,6 @@
 # HugaTiera — Complete REST API Reference
 
-This document provides the complete technical reference for all **16 REST API route modules** registered in `backend/app.js` on `mergedbranchv1`.
+This document provides the complete technical reference for all **16 REST API route modules** registered in `backend/app.js` on `main`.
 
 ---
 
@@ -13,7 +13,7 @@ This document provides the complete technical reference for all **16 REST API ro
 - **Role-Based Authorization (`requireRole(...roles)`):** Returns `403 Forbidden` (`{ message: 'You do not have permission to access this resource.' }`) if `req.user.role` is not in the allowed list.
 - **Standard Error Responses (`backend/app.js`):**
   - `400 Bad Request`: Validation failure, malformed JSON payload, or invalid file upload (`LIMIT_FILE_SIZE` > 5 MB, unsupported MIME type, or corrupt image stream).
-  - `401 Unauthorized`: Missing, invalid, or expired `hugatiera_token` cookie.
+  - `401 Unauthorized`: Missing, invalid, or expired `auth_token` cookie.
   - `403 Forbidden`: Insufficient role permissions, unapproved gardener profile, deactivated account, or resource ownership violation.
   - `404 Not Found`: Target entity does not exist.
   - `409 Conflict`: Invalid workflow state transition, stale agreement version, schedule overlap, locked offer, or retired direct booking creation (`MUTUAL_AGREEMENT_REQUIRED`).
@@ -38,7 +38,7 @@ This document provides the complete technical reference for all **16 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `POST` | `/api/auth/register` | Public | Public (`client`, `gardener`, `both`, `clerk`) | Registers an account with optional `middleName`, required `dateOfBirth` (18+ validation), required `phone` (10–15 digits), creates matching profile row(s), and sets the session cookie. Rate-limited. |
+| `POST` | `/api/auth/register` | Public | Public (`client`, `gardener`, `both`) | Registers a Client or Gardener account (Gardener automatically includes Client mode) with optional `middleName`, required `dateOfBirth` (18+ validation), required `phone` (10–15 digits), creates matching profile row(s), and sets the session cookie. Blocks `administrator` and `clerk` (`400`). Rate-limited. |
 | `POST` | `/api/auth/login` | Public | All active users | Authenticates email/password and sets the session cookie. Rate-limited. |
 | `POST` | `/api/auth/logout` | Public | All | Clears the session cookie. |
 | `GET` | `/api/auth/me` | Required | `client`, `gardener`, `clerk`, `administrator` | Returns the currently authenticated user's profile, active role, and dual-role flags (`canActAsClient`, `canActAsGardener`, `isDualRole`). |
@@ -61,7 +61,7 @@ This document provides the complete technical reference for all **16 REST API ro
     "role": "client"
   }
   ```
-  - **Validation & Security:** Rejects `role: "administrator"` with `403`. Rejects underage registrants (`< 18` years old) and invalid mobile numbers (`< 10` or `> 15` digits) with `400`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs`. Role `'both'` enables `can_act_as_client = TRUE` and `can_act_as_gardener = TRUE` and creates both profile rows.
+  - **Validation & Security:** Rejects `role: "administrator"` and `role: "clerk"` with `400` (Clerk accounts are created by a service provider under `POST /api/profiles/me/clerks` or by an Administrator). Rejects underage registrants (`< 18` years old) and invalid mobile numbers (`< 10` or `> 15` digits) with `400`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs`. Registering as `'gardener'` (or `'both'`) enables `can_act_as_client = TRUE` and `can_act_as_gardener = TRUE` and creates both `client_profiles` and `gardener_profiles` rows.
 
 ---
 
@@ -252,9 +252,9 @@ This document provides the complete technical reference for all **16 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/notifications` | Required | `client`, `gardener`, `administrator` | Returns recent notifications (`limit 50`) and `unreadCount` for the authenticated user. |
-| `PATCH` | `/api/notifications/read-all` | Required | `client`, `gardener`, `administrator` | Marks all unread notifications for the user as read. |
-| `PATCH` | `/api/notifications/:notificationId/read` | Required | `client`, `gardener`, `administrator` | Marks a single notification owned by the user as read. |
+| `GET` | `/api/notifications` | Required | `client`, `gardener`, `clerk`, `administrator` | Returns recent notifications (`limit 50`) and `unreadCount` for the authenticated user. |
+| `PATCH` | `/api/notifications/read-all` | Required | `client`, `gardener`, `clerk`, `administrator` | Marks all unread notifications for the user as read. |
+| `PATCH` | `/api/notifications/:notificationId/read` | Required | `client`, `gardener`, `clerk`, `administrator` | Marks a single notification owned by the user as read. |
 
 ---
 
@@ -263,7 +263,7 @@ This document provides the complete technical reference for all **16 REST API ro
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
 | `GET` | `/api/ai/usage` | Required | `client`, `gardener`, `administrator` | Returns the user's rolling 60-minute AI quota status (`limit`, `used`, `remaining`, `windowHours`) and `recentUsage` log entries from `ai_usage_log`. |
-| `GET` | `/api/ai/recommendations` | Required | `client`, `gardener`, `administrator` | Ranks nearby services or open leads using hybrid Zamboanga City barangay proximity, verified review scores, and clean conduct metrics (`smartMatching.js`). |
+| `GET` | `/api/ai/recommendations` | Required | `client`, `gardener`, `administrator` | Ranks nearby services (`mode=services`) or open leads (`mode=leads`) using hybrid Zamboanga City barangay proximity, verified review scores, and clean conduct metrics (`smartMatching.js`). Supports `area`, `categoryId` (positive integer category filter), `keyword`, `sortBy`, `nearbyOnly`, `highRatingOnly`, and `cleanConductOnly`. |
 | `POST` | `/api/ai/recommendations/summary` | Required | `client`, `gardener`, `administrator` | Generates an optional Gemini-powered advisory summary explaining top recommended services or leads. |
 | `POST` | `/api/ai/garden-plan` | Required | `client`, `gardener`, `administrator` | Generates a structured tropical garden planning guide from `{ prompt }` (max `3,000` chars). |
 | `POST` | `/api/ai/requirements` | Required | `client`, `gardener`, `administrator` | Generates editable JSON requirement suggestions (`structuredSummary`, `refinedDescription`, `suggestedCategoryId`, `suggestedCategoryName`, `gardeningIdeas`, `followUpQuestions`) from `{ prompt, location, requestType, imageIds }`. |
