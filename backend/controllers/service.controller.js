@@ -111,7 +111,8 @@ async function getGardener(req, res, next) {
              gp.service_area, gp.years_of_experience
       FROM users u
       JOIN gardener_profiles gp ON gp.user_id = u.id
-      WHERE u.id = ? AND u.role = 'gardener' AND u.is_active = TRUE AND gp.is_approved = TRUE
+      JOIN user_roles ur ON ur.user_id = u.id AND ur.role = 'gardener'
+      WHERE u.id = ? AND u.is_active = TRUE AND gp.is_approved = TRUE
       LIMIT 1
     `, [gardenerId])
     if (!gardeners[0]) return res.status(404).json({ message: 'Gardener profile was not found.' })

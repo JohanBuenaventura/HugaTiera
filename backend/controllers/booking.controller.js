@@ -23,8 +23,11 @@ async function listBookings(req, res, next) {
               a.version AS agreement_version,
               a.amount AS agreed_amount,
               a.scope_of_work AS agreed_scope,
-              CONCAT(client.first_name, ' ', client.last_name) AS client_name,
-              COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gardener.first_name, ' ', gardener.last_name)) AS gardener_name
+              CONCAT_WS(' ', client.first_name, NULLIF(client.middle_name, ''), client.last_name) AS client_name,
+              COALESCE(
+                NULLIF(TRIM(gp.business_name), ''),
+                CONCAT_WS(' ', gardener.first_name, NULLIF(gardener.middle_name, ''), gardener.last_name)
+              ) AS gardener_name
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id
        LEFT JOIN agreements a ON a.id = b.agreement_id
@@ -58,8 +61,13 @@ async function getBooking(req, res, next) {
               a.conditions AS agreed_conditions,
               a.client_approved_at,
               a.gardener_approved_at,
-              CONCAT(client.first_name, ' ', client.last_name) AS client_name,
-              COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gardener.first_name, ' ', gardener.last_name)) AS gardener_name
+              CONCAT_WS(' ', client.first_name, NULLIF(client.middle_name, ''), client.last_name) AS client_name,
+              client.phone AS client_phone,
+              COALESCE(
+                NULLIF(TRIM(gp.business_name), ''),
+                CONCAT_WS(' ', gardener.first_name, NULLIF(gardener.middle_name, ''), gardener.last_name)
+              ) AS gardener_name,
+              gardener.phone AS gardener_phone
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id
        LEFT JOIN agreements a ON a.id = b.agreement_id

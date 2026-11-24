@@ -17,7 +17,8 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
 ## 2. Implemented Features
 
 - **Role-Based Authentication & Security:**
-  - Client and Gardener registration with `bcryptjs` password hashing and `HttpOnly` JWT cookies (`hugatiera_token`).
+  - Client and Gardener registration with first/middle/last name, private date of birth with server-enforced 18+ eligibility, required mobile number, and required client service address/city; `bcryptjs` password hashing and `HttpOnly` JWT cookies (`hugatiera_token`).
+  - Client full addresses stay out of public requests, which use area-level location; exact address and contact numbers are shown only within authorized agreement and booking views.
   - Live account status verification (`users.is_active = TRUE`) on every protected request; administrator self-registration is blocked.
 - **Public Marketplace & Gardener Portfolios:**
   - Keyword, category, and service-area filtering with sorting (`newest`, `price_low`, `price_high`) and pagination (`/services`).
@@ -161,7 +162,7 @@ VITE_API_URL=http://localhost:5000/api
 ## 7. Database Setup & Migration 001 Status
 
 ### 7.1 Fresh Database Installation
-If setting up HugaTiera on a new machine without an existing `hugatiera_db` database, start MySQL in XAMPP and import [database/schema/hugatiera_schema.sql](file:///c:/xampp/htdocs/HugaTiera/database/schema/hugatiera_schema.sql), which creates `hugatiera_db` with all **19 tables** and **46 foreign keys**:
+If setting up HugaTiera on a new machine without an existing `hugatiera_db` database, start MySQL in XAMPP and import [database/schema/hugatiera_schema.sql](file:///c:/xampp/htdocs/HugaTiera/database/schema/hugatiera_schema.sql), which creates `hugatiera_db` with all **20 tables** and **47 foreign keys**:
 ```powershell
 c:\xampp\mysql\bin\mysql.exe -u root < database/schema/hugatiera_schema.sql
 ```
@@ -171,6 +172,15 @@ c:\xampp\mysql\bin\mysql.exe -u root < database/schema/hugatiera_schema.sql
 - Both `hugatiera_db` (production database) and `hugatiera_db_migration_test` (automated test database) are at the complete 19-table schema (`46` foreign keys).
 - **Do NOT rerun `001_unified_requests_and_agreements.sql` against `hugatiera_db`.**
 - Full table-by-table documentation, the 19-table Mermaid ERD, and Migration 001 verification details are in [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md).
+
+### 7.3 Registration/Profile Migration 003
+- This feature branch includes `database/migrations/003_registration_profile_details.sql`; it adds nullable `middle_name` and `date_of_birth` columns to existing databases. Fresh installs already get these columns from `database/schema/hugatiera_schema.sql`.
+- Migration 003 has **not** been applied to the local database. Do not run the updated backend against an existing database until the migration is reviewed, the database is backed up, and execution is explicitly approved. The rollback removes the newly stored personal data.
+
+### 7.4 Individual Multi-Role Migration 004
+- Migration 004 adds `user_roles`, allowing one person to use client and gardener features with separate profile records and a small active-mode switcher.
+- Apply Migration 004 only after Migration 003 and only after backing up the target database and receiving explicit approval. It has not been applied locally.
+- Company/team provider accounts are outside this change; the MVP continues to treat each login as one individual.
 
 ---
 
@@ -235,7 +245,7 @@ node --test --test-concurrency=1 `
 | Document | Description |
 |---|---|
 | [README.md](file:///c:/xampp/htdocs/HugaTiera/README.md) | Main project overview, setup, testing, and quick reference (this file). |
-| [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) | Authoritative 19-table schema reference, 46 FKs, Mermaid ERD, and Migration 001 execution record. |
+| [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) | Authoritative 20-table fresh-install schema reference, 47 FKs, Mermaid ERD, and migration execution records. |
 | [docs/architecture-and-workflows.md](file:///c:/xampp/htdocs/HugaTiera/docs/architecture-and-workflows.md) | System architecture, Client/Gardener/Admin workflows, Case 1 vs Case 2 + R3 Agreement flowcharts, and Gemini AI fallback design. |
 | [docs/api-reference.md](file:///c:/xampp/htdocs/HugaTiera/docs/api-reference.md) | Complete REST API endpoint documentation across all 15 route modules. |
 | [docs/implementation/implementation-plan.md](file:///c:/xampp/htdocs/HugaTiera/docs/implementation/implementation-plan.md) | Revision Track R0–R7 technical specification and state machine rules. |

@@ -104,8 +104,13 @@ async function fetchAgreementById(connection, agreementId) {
     `SELECT a.*,
             b.id AS booking_id,
             b.status AS booking_status,
-            CONCAT(c.first_name, ' ', c.last_name) AS client_name,
-            COALESCE(gp.business_name, CONCAT(g.first_name, ' ', g.last_name)) AS gardener_name
+            CONCAT_WS(' ', c.first_name, NULLIF(c.middle_name, ''), c.last_name) AS client_name,
+            c.phone AS client_phone,
+            COALESCE(
+              NULLIF(TRIM(gp.business_name), ''),
+              CONCAT_WS(' ', g.first_name, NULLIF(g.middle_name, ''), g.last_name)
+            ) AS gardener_name,
+            g.phone AS gardener_phone
      FROM agreements a
      JOIN users c ON c.id = a.client_id
      JOIN users g ON g.id = a.gardener_id
@@ -138,8 +143,13 @@ async function listInquiryAgreements(req, res, next) {
       `SELECT a.*,
               b.id AS booking_id,
               b.status AS booking_status,
-              CONCAT(c.first_name, ' ', c.last_name) AS client_name,
-              COALESCE(gp.business_name, CONCAT(g.first_name, ' ', g.last_name)) AS gardener_name
+              CONCAT_WS(' ', c.first_name, NULLIF(c.middle_name, ''), c.last_name) AS client_name,
+              c.phone AS client_phone,
+              COALESCE(
+                NULLIF(TRIM(gp.business_name), ''),
+                CONCAT_WS(' ', g.first_name, NULLIF(g.middle_name, ''), g.last_name)
+              ) AS gardener_name,
+              g.phone AS gardener_phone
        FROM agreements a
        JOIN users c ON c.id = a.client_id
        JOIN users g ON g.id = a.gardener_id
@@ -150,7 +160,7 @@ async function listInquiryAgreements(req, res, next) {
       [inquiryId],
     )
 
-    const isAdmin = req.user.role === 'administrator'
+    const isAdmin = req.user.roles.includes('administrator')
     const isInquiryClient = req.user.id === inquiry.client_id
     const isInquiryGardener = inquiry.gardener_id && req.user.id === inquiry.gardener_id
     const isAgreementParty = agreements.some(
@@ -201,7 +211,7 @@ async function getAgreement(req, res, next) {
     }
 
     if (
-      req.user.role !== 'administrator'
+      !req.user.roles.includes('administrator')
       && req.user.id !== agreement.client_id
       && req.user.id !== agreement.gardener_id
     ) {

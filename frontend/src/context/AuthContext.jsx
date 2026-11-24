@@ -54,6 +54,16 @@ export function AuthProvider({ children }) {
       setAuthError('')
       return result.user
     },
+    enableRole: async (details) => {
+      const result = await authApi.enableRole(details)
+      setUser(result.user)
+      return result.user
+    },
+    switchRole: async (role) => {
+      const result = await authApi.switchRole(role)
+      setUser(result.user)
+      return result.user
+    },
   }), [authError, loading, retryAuth, user])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -34,4 +34,6 @@ export const authApi = {
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   logout: () => request('/auth/logout', { method: 'POST' }),
   register: (details) => request('/auth/register', { method: 'POST', body: JSON.stringify(details) }),
+  enableRole: (details) => request('/auth/roles', { method: 'POST', body: JSON.stringify(details) }),
+  switchRole: (role) => request('/auth/active-role', { method: 'PATCH', body: JSON.stringify({ role }) }),
 }

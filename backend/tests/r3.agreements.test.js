@@ -95,7 +95,11 @@ describe('Step R3 – Mutual Agreement Engine, Versioning, Concurrency & Booking
         method: 'POST',
         body: {
           firstName: u.firstName,
+          middleName: 'Test',
           lastName: 'R3Test',
+          dateOfBirth: '1990-04-15',
+          phone: '09171234567',
+          ...(u.role === 'client' ? { address: 'Tetuan, Zamboanga City', city: 'Zamboanga City' } : {}),
           email: `r3.${u.key}.${runId}@hugatiera.test`,
           password: 'Password123',
           role: u.role,
@@ -123,6 +127,7 @@ describe('Step R3 – Mutual Agreement Engine, Versioning, Concurrency & Booking
     )
     adminId = adminIns.insertId
     createdUserIds.push(adminId)
+    await pool.execute('INSERT INTO user_roles (user_id, role) VALUES (?, "administrator")', [adminId])
 
     const adminLogin = await apiRequest('/auth/login', {
       method: 'POST',
@@ -407,6 +412,16 @@ describe('Step R3 – Mutual Agreement Engine, Versioning, Concurrency & Booking
     assert.ok(cAAppV2.data.booking.id)
     assert.equal(cAAppV2.data.booking.agreement_id, v2.id)
     assert.equal(cAAppV2.data.booking.status, 'accepted')
+
+    const agreementView = await apiRequest(`/agreements/inquiry/${inquiryId}`, { cookie: clientACookie })
+    assert.equal(agreementView.status, 200)
+    assert.equal(agreementView.data.activeAgreement.client_phone, '09171234567')
+    assert.equal(agreementView.data.activeAgreement.gardener_phone, '09171234567')
+
+    const bookingView = await apiRequest(`/bookings/${cAAppV2.data.booking.id}`, { cookie: clientACookie })
+    assert.equal(bookingView.status, 200)
+    assert.equal(bookingView.data.booking.client_phone, '09171234567')
+    assert.equal(bookingView.data.booking.gardener_phone, '09171234567')
 
     // Verify inquiry status is 'confirmed' and competing quotation2 was declined automatically
     const [[inqRow]] = await pool.execute('SELECT status, gardener_id FROM inquiries WHERE id = ?', [inquiryId])

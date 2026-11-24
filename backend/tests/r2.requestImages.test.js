@@ -121,7 +121,12 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       method: 'POST',
       body: {
         firstName: 'ClientA',
+        middleName: 'Test',
         lastName: 'R2Test',
+        dateOfBirth: '1990-04-15',
+        phone: '09171234567',
+        address: 'Tetuan, Zamboanga City',
+        city: 'Zamboanga City',
         email: `r2.clienta.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'client',
@@ -136,7 +141,12 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       method: 'POST',
       body: {
         firstName: 'ClientB',
+        middleName: 'Test',
         lastName: 'R2Test',
+        dateOfBirth: '1990-04-15',
+        phone: '09171234567',
+        address: 'Tetuan, Zamboanga City',
+        city: 'Zamboanga City',
         email: `r2.clientb.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'client',
@@ -151,7 +161,10 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       method: 'POST',
       body: {
         firstName: 'GardenerOne',
+        middleName: 'Test',
         lastName: 'R2Test',
+        dateOfBirth: '1990-04-15',
+        phone: '09171234567',
         email: `r2.gardener1.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'gardener',
@@ -166,7 +179,10 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       method: 'POST',
       body: {
         firstName: 'GardenerTwo',
+        middleName: 'Test',
         lastName: 'R2Test',
+        dateOfBirth: '1990-04-15',
+        phone: '09171234567',
         email: `r2.gardener2.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'gardener',
@@ -181,7 +197,10 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
       method: 'POST',
       body: {
         firstName: 'GardenerThree',
+        middleName: 'Test',
         lastName: 'R2Test',
+        dateOfBirth: '1990-04-15',
+        phone: '09171234567',
         email: `r2.gardener3.${runId}@hugatiera.test`,
         password: 'Password123',
         role: 'gardener',
@@ -211,6 +230,7 @@ describe('Step R2 – Garden Photo Upload, sharp EXIF/GPS Stripping & Access Con
     )
     adminId = adminIns.insertId
     createdUserIds.push(adminId)
+    await pool.execute('INSERT INTO user_roles (user_id, role) VALUES (?, "administrator")', [adminId])
 
     const adminLogin = await apiRequest('/api/auth/login', {
       method: 'POST',

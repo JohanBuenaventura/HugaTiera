@@ -132,7 +132,7 @@ async function canUserViewRequestImage(user, imageRow) {
   if (!user || !imageRow) return false
 
   // 1. Administrator can view for platform moderation
-  if (user.role === 'administrator') return true
+  if (user.roles?.includes('administrator')) return true
 
   // 2. Owning client (uploader or inquiry owner)
   if (user.id === imageRow.uploaded_by) return true
@@ -142,7 +142,7 @@ async function canUserViewRequestImage(user, imageRow) {
   if (!imageRow.inquiry_id) return false
 
   // 4. Only gardeners beyond this point can view attached request images
-  if (user.role !== 'gardener') return false
+  if (!user.roles?.includes('gardener')) return false
 
   // 4a. Targeted provider on the inquiry (Case 2 direct inquiry, or selected provider)
   if (imageRow.inquiry_gardener_id && user.id === imageRow.inquiry_gardener_id) {

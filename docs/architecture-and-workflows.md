@@ -30,7 +30,7 @@ flowchart TB
   end
 
   subgraph DataTier["Persistence & External Tier"]
-    MySQL[("MySQL / MariaDB (InnoDB)<br/>hugatiera_db (19 Tables, 46 FKs)")]
+    MySQL[("MySQL / MariaDB (InnoDB)<br/>Existing local DB: 19 Tables, 46 FKs<br/>Target schema: 20 Tables, 47 FKs")]
     FileStore[("Local File Storage (backend/uploads/)<br/>portfolios/ & request-images/{originals,generated}/")]
     GeminiAPI["Google Gemini REST API<br/>(generateContent — Text & Multimodal Photo Analysis)"]
     Controllers <-->|"mysql2/promise Pool & Transactions"| MySQL
@@ -47,17 +47,21 @@ flowchart TB
    - Manages authentication session context (`AuthContext.jsx`) and distinguishes `401 Unauthorized` from `503 DATABASE_UNAVAILABLE` or network outages (rendering an offline retry screen rather than logging the user out).
    - Resolves backend image URLs via the centralized `API_ORIGIN` helper (`getRequestImageFileUrl(imageId)`) so authenticated `<img>` tags carry the `HttpOnly` session cookie directly to the backend origin.
 2. **Backend (`backend/`):**
-   - Enforces authentication (`requireAuth`), live account activation (`users.is_active = TRUE`), role-based access control (`requireRole`), and strict resource ownership on every protected endpoint.
+   - Enforces authentication (`requireAuth`), live account activation (`users.is_active = TRUE`), assigned-role authorization (`requireRole` reads `user_roles`), and strict resource ownership on every protected endpoint.
    - Wraps multi-table workflow mutations (inquiry creation with draft image attachment, quotation submission/acceptance, mutual agreement versioning/approval, booking confirmation, and review creation) in `mysql2/promise` transactions (`BEGIN` / `COMMIT` / `ROLLBACK`) with row-level `SELECT ... FOR UPDATE` locks where concurrency protection is required.
    - Processes uploaded garden photos with `sharp` to validate image streams, apply EXIF orientation, resize within `1920×1920`, and strip all EXIF/GPS/XMP/IPTC metadata before writing to disk.
-3. **Database (`hugatiera_db`):**
-   - Enforces relational integrity via `19` `InnoDB` tables, `46` foreign keys, `CHECK` constraints, and stored generated columns (`quotations.active_flag` and `agreements.active_key`) that guarantee at the database level at most one active offer per provider per inquiry and at most one active agreement per inquiry.
+3. **Database (target schema after Migrations 003–004):**
+   - Enforces relational integrity via `20` `InnoDB` tables, `47` foreign keys, `CHECK` constraints, and stored generated columns (`quotations.active_flag` and `agreements.active_key`) that guarantee at the database level at most one active offer per provider per inquiry and at most one active agreement per inquiry. Migrations 003–004 remain unapplied to existing local databases.
 
 ---
 
 ## 2. User Roles and Capabilities
 
-### 2.1 Client (`role = 'client'`)
+Each login belongs to one person. `user_roles` stores the Client, Gardener, and Administrator capabilities assigned to that person; one person may hold both Client and Gardener roles. `users.role` stores the currently selected dashboard mode, and the sidebar mode switch changes that context without replacing the other profile. Backend authorization checks assigned roles and resource ownership; gardener approval remains separately required for public services and open-request access.
+
+Company/team provider accounts are not part of this revision. A gardener profile currently belongs to an individual account; the MVP does not support a company owner and multiple clerks sharing one provider workspace. Do not share login credentials. Multi-staff organization membership is deferred for separate design and approval.
+
+### 2.1 Client (`user_roles.role = 'client'`)
 - **Discovery:** Browse and filter approved gardening services by keyword, category, service area, and sort order (`/services`), inspect service details (`/services/:serviceId`), and view public gardener profiles, portfolios, and verified reviews (`/gardeners/:gardenerId`).
 - **AI Planning & Requirement Assistance:** Use the standalone Garden Planning Assistant (`/assistant`) or the embedded AI helpers inside `/inquiries/new` to structure requirements (`POST /api/ai/requirements`) and analyze uploaded garden photos (`POST /api/ai/photo-analysis`), then review and edit all AI suggestions before submission.
 - **Case 1 — General Service Request:** Submit an open request (`request_type = 'general'`) with up to 5 EXIF-stripped garden photos and an optional validity period (`7`, `14`, or `30` days), compare offers from multiple approved gardeners side by side (including ratings, completed booking counts, experience, and portfolio previews), and accept or decline offers.
@@ -66,14 +70,14 @@ flowchart TB
 - **Mutual Agreement & Booking Lifecycle:** Propose, edit (creating version $N+1$), approve, or cancel mutual agreements; track confirmed bookings (`accepted` → `in_progress` → `completed`), view the read-only **Mutual Agreement Summary** on booking details, and submit a 1–5 star review once a booking is marked `completed`.
 - **Dashboard & Settings (`ISS-05`):** View primary workflow activity (requests, offers, agreements, bookings) on the `Overview` tab and manage personal/address details in the dedicated `Profile & Settings` tab.
 
-### 2.2 Gardener (`role = 'gardener'`)
+### 2.2 Gardener (`user_roles.role = 'gardener'`)
 - **Professional Profile & Approval:** Maintain business name (optional, with automatic full-name fallback across all views), service area, years of experience, and description in the `Profile & Settings` tab. New gardeners start with `is_approved = FALSE` until approved by an administrator.
 - **Service Listings & Portfolio:** Create, update, and deactivate gardening service listings (`/api/services`) and upload/edit/delete portfolio project photos (`/api/portfolios`).
 - **Open Service Requests Board (Case 1):** Approved gardeners browse non-expired open general requests (`GET /api/inquiries/open`) filtered by category or service area, inspect the **Provider Decision-Support View** (client requirements, AI requirement summary, and garden photos with space notes), and submit, revise (`PUT /api/inquiries/quotations/:quotationId`), or withdraw (`POST /api/inquiries/quotations/:quotationId/withdraw`) offers until client acceptance.
 - **Direct Inquiries (Case 2):** Evaluate direct client inquiries and respond with `offer`, `feasible`, `modifications` (with required `proposedChanges`), or `cannot_do`.
 - **Mutual Agreement & Service Execution:** Propose, revise, or approve mutual agreements; transition confirmed bookings from `accepted` to `in_progress` and `completed`.
 
-### 2.3 Administrator (`role = 'administrator'`)
+### 2.3 Administrator (`user_roles.role = 'administrator'`)
 - **Platform Summary & Statistics (`ISS-06`):** View live platform metrics on `/dashboard`, including Total Users, Active Services, Pending Gardener Approvals, Inquiries (`open` vs `total`), Bookings (`completed` vs `total`), and Open Reports.
 - **Gardener Approval Queue:** Review pending gardener profiles (`GET /api/admin/gardeners/pending`) and approve or request changes (`PATCH /api/admin/gardeners/:userId/approval`) with automated in-app notifications.
 - **Account & Category Management:** Activate or deactivate client and gardener accounts (`PATCH /api/admin/users/:userId/status` — immediately enforced by `requireAuth`) and create/edit/toggle service categories (`/api/admin/categories`).

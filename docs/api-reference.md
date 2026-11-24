@@ -8,8 +8,8 @@ This document provides the complete technical reference for all **15 REST API ro
 
 - **Base URL:** `http://localhost:5000/api`
 - **Authentication Mechanism:** `HttpOnly`, `SameSite=Lax` JWT cookie named `hugatiera_token` (7-day expiry). Requests from the React frontend use `withCredentials: true`.
-- **Account Status Verification (`requireAuth`):** Every protected request verifies that the JWT is valid **and** queries `SELECT id, role, is_active FROM users WHERE id = ?` in MySQL. Deactivated accounts (`is_active = FALSE`) immediately receive `403 Forbidden`.
-- **Role-Based Authorization (`requireRole(...roles)`):** Returns `403 Forbidden` (`{ message: 'You do not have permission to access this resource.' }`) if `req.user.role` is not in the allowed list.
+- **Account Status Verification (`requireAuth`):** Every protected request verifies that the JWT is valid, queries the account's active mode/status, and loads assigned memberships from `user_roles`. Deactivated accounts (`is_active = FALSE`) immediately lose access.
+- **Role-Based Authorization (`requireRole(...roles)`):** Returns `403 Forbidden` (`{ message: 'You do not have permission to access this resource.' }`) unless at least one requested role is assigned in `user_roles`. `users.role` is the currently selected dashboard mode; it is not the role-membership source of truth.
 - **Standard Error Responses (`backend/app.js`):**
   - `400 Bad Request`: Validation failure, malformed JSON payload, or invalid file upload (`LIMIT_FILE_SIZE` > 5 MB, unsupported MIME type, or corrupt image stream).
   - `401 Unauthorized`: Missing, invalid, or expired `hugatiera_token` cookie.
@@ -40,21 +40,31 @@ This document provides the complete technical reference for all **15 REST API ro
 | `POST` | `/api/auth/register` | Public | Public (`client`, `gardener` only) | Registers a new client or gardener account, creates the matching role profile row in a transaction, and sets the `hugatiera_token` cookie. |
 | `POST` | `/api/auth/login` | Public | All active users | Authenticates email/password and sets the `hugatiera_token` cookie. |
 | `POST` | `/api/auth/logout` | Public | All | Clears the `hugatiera_token` cookie. |
-| `GET` | `/api/auth/me` | Required | `client`, `gardener`, `administrator` | Returns the currently authenticated user's profile and role. |
+| `GET` | `/api/auth/me` | Required | Any assigned role | Returns the authenticated user's active mode and assigned `roles` array. |
+| `POST` | `/api/auth/roles` | Required | `client`, `gardener` accounts | Enables the other public role and creates its role-specific profile in one transaction. |
+| `PATCH` | `/api/auth/active-role` | Required | Any authenticated account | Switches the active dashboard mode to a role already assigned to the account. |
 | `GET` | `/api/auth/administrator-check` | Required | `administrator` | Verifies administrator role access (`{ "status": "ok" }`). |
 
 - **`POST /api/auth/register` Request Body:**
   ```json
   {
     "firstName": "Maria",
+    "middleName": "Cruz",
     "lastName": "Santos",
+    "dateOfBirth": "1990-04-15",
     "email": "maria@example.com",
     "password": "Password123",
     "role": "client",
-    "phone": "09171234567"
+    "phone": "+63 917 123 4567",
+    "address": "12 Garden Street, Tetuan",
+    "city": "Zamboanga City"
   }
   ```
-  - **Validation & Security:** Rejects `role: "administrator"` with `403`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs` (`10` rounds). Creates `client_profiles` (`city = 'Zamboanga City'`) or `gardener_profiles` (`service_area = 'Zamboanga City'`, `is_approved = FALSE`).
+  - **Validation & Security:** Public registration accepts only `client` and `gardener` roles (`400` otherwise), rejects duplicate emails with `409`, validates the date of birth and requires the applicant to be at least 18, and requires a valid mobile number. Middle name is optional. Client registrations must also provide a service address and city; gardener registrations do not collect a client address. Passwords are hashed with `bcryptjs` before being stored.
+  - **Privacy:** `dateOfBirth` is returned only by the authenticated user's `GET /api/profiles/me` response, not by `/api/auth/me`, public listings, or request APIs. A client's full address is stored in their private profile; open requests use area-level location only. The exact address and party phone numbers are included in private agreement/booking views.
+- **Multi-role account behavior:** Public registration initially assigns one role. `POST /api/auth/roles` accepts `{ "role": "gardener" }` to add Gardener mode, or `{ "role": "client", "address": "...", "city": "..." }` to add Client mode. Client address and city are required. The endpoint creates the membership and profile transactionally and switches to that mode. New gardener profiles remain pending administrator approval. Administrator accounts cannot self-enable public roles.
+- **`PATCH /api/auth/active-role` Request Body:** `{ "role": "client" }` or `{ "role": "gardener" }`. A role not assigned to the account is rejected with `403`.
+- **Response user shape:** Authenticated user objects include `role` (active mode) and `roles` (assigned role array), for example `{ "role": "client", "roles": ["client", "gardener"] }`.
 
 ---
 
@@ -62,9 +72,12 @@ This document provides the complete technical reference for all **15 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/profiles/me` | Required | `client`, `gardener`, `administrator` | Returns the user's account info, role-specific profile fields (`client_profiles` or `gardener_profiles`), and dashboard `counts`. |
-| `PUT` | `/api/profiles/me` | Required | `client`, `gardener`, `administrator` | Updates personal details (`firstName`, `lastName`, `phone`) and role-specific profile fields (`address`, `city`, `bio` for clients; `businessName`, `description`, `serviceArea`, `yearsOfExperience` for gardeners). |
+| `GET` | `/api/profiles/me` | Required | Any authenticated account | Returns personal details, private date of birth, assigned `roles`, active-mode profile fields (`client_profiles` or `gardener_profiles`), and dashboard `counts`. |
+| `PUT` | `/api/profiles/me` | Required | Any authenticated account | Updates common personal details and the active-mode profile (`address` and `city` for clients; gardener professional fields for gardeners). |
 | `POST` | `/api/profiles/reports` | Required | `client`, `gardener`, `administrator` | Submits a moderation report against a user, service, or message. |
+
+- **Account data privacy:** The authenticated profile endpoint is the only user-facing endpoint that returns date of birth. A client address is visible to the client in their profile and to the relevant parties once it is entered in a mutual agreement; it is not included in the public Open Requests Board.
+- **Multi-role profile data:** Client and Gardener profile records remain separate for one user. `GET` and `PUT /api/profiles/me` operate on the active mode; switching modes does not overwrite the other profile.
 
 - **Dashboard Counts Behavior (`GET /api/profiles/me` — `ISS-03`):**
   - For **Clients**: returns `{ inquiries, bookings, unreadNotifications }`.
@@ -172,7 +185,7 @@ This document provides the complete technical reference for all **15 REST API ro
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
 | `POST` | `/api/agreements/direct-service` | Required | `client` | Creates a Case 2 direct inquiry for an active priced service **and** proposes Version 1 of the mutual agreement in a single transaction (`status = 'in_agreement'`). |
-| `GET` | `/api/agreements/inquiry/:inquiryId` | Required | `client`, `gardener`, `administrator` | Returns `activeAgreement` and full `agreements` version history for an inquiry. |
+| `GET` | `/api/agreements/inquiry/:inquiryId` | Required | `client`, `gardener`, `administrator` | Returns `activeAgreement` and full `agreements` version history for an inquiry. Agreement-party phone numbers are included only in this authorized agreement view. |
 | `POST` | `/api/agreements/inquiry/:inquiryId` | Required | `client`, `gardener` | Proposes Version 1 of a mutual agreement on an inquiry with an accepted offer (or after a cancelled agreement). |
 | `POST` | `/api/agreements` | Required | `client`, `gardener` | Proposes Version 1 of a mutual agreement (accepting `inquiryId` in the JSON request body; same handler as `POST /api/agreements/inquiry/:inquiryId`). |
 | `GET` | `/api/agreements/:agreementId` | Required | `client`, `gardener`, `administrator` | Returns a single agreement version record. |
@@ -188,7 +201,7 @@ This document provides the complete technical reference for all **15 REST API ro
 |---|---|---|---|---|
 | `GET` | `/api/bookings` | Required | `client`, `gardener` | Lists bookings belonging to the authenticated client or gardener, including joined agreement summary fields (`agreement_version`, `agreed_amount`, `agreed_price_basis`, `agreement_status`). Administrators receive `403`. |
 | `POST` | `/api/bookings` | Required | All authenticated | **Retired in Step R3:** Always returns `409 Conflict` (`code: 'MUTUAL_AGREEMENT_REQUIRED'`). Bookings are created exclusively via mutual agreement approval. |
-| `GET` | `/api/bookings/:bookingId` | Required | `client`, `gardener` | Returns booking details plus full mutual agreement details (`agreement_version`, `agreed_scope_of_work`, `agreed_amount`, `agreed_price_basis`, `agreed_conditions`, `client_approved_at`, `gardener_approved_at`, `agreement_status`). Administrators receive `403`. |
+| `GET` | `/api/bookings/:bookingId` | Required | `client`, `gardener` | Returns booking details plus full mutual agreement details, location, and party phone numbers. Access is limited to the booking's client or gardener. Administrators receive `403`. |
 | `PATCH` | `/api/bookings/:bookingId/status` | Required | `client`, `gardener` | Updates booking status (`in_progress` or `completed` by gardener; `cancelled` by client on `pending`/`accepted` bookings; `accepted`/`declined` by gardener on legacy `pending` rows). |
 
 ---

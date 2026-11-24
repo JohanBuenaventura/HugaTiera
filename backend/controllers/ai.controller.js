@@ -308,7 +308,7 @@ async function createRequirementAssistance(req, res, next) {
       if (!inquiries[0]) {
         return res.status(404).json({ message: 'Inquiry was not found.' })
       }
-      if (inquiries[0].client_id !== req.user.id && req.user.role !== 'administrator') {
+      if (inquiries[0].client_id !== req.user.id && !req.user.roles.includes('administrator')) {
         return res.status(403).json({ message: 'You can only request AI assistance for your own inquiry.' })
       }
     }
@@ -326,7 +326,7 @@ async function createRequirementAssistance(req, res, next) {
         return res.status(404).json({ message: 'One or more uploaded garden photos were not found.' })
       }
       for (const img of imageRows) {
-        if (img.uploaded_by !== req.user.id && req.user.role !== 'administrator') {
+        if (img.uploaded_by !== req.user.id && !req.user.roles.includes('administrator')) {
           return res.status(403).json({ message: 'You can only reference garden photos that you uploaded.' })
         }
         if (img.ai_description) {
@@ -417,7 +417,7 @@ async function analyzeUploadedPhoto(req, res, next) {
     if (!imageRow) {
       return res.status(404).json({ message: 'Garden photo was not found.' })
     }
-    if (imageRow.uploaded_by !== req.user.id && req.user.role !== 'administrator') {
+    if (imageRow.uploaded_by !== req.user.id && !req.user.roles.includes('administrator')) {
       return res.status(403).json({ message: 'You can only analyze garden photos that you uploaded.' })
     }
     if (imageRow.inquiry_id && !['open', 'responded'].includes(imageRow.inquiry_status)) {

@@ -27,6 +27,10 @@ HugaTiera is more than a basic booking system. Its primary purpose is to provide
 
 ## 3. USER ROLES
 
+Client and Gardener are capabilities, not mutually exclusive account types. One person uses one login and may hold both roles. The application stores assigned memberships separately from the currently selected dashboard mode and preserves separate client and gardener profile data. Administrator access remains a separately assigned role.
+
+The current MVP models service providers as individual accounts. Company-level provider organizations, shared workspaces, staff invitations, and owner/manager/clerk permissions are deferred; employees must not share login credentials.
+
 ### Client
 - Register and log in.
 - Manage personal profile.

@@ -242,6 +242,11 @@ describe('Step R5 – Case 1 General Service Request, Open Provider Board, Multi
     )
     adminId = admRes.insertId
     createdUserIds.push(adminId)
+    await pool.execute(
+      `INSERT INTO user_roles (user_id, role)
+       SELECT id, role FROM users WHERE id IN (?, ?, ?, ?, ?, ?, ?)`,
+      [clientAId, clientBId, gardener1Id, gardener2Id, gardener3Id, unapprovedGardenerId, adminId],
+    )
 
     // Ensure at least two active categories exist
     const [cats] = await pool.query('SELECT id FROM service_categories WHERE is_active = 1 ORDER BY id ASC LIMIT 2')

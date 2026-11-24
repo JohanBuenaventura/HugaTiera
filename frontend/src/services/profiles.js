@@ -2,7 +2,9 @@ const apiBaseUrl = import.meta.env?.VITE_API_URL || '/api'
 
 export const initialProfile = {
   firstName: '',
+  middleName: '',
   lastName: '',
+  dateOfBirth: '',
   phone: '',
   address: '',
   city: 'Zamboanga City',
@@ -16,7 +18,7 @@ export const initialProfile = {
 export const FLOATING_MESSAGE_ICON_LABEL = 'Open messages and notifications'
 
 export function shouldShowFloatingMessageIcon(user) {
-  return Boolean(user && (user.role === 'client' || user.role === 'gardener'))
+  return Boolean(user && (user.roles || [user.role]).some((role) => role === 'client' || role === 'gardener'))
 }
 
 export function getDashboardNavLinks(role, unreadCounts = {}) {
@@ -60,7 +62,9 @@ export function buildProfileForm(result, baseForm = initialProfile) {
     ...userPart,
     ...profilePart,
     firstName: userPart.firstName ?? userPart.first_name ?? baseForm.firstName ?? '',
+    middleName: userPart.middleName ?? userPart.middle_name ?? baseForm.middleName ?? '',
     lastName: userPart.lastName ?? userPart.last_name ?? baseForm.lastName ?? '',
+    dateOfBirth: userPart.dateOfBirth ?? userPart.date_of_birth ?? baseForm.dateOfBirth ?? '',
     phone: userPart.phone ?? baseForm.phone ?? '',
     avatarPath: userPart.avatarPath ?? userPart.avatar_path ?? null,
     address: profilePart.address ?? baseForm.address ?? '',

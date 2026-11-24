@@ -1079,6 +1079,9 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
     transform: none;
     pointer-events: auto;
   }
+  .app-sidebar.is-collapsed .app-sidebar-mode {
+    display: grid;
+  }
   .app-sidebar.is-collapsed .app-sidebar-role {
     justify-content: flex-start;
     margin-right: 12px;
@@ -1476,6 +1479,25 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
 }
 .app-sidebar-role small {
   color: var(--muted);
+}
+.app-sidebar-mode {
+  display: grid;
+  gap: 5px;
+  padding: 10px 4px 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.app-sidebar-mode select {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--forest);
+  background: var(--surface);
+}
+.app-sidebar.is-collapsed .app-sidebar-mode {
+  display: none;
 }
 .app-sidebar-avatar {
   color: #1B3A29;
