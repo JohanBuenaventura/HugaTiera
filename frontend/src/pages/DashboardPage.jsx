@@ -723,18 +723,18 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
               Ranked by Zamboanga City barangay proximity ({referenceLocation}), verified review scores, and clean service conduct. Advisory only—you always choose who to inquire or book.
             </p>
           </div>
-          <div className="inline-actions">
+          <div className="inline-actions showcase-header-actions">
             {services.length > 0 && (
               <button
                 type="button"
-                className="table-action"
+                className="button button-outline button-sm"
                 disabled={loadingSummary}
                 onClick={handleExplainTopPicks}
               >
                 <Sparkles size={14} /> {loadingSummary ? 'Summarizing...' : 'AI Explain Top Picks'}
               </button>
             )}
-            <Link className="button button-outline" to="/services">
+            <Link className="button button-outline button-sm" to="/services">
               View all services <ArrowRight size={15} />
             </Link>
           </div>
@@ -743,7 +743,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
         <div className="ai-filter-bar" role="region" aria-label="AI service filters">
           <div className="ai-filter-inputs">
             <label>
-              Your barangay / area
+              <span className="ai-filter-label-text">Your barangay / area</span>
               <input
                 maxLength="120"
                 placeholder="e.g., Tetuan, Sta. Maria, Pasonanca"
@@ -752,7 +752,9 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
               />
             </label>
             <label>
-              What do you need? <span className="label-note">(Category)</span>
+              <span className="ai-filter-label-text">
+                What do you need? <span className="label-note">(Category)</span>
+              </span>
               <select
                 value={selectedCategoryId}
                 onChange={(e) => setSelectedCategoryId(e.target.value)}
@@ -770,7 +772,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                 { key: 'smart_ai', label: 'AI Smart Match' },
                 { key: 'nearby', label: 'Nearest First' },
                 { key: 'top_rated', label: 'Highest Rated' },
-                { key: 'best_conduct', label: 'Best Service Conduct' },
+                { key: 'best_conduct', label: 'Best Conduct' },
               ].map((opt) => (
                 <button
                   key={opt.key}
@@ -788,21 +790,21 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                 <input type="checkbox" checked={nearbyOnly} onChange={(e) => setNearbyOnly(e.target.checked)} />
                 <span>Nearby only</span>
               </label>
+              <details className="ai-filter-more">
+                <summary className="ai-toggle-chip ai-filter-more-summary">More filters</summary>
+                <div className="ai-filter-more-body">
+                  <label className="ai-toggle-chip">
+                    <input type="checkbox" checked={minRating >= 4} onChange={(e) => setMinRating(e.target.checked ? 4 : 0)} />
+                    <span>4.0★+ rated</span>
+                  </label>
+                  <label className="ai-toggle-chip">
+                    <input type="checkbox" checked={goodConductOnly} onChange={(e) => setGoodConductOnly(e.target.checked)} />
+                    <span>Clean conduct only</span>
+                  </label>
+                </div>
+              </details>
             </div>
           </div>
-          <details className="ai-filter-more">
-            <summary className="ai-toggle-chip ai-filter-more-summary">More filters</summary>
-            <div className="ai-filter-more-body">
-              <label className="ai-toggle-chip">
-                <input type="checkbox" checked={minRating >= 4} onChange={(e) => setMinRating(e.target.checked ? 4 : 0)} />
-                <span>4.0★+ rated</span>
-              </label>
-              <label className="ai-toggle-chip">
-                <input type="checkbox" checked={goodConductOnly} onChange={(e) => setGoodConductOnly(e.target.checked)} />
-                <span>Clean conduct only</span>
-              </label>
-            </div>
-          </details>
         </div>
 
         {aiSummary && (
@@ -1051,7 +1053,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
               Automatically ranked by proximity to your Zamboanga City service area, matching service categories, low competition, and client conduct.
             </p>
           </div>
-          <Link className="button button-outline" to="/inquiries?tab=open">
+          <Link className="button button-outline button-sm" to="/inquiries?tab=open">
             Open full requests board <ArrowRight size={15} />
           </Link>
         </div>
@@ -1060,7 +1062,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
           <div className="ai-filter-bar" role="region" aria-label="AI open lead filters">
             <div className="ai-filter-inputs">
               <label>
-                Filter near barangay / service area
+                <span className="ai-filter-label-text">Filter near barangay / service area</span>
                 <input
                   maxLength="120"
                   placeholder="e.g., Tetuan, Guiwan, Zamboanga City"
@@ -1074,7 +1076,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
                 {[
                   { key: 'smart_ai', label: 'AI Best Lead' },
                   { key: 'nearby', label: 'Nearest First' },
-                  { key: 'category_match', label: 'Matches My Services' },
+                  { key: 'category_match', label: 'My Services' },
                   { key: 'low_competition', label: 'Low Competition' },
                 ].map((opt) => (
                   <button
