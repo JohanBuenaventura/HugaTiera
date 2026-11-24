@@ -6236,3 +6236,189 @@ tbody tr:hover {
     width: 100%;
   }
 }
+
+.dashboard-page > .dashboard-content {
+  width: min(1240px, calc(100% - 210px));
+  max-width: none;
+  padding-top: 48px;
+  padding-bottom: 96px;
+}
+.dashboard-page .dashboard-topbar {
+  margin-bottom: 24px;
+}
+.dashboard-page .dashboard-hero-row {
+  margin-bottom: 32px;
+}
+.dashboard-page .dashboard-hero-row > div:first-child {
+  max-width: 720px;
+}
+
+.dashboard-page .stat-grid,
+.dashboard-page .dashboard-grid,
+.dashboard-page .dashboard-activity,
+.dashboard-page .admin-analytics-grid {
+  gap: 24px;
+}
+.dashboard-page .stat-card {
+  padding: 24px;
+}
+.dashboard-page .dashboard-panel {
+  padding: 32px;
+}
+.dashboard-page .dashboard-panel h2 {
+  margin-bottom: 20px;
+}
+
+.dashboard-page .dashboard-panel,
+.dashboard-page .stat-card,
+.dashboard-page .showcase-card {
+  box-shadow: var(--shadow-sm);
+}
+.dashboard-page .stat-card:not(.stat-card-primary) {
+  box-shadow: none;
+}
+.dashboard-page .dashboard-grid > .dashboard-panel:first-child {
+  box-shadow: var(--shadow-md);
+}
+
+.dashboard-page .inquiry-status,
+.dashboard-page .category-pill,
+.dashboard-page .showcase-rating-pill,
+.dashboard-page .showcase-lead-badge,
+.dashboard-page .booking-filter-pill,
+.dashboard-page .ai-toggle-chip {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+.dashboard-page .activity-row {
+  min-height: 56px;
+}
+.dashboard-page .activity-heading {
+  margin-bottom: 8px;
+}
+.dashboard-page .analytics-meter-list {
+  gap: 18px;
+}
+.dashboard-page .analytics-meter-row {
+  gap: 8px;
+}
+.dashboard-page .analytics-bar-fill {
+  transition: none;
+}
+.dashboard-page .stat-card strong,
+.dashboard-page .analytics-meter-label strong,
+.dashboard-page table td {
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-page table th {
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.dashboard-page table td {
+  vertical-align: middle;
+}
+
+@media (max-width: 760px) {
+  .dashboard-page > .dashboard-content {
+    padding-top: 32px;
+    padding-bottom: 64px;
+  }
+  .dashboard-page .stat-grid,
+  .dashboard-page .dashboard-grid,
+  .dashboard-page .dashboard-activity,
+  .dashboard-page .admin-analytics-grid {
+    gap: 16px;
+  }
+  .dashboard-page .stat-card {
+    padding: 18px;
+  }
+  .dashboard-page .dashboard-panel {
+    padding: 22px;
+  }
+  .dashboard-page .dashboard-hero-row > div:first-child {
+    max-width: none;
+  }
+}
+
+.dashboard-activity > .dashboard-panel:nth-child(2) .activity-row {
+  min-height: 52px;
+  gap: 12px;
+}
+.dashboard-activity > .dashboard-panel:nth-child(2) .activity-row strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.dashboard-activity > .dashboard-panel:nth-child(2) .activity-row small {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.dashboard-activity > .dashboard-panel:nth-child(2) .activity-row .inquiry-status {
+  flex: 0 0 auto;
+  min-width: 108px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.payment-history-list {
+  gap: 14px;
+}
+.payment-history-intro .field-note {
+  max-width: 720px;
+  line-height: 1.6;
+}
+.payment-record-card {
+  gap: 8px;
+  padding: 16px 18px;
+}
+.payment-record-title {
+  gap: 8px;
+}
+.payment-record-title strong {
+  font-size: 16px;
+}
+.payment-record-card .inquiry-status,
+.payment-record-card .gateway-provider-badge {
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.payment-record-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+.payment-record-facts dt {
+  font-size: 10px;
+  letter-spacing: .03em;
+}
+.payment-record-facts dd {
+  font-size: 13px;
+}
+.payment-record-card .inline-actions {
+  gap: 8px;
+}
+.transaction-closing-panel {
+  gap: 10px;
+  padding: 16px 18px;
+}
+.closing-checklist {
+  gap: 6px;
+}
+.closing-checklist li {
+  padding: 8px 10px;
+}
+
+@media (max-width: 760px) {
+  .dashboard-activity > .dashboard-panel:nth-child(2) .activity-row .inquiry-status {
+    min-width: 0;
+  }
+  .payment-record-facts {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
