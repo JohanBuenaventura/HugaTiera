@@ -123,6 +123,11 @@ HugaTiera/
 ├── docs/
 │   ├── diagrams/
 │   │   ├── 01-data-model-erd-25-tables.png
+│   │   ├── 01a-erd-domain-identity-and-clerks.png
+│   │   ├── 01b-erd-domain-marketplace-and-pricing.png
+│   │   ├── 01c-erd-domain-requests-and-quotations.png
+│   │   ├── 01d-erd-domain-agreements-bookings-payments.png
+│   │   ├── 01e-erd-domain-communication-ai-governance.png
 │   │   ├── 02-data-model-erd-grouped-overview.png
 │   │   ├── 03-dfd-level-0-context.png
 │   │   ├── 04-dfd-level-1-system.png
