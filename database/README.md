@@ -27,20 +27,26 @@ This directory contains the authoritative relational schema, migration scripts, 
 
 ## 2. Entity Relationship Diagram (ERD)
 
-The Mermaid Entity Relationship Diagram below represents all **19 tables** in the current `hugatiera_db` schema, including primary keys (`PK`), foreign keys (`FK`), unique keys (`UK`), and relationship cardinalities (`||` mandatory one, `|o` optional one, `o{` zero or many).
+The Mermaid Entity Relationship Diagram below represents all **25 tables** and **59 foreign keys** in the current `hugatiera_db` schema (Migrations `001`–`013`), including primary keys (`PK`), foreign keys (`FK`), unique keys (`UK`), and relationship cardinalities (`||` mandatory one, `|o` optional one, `o{` zero or many).
 
 ```mermaid
 erDiagram
   users ||--o| client_profiles : "has client profile"
   users ||--o| gardener_profiles : "has gardener profile"
+  users ||--o{ gardener_unavailable_dates : "blocks unavailable dates"
+  users ||--o{ clerk_gardener_assignments : "assigned clerk"
+  users ||--o{ clerk_gardener_assignments : "managed gardener"
+  users |o--o{ clerk_gardener_assignments : "assigned by"
   users ||--o{ services : "gardener offers"
   service_categories ||--o{ services : "categorizes"
   users ||--o{ portfolios : "gardener uploads"
 
   users ||--o{ inquiries : "client submits"
-  users |o--o{ inquiries : "direct target gardener"
+  users |o--o{ inquiries : "direct target or selected gardener"
   services |o--o{ inquiries : "optional service"
   service_categories |o--o{ inquiries : "optional category"
+  inquiries ||--o{ inquiry_estimate_items : "itemized estimate lines"
+  pricing_addons |o--o{ inquiry_estimate_items : "catalog addon"
 
   inquiries |o--o{ request_images : "has attached photos"
   users ||--o{ request_images : "uploaded by"
@@ -57,14 +63,23 @@ erDiagram
   users ||--o{ agreements : "proposed by"
   agreements |o--o| agreements : "supersedes previous version"
 
-  agreements |o--o| bookings : "confirms arrangement"
+  agreements |o--o| bookings : "creates reservation"
   inquiries |o--o{ bookings : "originating request"
   quotations |o--o{ bookings : "originating offer"
   users ||--o{ bookings : "client books"
   users ||--o{ bookings : "gardener fulfills"
+  users |o--o{ bookings : "cancelled by"
   services |o--o{ bookings : "booked service"
 
-  bookings ||--o| reviews : "reviewed once after completion"
+  bookings ||--o{ booking_payments : "records payments"
+  users ||--o{ booking_payments : "submitted by"
+  users |o--o{ booking_payments : "verified by"
+
+  bookings ||--o{ booking_reschedule_requests : "requests date move"
+  users ||--o{ booking_reschedule_requests : "requested by"
+  users |o--o{ booking_reschedule_requests : "responded by"
+
+  bookings ||--o| reviews : "reviewed once when closed"
   users ||--o{ reviews : "client writes"
   users ||--o{ reviews : "gardener receives"
 
@@ -92,10 +107,15 @@ erDiagram
     int_unsigned id PK
     varchar email UK
     varchar password_hash
-    enum role "client | gardener | administrator"
+    enum role "client | gardener | clerk | administrator"
+    boolean can_act_as_client
+    boolean can_act_as_gardener
     varchar first_name
+    varchar middle_name
     varchar last_name
     varchar phone
+    date date_of_birth
+    varchar avatar_path
     boolean is_active
     timestamp created_at
     timestamp updated_at
@@ -114,15 +134,55 @@ erDiagram
     text description
     varchar service_area
     tinyint_unsigned years_of_experience
+    varchar working_days
+    time work_start_time
+    time work_end_time
+    tinyint_unsigned max_concurrent_jobs
+    tinyint_unsigned crew_size
+    varchar availability_notes
     boolean is_approved
+  }
+
+  gardener_unavailable_dates {
+    int_unsigned id PK
+    int_unsigned gardener_id FK
+    date start_date
+    date end_date
+    varchar reason
+    timestamp created_at
+  }
+
+  clerk_gardener_assignments {
+    int_unsigned id PK
+    int_unsigned clerk_id FK
+    int_unsigned gardener_id FK
+    int_unsigned assigned_by FK
+    varchar notes
+    timestamp created_at
   }
 
   service_categories {
     int_unsigned id PK
     varchar name UK
     text description
+    decimal rate_per_sqm_min
+    decimal rate_per_sqm_max
+    decimal min_base_fee
     boolean is_active
     timestamp created_at
+  }
+
+  pricing_addons {
+    int_unsigned id PK
+    varchar name UK
+    enum item_type "plant | material | equipment | disposal"
+    varchar unit
+    decimal unit_price_min
+    decimal unit_price_max
+    varchar description
+    boolean is_active
+    timestamp created_at
+    timestamp updated_at
   }
 
   services {
@@ -134,6 +194,8 @@ erDiagram
     decimal indicative_price
     varchar price_unit
     varchar service_area
+    tinyint_unsigned workers_required
+    varchar image_path
     boolean is_active
     timestamp created_at
     timestamp updated_at
@@ -152,18 +214,45 @@ erDiagram
     int_unsigned id PK
     enum request_type "direct | general"
     int_unsigned client_id FK
-    int_unsigned gardener_id FK "NULL for general requests"
+    int_unsigned gardener_id FK "NULL for unassigned general requests"
     int_unsigned service_id FK
     varchar subject
     text description
     date requested_date
     varchar location
+    decimal area_sqm
+    enum work_complexity "light | moderate | heavy"
+    enum materials_option "client_provides | gardener_provides"
+    boolean site_visit_requested
+    decimal estimated_labor_min
+    decimal estimated_labor_max
+    decimal estimated_materials_min
+    decimal estimated_materials_max
+    decimal estimated_min_amount
+    decimal estimated_max_amount
+    text price_comment
+    json category_specs
     enum status "open | responded | closed | cancelled | provider_selected | in_agreement | confirmed | expired"
     timestamp created_at
     timestamp updated_at
     int_unsigned category_id FK
     text ai_summary
     datetime expires_at
+  }
+
+  inquiry_estimate_items {
+    int_unsigned id PK
+    int_unsigned inquiry_id FK
+    int_unsigned addon_id FK
+    varchar item_name
+    enum item_type "plant | material | equipment | disposal"
+    varchar unit
+    decimal quantity
+    decimal unit_price_min
+    decimal unit_price_max
+    decimal subtotal_min
+    decimal subtotal_max
+    timestamp created_at
   }
 
   request_images {
@@ -184,15 +273,21 @@ erDiagram
     int_unsigned inquiry_id FK
     int_unsigned gardener_id FK
     decimal amount
+    decimal labor_amount
+    decimal materials_amount
+    text materials_breakdown
     text details
     date availability_start
     date availability_end
+    decimal estimated_working_days
+    decimal estimated_hours
     enum status "draft | sent | accepted | declined | expired | withdrawn"
     date valid_until
     timestamp created_at
     timestamp updated_at
     enum response_type "interest | offer | feasible | modifications | cannot_do"
     text proposed_changes
+    boolean requires_site_visit
     int_unsigned revision_number
     timestamp locked_at
     tinyint_unsigned active_flag "GENERATED STORED"
@@ -204,10 +299,16 @@ erDiagram
     int_unsigned revision_number
     varchar response_type
     decimal amount
+    decimal labor_amount
+    decimal materials_amount
+    text materials_breakdown
     text details
     text proposed_changes
+    boolean requires_site_visit
     date availability_start
     date availability_end
+    decimal estimated_working_days
+    decimal estimated_hours
     date valid_until
     timestamp created_at
   }
@@ -222,9 +323,11 @@ erDiagram
     int_unsigned version
     text scope_of_work
     decimal amount
+    decimal required_deposit_amount
     varchar price_basis
     datetime scheduled_start
     datetime scheduled_end
+    decimal estimated_working_days
     varchar location
     text conditions
     int_unsigned proposed_by FK
@@ -248,9 +351,65 @@ erDiagram
     varchar location
     text notes
     enum status "pending | accepted | declined | in_progress | completed | cancelled"
+    enum booking_stage "reserved | booked"
+    enum payment_status "unpaid | pending_verification | partially_paid | fully_paid"
+    decimal required_deposit_amount
+    decimal amount_paid
+    timestamp paid_at
+    enum transaction_status "open | pending_closure | closed"
+    timestamp client_completion_confirmed_at
+    timestamp gardener_completion_confirmed_at
+    timestamp transaction_closed_at
+    text completion_agreement_notes
+    enum cancellation_reason_type "typhoon_weather | accident_emergency | schedule_conflict | scope_or_plan_change | property_access_issue | other"
+    varchar cancellation_reason
+    int_unsigned cancelled_by FK
+    timestamp cancelled_at
     timestamp requested_at
     timestamp updated_at
     int_unsigned agreement_id FK, UK "NULL only on legacy rows"
+  }
+
+  booking_payments {
+    int_unsigned id PK
+    varchar transaction_code UK
+    int_unsigned booking_id FK
+    int_unsigned submitted_by FK
+    enum payment_type "partial | full | balance"
+    enum payment_method "gcash | maya | grab_pay | card | bank_transfer | cash | other"
+    enum gateway_provider "manual | paymongo | sandbox_demo"
+    varchar gateway_session_id
+    varchar gateway_checkout_url
+    enum gateway_status "none | awaiting_payment | paid | failed | cancelled"
+    timestamp gateway_paid_at
+    decimal amount
+    varchar reference_number
+    varchar receipt_path
+    varchar notes
+    enum status "pending | verified | rejected"
+    int_unsigned verified_by FK
+    timestamp verified_at
+    varchar rejection_reason
+    timestamp created_at
+    timestamp updated_at
+  }
+
+  booking_reschedule_requests {
+    int_unsigned id PK
+    int_unsigned booking_id FK
+    int_unsigned requested_by FK
+    enum reason_type "typhoon_weather | accident_emergency | schedule_conflict | scope_or_plan_change | property_access_issue | other"
+    varchar reason_details
+    datetime previous_start
+    datetime previous_end
+    datetime proposed_start
+    datetime proposed_end
+    enum status "pending | approved | declined | cancelled"
+    int_unsigned responded_by FK
+    timestamp responded_at
+    varchar response_note
+    timestamp created_at
+    timestamp updated_at
   }
 
   reviews {
@@ -336,15 +495,16 @@ erDiagram
 
 ---
 
-## 3. Complete Table-by-Table Schema Reference (19 Tables)
+## 3. Complete Table-by-Table Schema Reference (25 Tables)
 
 ### 3.1 `users`
-- **Purpose:** Stores core authentication credentials, role assignment, contact info, and activation state for all platform users.
+- **Purpose:** Stores core authentication credentials, role assignment, dual-role capability flags, basic profile verification fields, avatar path, and activation state for all platform users.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Unique Constraints:** `email` (`UNIQUE`)
 - **Indexes:** `idx_users_role_active (role, is_active)`
 - **Business Rules:**
-  - Public registration (`/api/auth/register`) only permits `'client'` and `'gardener'`; `'administrator'` self-registration is rejected (`403`).
+  - Public registration (`POST /api/auth/register`) permits `'client'` and `'gardener'` (which automatically enables Client mode via `can_act_as_client = TRUE`); `'administrator'` and `'clerk'` self-registration are rejected (`400`/`403`). Clerk accounts are provider-managed inside **My Clerks** or assigned by an Administrator.
+  - `date_of_birth` enforces 18+ age verification on registration and profile updates.
   - `requireAuth` middleware checks `is_active = TRUE` on every authenticated API request so deactivated accounts immediately lose access (`403`).
 
 | Column | Data Type | Nullability | Default | Notes |
@@ -352,10 +512,15 @@ erDiagram
 | `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
 | `email` | `VARCHAR(255)` | `NOT NULL` | — | Unique login identifier |
 | `password_hash` | `VARCHAR(255)` | `NOT NULL` | — | `bcryptjs` hash (`10` salt rounds) |
-| `role` | `ENUM('client', 'gardener', 'administrator')` | `NOT NULL` | — | Role-based access control |
+| `role` | `ENUM('client', 'gardener', 'clerk', 'administrator')` | `NOT NULL` | — | Active role (extended in Migration 012) |
+| `can_act_as_client` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `FALSE` (`0`) | Dual-role client capability (Migration 012) |
+| `can_act_as_gardener` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `FALSE` (`0`) | Dual-role gardener capability (Migration 012) |
 | `first_name` | `VARCHAR(100)` | `NOT NULL` | — | User's given name |
+| `middle_name` | `VARCHAR(100)` | `NULL` | `NULL` | Optional middle name (Migration 003) |
 | `last_name` | `VARCHAR(100)` | `NOT NULL` | — | User's family name |
-| `phone` | `VARCHAR(30)` | `NULL` | `NULL` | Optional contact phone |
+| `phone` | `VARCHAR(30)` | `NULL` | `NULL` | Contact mobile number |
+| `date_of_birth` | `DATE` | `NULL` | `NULL` | 18+ age verification (Migration 003) |
+| `avatar_path` | `VARCHAR(255)` | `NULL` | `NULL` | `sharp`-sanitized avatar filename (Migration 002) |
 | `is_active` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `TRUE` (`1`) | Account active flag |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
@@ -395,12 +560,57 @@ erDiagram
 | `description` | `TEXT` | `NULL` | `NULL` | Gardener bio and specialties |
 | `service_area` | `VARCHAR(150)` | `NOT NULL` | `'Zamboanga City'` | Primary coverage area |
 | `years_of_experience` | `TINYINT UNSIGNED` | `NULL` | `NULL` | `0`–`80` years validated by API |
+| `working_days` | `VARCHAR(64)` | `NOT NULL` | `'mon,tue,wed,thu,fri,sat,sun'` | Comma-separated working weekdays (Migration 005) |
+| `work_start_time` | `TIME` | `NOT NULL` | `'08:00:00'` | Daily start of operating hours (Migration 005) |
+| `work_end_time` | `TIME` | `NOT NULL` | `'17:00:00'` | Daily end of operating hours (Migration 005) |
+| `max_concurrent_jobs` | `TINYINT UNSIGNED` | `NOT NULL` | `1` | Simultaneous job capacity (Migration 005) |
+| `crew_size` | `TINYINT UNSIGNED` | `NOT NULL` | `1` | Daily worker headcount (Migration 011) |
+| `availability_notes` | `VARCHAR(255)` | `NULL` | `NULL` | Optional scheduling notes (Migration 005) |
 | `is_approved` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `FALSE` (`0`) | Set by administrator moderation |
 
 ---
 
-### 3.4 `service_categories`
-- **Purpose:** Lookup table of gardening and landscaping service categories managed by administrators.
+### 3.4 `gardener_unavailable_dates` *(Added in Migration 005)*
+- **Purpose:** Stores blocked/unavailable date ranges for gardeners (vacations, maintenance, or personal days).
+- **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
+- **Foreign Keys:** `gardener_id` → `users(id)` `ON DELETE CASCADE`
+- **CHECK Constraints:** `chk_unavailable_dates_range` (`end_date >= start_date`)
+- **Indexes:** `idx_gardener_unavailable_range (gardener_id, start_date, end_date)`
+
+| Column | Data Type | Nullability | Default | Notes |
+|---|---|---|---|---|
+| `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
+| `gardener_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to gardener (`users.id`) |
+| `start_date` | `DATE` | `NOT NULL` | — | First blocked date |
+| `end_date` | `DATE` | `NOT NULL` | — | Last blocked date (`>= start_date`) |
+| `reason` | `VARCHAR(255)` | `NULL` | `NULL` | Optional reason |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
+
+---
+
+### 3.5 `clerk_gardener_assignments` *(Added in Migration 012)*
+- **Purpose:** Maps Assigned Clerks (`role = 'clerk'`) to the specific gardener(s) they are authorized to assist via `/api/clerk/*`.
+- **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
+- **Foreign Keys:**
+  - `clerk_id` (`fk_cga_clerk`) → `users(id)` `ON DELETE CASCADE`
+  - `gardener_id` (`fk_cga_gardener`) → `users(id)` `ON DELETE CASCADE`
+  - `assigned_by` (`fk_cga_assigned_by`) → `users(id)` `ON DELETE SET NULL`
+- **Unique Constraints:** `uq_clerk_gardener (clerk_id, gardener_id)`
+- **Indexes:** `idx_cga_gardener (gardener_id)`
+
+| Column | Data Type | Nullability | Default | Notes |
+|---|---|---|---|---|
+| `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
+| `clerk_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to clerk (`users.id`) |
+| `gardener_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to gardener (`users.id`) |
+| `assigned_by` | `INT UNSIGNED` | `NULL` | `NULL` | FK to assigning gardener or admin |
+| `notes` | `VARCHAR(255)` | `NULL` | `NULL` | Optional role/delegation notes |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
+
+---
+
+### 3.6 `service_categories`
+- **Purpose:** Lookup table of gardening and landscaping service categories and baseline per-sq.m labor rates managed by administrators.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Unique Constraints:** `name` (`UNIQUE`)
 - **Business Rules:** Public service listings and request category selectors only expose categories where `is_active = TRUE`.
@@ -410,12 +620,37 @@ erDiagram
 | `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
 | `name` | `VARCHAR(100)` | `NOT NULL` | — | Unique category title |
 | `description` | `TEXT` | `NULL` | `NULL` | Optional category description |
+| `rate_per_sqm_min` | `DECIMAL(10, 2)` | `NOT NULL` | `60.00` | Minimum per-sq.m labor rate (Migration 004) |
+| `rate_per_sqm_max` | `DECIMAL(10, 2)` | `NOT NULL` | `120.00` | Maximum per-sq.m labor rate (Migration 004) |
+| `min_base_fee` | `DECIMAL(10, 2)` | `NOT NULL` | `450.00` | Minimum base fee floor (Migration 004) |
 | `is_active` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `TRUE` (`1`) | Active visibility toggle |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
 
 ---
 
-### 3.5 `services`
+### 3.7 `pricing_addons` *(Added in Migration 006)*
+- **Purpose:** Administrator-managed catalog of optional plant, material, equipment, and disposal add-on rates used by the itemized Price Estimator.
+- **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
+- **Unique Constraints:** `name` (`UNIQUE`)
+- **CHECK Constraints:** `chk_pricing_addons_range` (`unit_price_max >= unit_price_min`)
+- **Indexes:** `idx_pricing_addons_active_type (is_active, item_type)`
+
+| Column | Data Type | Nullability | Default | Notes |
+|---|---|---|---|---|
+| `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
+| `name` | `VARCHAR(120)` | `NOT NULL` | — | Unique add-on name |
+| `item_type` | `ENUM('plant', 'material', 'equipment', 'disposal')` | `NOT NULL` | `'material'` | Add-on classification |
+| `unit` | `VARCHAR(40)` | `NOT NULL` | `'per item'` | Pricing unit label |
+| `unit_price_min` | `DECIMAL(10, 2)` | `NOT NULL` | — | Low unit price |
+| `unit_price_max` | `DECIMAL(10, 2)` | `NOT NULL` | — | High unit price (`>= unit_price_min`) |
+| `description` | `VARCHAR(255)` | `NULL` | `NULL` | Optional item description |
+| `is_active` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `TRUE` (`1`) | Active toggle |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
+| `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
+
+---
+
+### 3.8 `services`
 - **Purpose:** Gardener-created gardening and landscaping service listings displayed in the public marketplace.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -438,13 +673,15 @@ erDiagram
 | `indicative_price` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Optional starting/reference price |
 | `price_unit` | `VARCHAR(50)` | `NULL` | `NULL` | e.g., `per visit`, `per sq.m.` |
 | `service_area` | `VARCHAR(150)` | `NOT NULL` | `'Zamboanga City'` | Area served |
+| `workers_required` | `TINYINT UNSIGNED` | `NOT NULL` | `1` | Crew members required per booking (Migration 011) |
+| `image_path` | `VARCHAR(255)` | `NULL` | `NULL` | Optional `sharp`-sanitized cover image (Migration 002) |
 | `is_active` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `TRUE` (`1`) | Soft-delete / moderation flag |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
 
 ---
 
-### 3.6 `portfolios`
+### 3.9 `portfolios`
 - **Purpose:** Gardener portfolio project showcase entries with uploaded project photos.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -463,8 +700,8 @@ erDiagram
 
 ---
 
-### 3.7 `inquiries`
-- **Purpose:** Unified request engine table storing both **Case 1 General Service Requests** (`request_type = 'general'`) and **Case 2 Direct Service Provider Inquiries** (`request_type = 'direct'`).
+### 3.10 `inquiries`
+- **Purpose:** Unified request engine table storing both **Case 1 General Service Requests** (`request_type = 'general'`) and **Case 2 Direct Service Provider Inquiries** (`request_type = 'direct'`), along with dynamic category specifications (`category_specs`) and per-sq.m price estimator data.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
   - `client_id` → `users(id)` `ON DELETE RESTRICT`
@@ -494,6 +731,18 @@ erDiagram
 | `description` | `TEXT` | `NOT NULL` | — | Detailed client requirements |
 | `requested_date` | `DATE` | `NULL` | `NULL` | Preferred target date |
 | `location` | `VARCHAR(255)` | `NULL` | `NULL` | Area/barangay location |
+| `area_sqm` | `DECIMAL(8, 2)` | `NULL` | `NULL` | Estimated garden area in sq.m (Migration 004) |
+| `work_complexity` | `ENUM('light', 'moderate', 'heavy')` | `NULL` | `NULL` | Work intensity level (Migration 004) |
+| `materials_option` | `ENUM('client_provides', 'gardener_provides')` | `NULL` | `NULL` | Who supplies materials (Migration 004) |
+| `site_visit_requested` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `FALSE` (`0`) | Client requests ocular inspection (Migration 004) |
+| `estimated_labor_min` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Estimated labor low bound (Migration 006) |
+| `estimated_labor_max` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Estimated labor high bound (Migration 006) |
+| `estimated_materials_min` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Estimated materials/add-ons low bound (Migration 006) |
+| `estimated_materials_max` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Estimated materials/add-ons high bound (Migration 006) |
+| `estimated_min_amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Total indicative estimate low bound (Migration 004) |
+| `estimated_max_amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Total indicative estimate high bound (Migration 004) |
+| `price_comment` | `TEXT` | `NULL` | `NULL` | Client budget/price notes (Migration 004) |
+| `category_specs` | `JSON` | `NULL` | `NULL` | Dynamic category-specific request fields (Migration 010) |
 | `status` | `ENUM('open', 'responded', 'closed', 'cancelled', 'provider_selected', 'in_agreement', 'confirmed', 'expired')` | `NOT NULL` | `'open'` | Extended in Migration 001 |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
@@ -503,7 +752,32 @@ erDiagram
 
 ---
 
-### 3.8 `request_images`
+### 3.11 `inquiry_estimate_items` *(Added in Migration 006)*
+- **Purpose:** Stores immutable snapshots of itemized plant/material/equipment/disposal add-ons selected during a client's inquiry price estimate.
+- **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
+- **Foreign Keys:**
+  - `inquiry_id` → `inquiries(id)` `ON DELETE CASCADE`
+  - `addon_id` → `pricing_addons(id)` `ON DELETE SET NULL`
+- **Indexes:** `idx_inquiry_estimate_items_inquiry (inquiry_id)`
+
+| Column | Data Type | Nullability | Default | Notes |
+|---|---|---|---|---|
+| `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
+| `inquiry_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to `inquiries.id` |
+| `addon_id` | `INT UNSIGNED` | `NULL` | `NULL` | Optional FK to `pricing_addons.id` |
+| `item_name` | `VARCHAR(120)` | `NOT NULL` | — | Snapshot item title |
+| `item_type` | `ENUM('plant', 'material', 'equipment', 'disposal')` | `NOT NULL` | `'material'` | Snapshot item type |
+| `unit` | `VARCHAR(40)` | `NOT NULL` | — | Snapshot pricing unit |
+| `quantity` | `DECIMAL(8, 2)` | `NOT NULL` | — | Requested quantity |
+| `unit_price_min` | `DECIMAL(10, 2)` | `NOT NULL` | — | Snapshot min unit price |
+| `unit_price_max` | `DECIMAL(10, 2)` | `NOT NULL` | — | Snapshot max unit price |
+| `subtotal_min` | `DECIMAL(10, 2)` | `NOT NULL` | — | `quantity × unit_price_min` |
+| `subtotal_max` | `DECIMAL(10, 2)` | `NOT NULL` | — | `quantity × unit_price_max` |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
+
+---
+
+### 3.12 `request_images`
 - **Purpose:** Stores metadata and file paths for client-uploaded garden photos (`kind = 'original'`) and future AI-generated concept images (`kind = 'ai_generated'`), plus client-reviewed AI photo descriptions.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -534,8 +808,8 @@ erDiagram
 
 ---
 
-### 3.9 `quotations`
-- **Purpose:** Stores gardener offers (Case 1) and feasibility/quotation responses (Case 2), including revision tracking, offer locking, and active-offer uniqueness.
+### 3.13 `quotations`
+- **Purpose:** Stores gardener offers (Case 1) and feasibility/quotation responses (Case 2), including itemized labor/materials splits, duration estimates, revision tracking, offer locking, and active-offer uniqueness.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
   - `inquiry_id` → `inquiries(id)` `ON DELETE CASCADE`
@@ -556,23 +830,29 @@ erDiagram
 | `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
 | `inquiry_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to `inquiries.id` |
 | `gardener_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to responding gardener (`users.id`) |
-| `amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Indicative price (`NULL` allowed for `interest`/`cannot_do`) |
+| `amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Total indicative price (`NULL` allowed for `interest`/`cannot_do`) |
+| `labor_amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Labor portion of quote (Migration 006) |
+| `materials_amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Materials/plants portion of quote (Migration 006) |
+| `materials_breakdown` | `TEXT` | `NULL` | `NULL` | Itemized materials notes (Migration 006) |
 | `details` | `TEXT` | `NOT NULL` | — | Scope/feasibility explanation |
 | `availability_start` | `DATE` | `NULL` | `NULL` | Earliest available date |
 | `availability_end` | `DATE` | `NULL` | `NULL` | Latest available date |
+| `estimated_working_days` | `DECIMAL(4, 1)` | `NULL` | `NULL` | Estimated duration in days (Migration 005) |
+| `estimated_hours` | `DECIMAL(5, 1)` | `NULL` | `NULL` | Estimated duration in hours (Migration 005) |
 | `status` | `ENUM('draft', 'sent', 'accepted', 'declined', 'expired', 'withdrawn')` | `NOT NULL` | `'draft'` | Extended in Migration 001 |
 | `valid_until` | `DATE` | `NULL` | `NULL` | Offer validity date |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
 | `response_type` | `ENUM('interest', 'offer', 'feasible', 'modifications', 'cannot_do')` | `NOT NULL` | `'offer'` | Added in Migration 001 |
 | `proposed_changes` | `TEXT` | `NULL` | `NULL` | Required when `response_type = 'modifications'` |
+| `requires_site_visit` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `FALSE` (`0`) | Provider flags ocular visit needed (Migration 004) |
 | `revision_number` | `INT UNSIGNED` | `NOT NULL` | `1` | Increments on each revision |
 | `locked_at` | `TIMESTAMP` | `NULL` | `NULL` | Set when accepted by client |
 | `active_flag` | `TINYINT UNSIGNED` | `NULL` | `GENERATED ALWAYS AS (IF(status IN ('draft','sent','accepted'), 1, NULL)) STORED` | Enforces 1 active offer per provider per inquiry |
 
 ---
 
-### 3.10 `quotation_revisions`
+### 3.14 `quotation_revisions`
 - **Purpose:** Immutable audit snapshot table storing each superseded revision of a quotation whenever a gardener revises an unaccepted offer.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -585,18 +865,24 @@ erDiagram
 | `quotation_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to `quotations.id` |
 | `revision_number` | `INT UNSIGNED` | `NOT NULL` | — | Snapshot revision number (`1, 2, ...`) |
 | `response_type` | `VARCHAR(20)` | `NOT NULL` | — | Prior `response_type` |
-| `amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Prior amount |
+| `amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Prior total amount |
+| `labor_amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Prior labor amount (Migration 006) |
+| `materials_amount` | `DECIMAL(10, 2)` | `NULL` | `NULL` | Prior materials amount (Migration 006) |
+| `materials_breakdown` | `TEXT` | `NULL` | `NULL` | Prior materials breakdown (Migration 006) |
 | `details` | `TEXT` | `NOT NULL` | — | Prior details |
 | `proposed_changes` | `TEXT` | `NULL` | `NULL` | Prior proposed changes |
+| `requires_site_visit` | `BOOLEAN` (`TINYINT(1)`) | `NOT NULL` | `FALSE` (`0`) | Prior ocular visit flag (Migration 004) |
 | `availability_start` | `DATE` | `NULL` | `NULL` | Prior availability start |
 | `availability_end` | `DATE` | `NULL` | `NULL` | Prior availability end |
+| `estimated_working_days` | `DECIMAL(4, 1)` | `NULL` | `NULL` | Prior estimated days (Migration 005) |
+| `estimated_hours` | `DECIMAL(5, 1)` | `NULL` | `NULL` | Prior estimated hours (Migration 005) |
 | `valid_until` | `DATE` | `NULL` | `NULL` | Prior validity date |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Snapshot timestamp |
 
 ---
 
-### 3.11 `agreements`
-- **Purpose:** Stores versioned mutual agreements between client and gardener covering scope of work, final agreed amount, price basis, schedule, exact location, and conditions. **A confirmed booking can only be created when both parties approve the exact same agreement version.**
+### 3.15 `agreements`
+- **Purpose:** Stores versioned mutual agreements between client and gardener covering scope of work, final agreed amount, required deposit, price basis, schedule, exact location, and conditions. **A reservation/booking can only be created when both parties approve the exact same agreement version.**
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
   - `inquiry_id` → `inquiries(id)` `ON DELETE RESTRICT`
@@ -615,8 +901,8 @@ erDiagram
   - `idx_agreements_inquiry (inquiry_id, version)`
 - **Business Rules:**
   - `active_key` is a stored generated column (`IF(status IN ('proposed', 'agreed'), inquiry_id, NULL)`), guaranteeing at the database level that an inquiry can have at most **one** active (`proposed` or `agreed`) agreement at a time.
-  - Editing a proposed agreement marks version $N$ as `'superseded'`, inserts version $N+1$ linked via `previous_agreement_id`, clears the counterparty's approval (`NULL`), and records only the editor's approval timestamp.
-  - When the second party approves the current version (`POST /api/agreements/:agreementId/approve`), the backend verifies schedule conflicts, transitions `status` to `'agreed'`, inserts the confirmed `bookings` record (`status = 'accepted'`), updates `inquiries.status = 'confirmed'`, and declines any competing open offers in a single atomic transaction.
+  - Editing a proposed agreement marks version $N$ as `'superseded'`, inserts version $N+1$ linked via `previous_agreement_id`, and resets both `client_approved_at` and `gardener_approved_at` to `NULL` so both parties explicitly approve version $N+1$.
+  - When the second party approves the current version (`POST /api/agreements/:agreementId/approve`), the backend validates working days, blocked dates, and daily crew capacity, transitions `status` to `'agreed'`, inserts the reservation `bookings` record (`status = 'accepted'`, `booking_stage = 'reserved'`), updates `inquiries.status = 'confirmed'`, and declines competing open offers in a single atomic transaction.
 
 | Column | Data Type | Nullability | Default / Expression | Notes |
 |---|---|---|---|---|
@@ -629,9 +915,11 @@ erDiagram
 | `version` | `INT UNSIGNED` | `NOT NULL` | `1` | Version number (`1, 2, ...`) |
 | `scope_of_work` | `TEXT` | `NOT NULL` | — | Mutually agreed scope of work |
 | `amount` | `DECIMAL(10, 2)` | `NOT NULL` | — | Final agreed price (`> 0`) |
+| `required_deposit_amount` | `DECIMAL(10, 2)` | `NOT NULL` | `0.00` | Deposit needed to upgrade reservation to booked (Migration 007) |
 | `price_basis` | `VARCHAR(100)` | `NULL` | `NULL` | e.g., `Fixed project fee`, `Per visit` |
 | `scheduled_start` | `DATETIME` | `NOT NULL` | — | Agreed start date/time |
 | `scheduled_end` | `DATETIME` | `NOT NULL` | — | Agreed end date/time (`> scheduled_start`) |
+| `estimated_working_days` | `DECIMAL(4, 1)` | `NULL` | `NULL` | Agreed working day estimate (Migration 005) |
 | `location` | `VARCHAR(255)` | `NOT NULL` | — | Full service address |
 | `conditions` | `TEXT` | `NULL` | `NULL` | Special conditions, materials, access notes |
 | `proposed_by` | `INT UNSIGNED` | `NOT NULL` | — | FK to proposer (`client_id` or `gardener_id`) |
@@ -644,8 +932,8 @@ erDiagram
 
 ---
 
-### 3.12 `bookings`
-- **Purpose:** Stores confirmed service arrangements and tracks service execution progress (`accepted` → `in_progress` → `completed` or `cancelled`).
+### 3.16 `bookings`
+- **Purpose:** Stores service reservations and confirmed paid bookings, tracking deposit gating (`reserved` → `booked`), execution lifecycle (`accepted` → `in_progress` → `completed` or event-based `cancelled`), and mutual transaction closure (`open` → `pending_closure` → `closed`).
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
   - `inquiry_id` → `inquiries(id)` `ON DELETE SET NULL`
@@ -653,6 +941,7 @@ erDiagram
   - `client_id` → `users(id)` `ON DELETE RESTRICT`
   - `gardener_id` → `users(id)` `ON DELETE RESTRICT`
   - `service_id` → `services(id)` `ON DELETE SET NULL`
+  - `cancelled_by` (`fk_bookings_cancelled_by`) → `users(id)` `ON DELETE SET NULL`
   - `agreement_id` (`fk_bookings_agreement`) → `agreements(id)` `ON DELETE RESTRICT`
 - **Unique Constraints:**
   - `uq_booking_agreement (agreement_id)`
@@ -661,8 +950,8 @@ erDiagram
   - `idx_bookings_gardener_status (gardener_id, status, requested_at)`
   - `idx_bookings_schedule (gardener_id, scheduled_start, scheduled_end)`
 - **Business Rules:**
-  - Direct creation via `POST /api/bookings` is retired (`409 MUTUAL_AGREEMENT_REQUIRED`). Every new booking is created automatically by the second approval on `POST /api/agreements/:agreementId/approve` with `status = 'accepted'` and `agreement_id` populated.
-  - Legacy pre-R3 bookings retain `agreement_id = NULL` and remain readable and manageable (`GET /api/bookings/:bookingId` returns `agreement_id: null` and the frontend displays a legacy-booking note).
+  - Direct creation via `POST /api/bookings` is retired (`409 MUTUAL_AGREEMENT_REQUIRED`). Every new booking is created automatically by the second approval on `POST /api/agreements/:agreementId/approve` with `status = 'accepted'`, `booking_stage = 'reserved'`, and `agreement_id` populated.
+  - Legacy pre-R3 bookings retain `agreement_id = NULL` and remain readable and manageable.
 
 | Column | Data Type | Nullability | Default | Notes |
 |---|---|---|---|---|
@@ -677,14 +966,96 @@ erDiagram
 | `location` | `VARCHAR(255)` | `NULL` | `NULL` | Service location |
 | `notes` | `TEXT` | `NULL` | `NULL` | Scope/notes copied from agreement |
 | `status` | `ENUM('pending', 'accepted', 'declined', 'in_progress', 'completed', 'cancelled')` | `NOT NULL` | `'pending'` | New bookings start at `'accepted'` |
+| `booking_stage` | `ENUM('reserved', 'booked')` | `NOT NULL` | `'reserved'` | Upgrades to `'booked'` when deposit verified (Migration 007) |
+| `payment_status` | `ENUM('unpaid', 'pending_verification', 'partially_paid', 'fully_paid')` | `NOT NULL` | `'unpaid'` | Aggregate payment state (Migration 007) |
+| `required_deposit_amount` | `DECIMAL(10, 2)` | `NOT NULL` | `0.00` | Required reservation deposit (Migration 007) |
+| `amount_paid` | `DECIMAL(10, 2)` | `NOT NULL` | `0.00` | Total verified payments (Migration 007) |
+| `paid_at` | `TIMESTAMP` | `NULL` | `NULL` | Timestamp of latest verified payment (Migration 007) |
+| `transaction_status` | `ENUM('open', 'pending_closure', 'closed')` | `NOT NULL` | `'open'` | Mutual completion closure state (Migration 008) |
+| `client_completion_confirmed_at` | `TIMESTAMP` | `NULL` | `NULL` | Client completion sign-off (Migration 008) |
+| `gardener_completion_confirmed_at` | `TIMESTAMP` | `NULL` | `NULL` | Gardener completion sign-off (Migration 008) |
+| `transaction_closed_at` | `TIMESTAMP` | `NULL` | `NULL` | Mutual closure timestamp (Migration 008) |
+| `completion_agreement_notes` | `TEXT` | `NULL` | `NULL` | Final closure notes (Migration 008) |
+| `cancellation_reason_type` | `ENUM('typhoon_weather', 'accident_emergency', 'schedule_conflict', 'scope_or_plan_change', 'property_access_issue', 'other')` | `NULL` | `NULL` | Structured event cancel category (Migration 009) |
+| `cancellation_reason` | `VARCHAR(1000)` | `NULL` | `NULL` | Cancellation explanation (Migration 009) |
+| `cancelled_by` | `INT UNSIGNED` | `NULL` | `NULL` | FK to cancelling user (Migration 009) |
+| `cancelled_at` | `TIMESTAMP` | `NULL` | `NULL` | Cancellation timestamp (Migration 009) |
 | `requested_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
 | `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
 | `agreement_id` | `INT UNSIGNED` | `NULL` | `NULL` | Unique FK to `agreements.id` (`NULL` only on legacy rows) |
 
 ---
 
-### 3.13 `reviews`
-- **Purpose:** Stores client ratings (`1`–`5`) and written reviews for completed bookings.
+### 3.17 `booking_payments` *(Added in Migration 007; extended in Migrations 008 & 013)*
+- **Purpose:** Tracks deposit, full, and balance payment submissions—both online gateway sessions (PayMongo Checkout / Sandbox Demo) and manual payment proofs with receipt uploads—each assigned a unique `TXN-YYYYMMDD-XXXXXX` code.
+- **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
+- **Foreign Keys:**
+  - `booking_id` → `bookings(id)` `ON DELETE CASCADE`
+  - `submitted_by` → `users(id)` `ON DELETE RESTRICT`
+  - `verified_by` → `users(id)` `ON DELETE SET NULL`
+- **Unique Constraints:** `transaction_code` (`UNIQUE`)
+- **Indexes:**
+  - `idx_booking_payments_booking (booking_id, status, created_at)`
+  - `idx_booking_payments_gateway_session (gateway_session_id)`
+
+| Column | Data Type | Nullability | Default | Notes |
+|---|---|---|---|---|
+| `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
+| `transaction_code` | `VARCHAR(40)` | `NULL` | `NULL` | Unique `TXN-YYYYMMDD-XXXXXX` code (Migration 008) |
+| `booking_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to `bookings.id` |
+| `submitted_by` | `INT UNSIGNED` | `NOT NULL` | — | FK to paying client (`users.id`) |
+| `payment_type` | `ENUM('partial', 'full', 'balance')` | `NOT NULL` | `'partial'` | Payment stage |
+| `payment_method` | `ENUM('gcash', 'maya', 'grab_pay', 'card', 'bank_transfer', 'cash', 'other')` | `NOT NULL` | `'gcash'` | Payment channel (extended in Migration 013) |
+| `gateway_provider` | `ENUM('manual', 'paymongo', 'sandbox_demo')` | `NOT NULL` | `'manual'` | Gateway vs manual proof (Migration 013) |
+| `gateway_session_id` | `VARCHAR(120)` | `NULL` | `NULL` | Provider checkout session ID (Migration 013) |
+| `gateway_checkout_url` | `VARCHAR(500)` | `NULL` | `NULL` | Hosted checkout URL (Migration 013) |
+| `gateway_status` | `ENUM('none', 'awaiting_payment', 'paid', 'failed', 'cancelled')` | `NOT NULL` | `'none'` | Gateway checkout status (Migration 013) |
+| `gateway_paid_at` | `TIMESTAMP` | `NULL` | `NULL` | Gateway confirmation time (Migration 013) |
+| `amount` | `DECIMAL(10, 2)` | `NOT NULL` | — | Payment amount (`> 0`) |
+| `reference_number` | `VARCHAR(100)` | `NULL` | `NULL` | Optional manual reference number |
+| `receipt_path` | `VARCHAR(255)` | `NULL` | `NULL` | Private receipt file under `uploads/payment-receipts/` |
+| `notes` | `VARCHAR(500)` | `NULL` | `NULL` | Optional client notes |
+| `status` | `ENUM('pending', 'verified', 'rejected')` | `NOT NULL` | `'pending'` | Verification state |
+| `verified_by` | `INT UNSIGNED` | `NULL` | `NULL` | FK to verifying gardener or clerk (`users.id`) |
+| `verified_at` | `TIMESTAMP` | `NULL` | `NULL` | Verification timestamp |
+| `rejection_reason` | `VARCHAR(500)` | `NULL` | `NULL` | Reason if rejected |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
+| `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
+
+---
+
+### 3.18 `booking_reschedule_requests` *(Added in Migration 009)*
+- **Purpose:** Tracks mutual date-change requests on existing bookings (e.g., due to typhoons, weather, or emergencies), preserving payments and re-checking crew/schedule availability on approval.
+- **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
+- **Foreign Keys:**
+  - `booking_id` (`fk_reschedule_booking`) → `bookings(id)` `ON DELETE CASCADE`
+  - `requested_by` (`fk_reschedule_requester`) → `users(id)` `ON DELETE RESTRICT`
+  - `responded_by` (`fk_reschedule_responder`) → `users(id)` `ON DELETE SET NULL`
+- **CHECK Constraints:** `chk_reschedule_proposed_schedule` (`proposed_end > proposed_start`)
+- **Indexes:** `idx_reschedule_booking_status (booking_id, status, created_at)`
+
+| Column | Data Type | Nullability | Default | Notes |
+|---|---|---|---|---|
+| `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
+| `booking_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to `bookings.id` |
+| `requested_by` | `INT UNSIGNED` | `NOT NULL` | — | FK to requesting party (`users.id`) |
+| `reason_type` | `ENUM('typhoon_weather', 'accident_emergency', 'schedule_conflict', 'scope_or_plan_change', 'property_access_issue', 'other')` | `NOT NULL` | — | Event reason category |
+| `reason_details` | `VARCHAR(1000)` | `NOT NULL` | — | Explanation |
+| `previous_start` | `DATETIME` | `NOT NULL` | — | Prior booking start |
+| `previous_end` | `DATETIME` | `NOT NULL` | — | Prior booking end |
+| `proposed_start` | `DATETIME` | `NOT NULL` | — | Requested new start |
+| `proposed_end` | `DATETIME` | `NOT NULL` | — | Requested new end (`> proposed_start`) |
+| `status` | `ENUM('pending', 'approved', 'declined', 'cancelled')` | `NOT NULL` | `'pending'` | Request outcome |
+| `responded_by` | `INT UNSIGNED` | `NULL` | `NULL` | FK to responding counterparty (`users.id`) |
+| `responded_at` | `TIMESTAMP` | `NULL` | `NULL` | Response timestamp |
+| `response_note` | `VARCHAR(500)` | `NULL` | `NULL` | Optional response message |
+| `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Creation timestamp |
+| `updated_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last update timestamp |
+
+---
+
+### 3.19 `reviews`
+- **Purpose:** Stores client ratings (`1`–`5`) and written reviews for completed, fully paid, and mutually closed bookings.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
   - `booking_id` → `bookings(id)` `ON DELETE RESTRICT`
@@ -694,7 +1065,7 @@ erDiagram
   - `uq_review_booking (booking_id)` (enforces at most one review per booking)
 - **Indexes:**
   - `idx_reviews_gardener (gardener_id, is_visible, created_at)`
-- **Business Rules:** Only the `client_id` who owns a booking with `status = 'completed'` can submit a review (`POST /api/reviews`).
+- **Business Rules:** Only the `client_id` who owns a booking with `status = 'completed'`, `payment_status = 'fully_paid'`, and `transaction_status = 'closed'` can submit a review (`POST /api/reviews`).
 
 | Column | Data Type | Nullability | Default | Notes |
 |---|---|---|---|---|
@@ -709,7 +1080,7 @@ erDiagram
 
 ---
 
-### 3.14 `conversations`
+### 3.20 `conversations`
 - **Purpose:** Represents a 1-to-1 messaging thread between a client and a gardener, optionally tied to a specific inquiry.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -733,7 +1104,7 @@ erDiagram
 
 ---
 
-### 3.15 `messages`
+### 3.21 `messages`
 - **Purpose:** Stores individual chat messages within a conversation thread.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -753,8 +1124,8 @@ erDiagram
 
 ---
 
-### 3.16 `notifications`
-- **Purpose:** Stores in-app workflow notifications for clients, gardeners, and administrators.
+### 3.22 `notifications`
+- **Purpose:** Stores in-app workflow notifications for clients, gardeners, assigned clerks, and administrators.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
   - `user_id` → `users(id)` `ON DELETE CASCADE`
@@ -775,7 +1146,7 @@ erDiagram
 
 ---
 
-### 3.17 `reports`
+### 3.23 `reports`
 - **Purpose:** Stores user-submitted moderation reports concerning users, services, or messages, and tracks administrator resolution.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -804,7 +1175,7 @@ erDiagram
 
 ---
 
-### 3.18 `request_events`
+### 3.24 `request_events`
 - **Purpose:** Chronological audit trail of state transitions, offer actions, and mutual agreement approvals for each inquiry.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -814,7 +1185,7 @@ erDiagram
   - `actor_id` → `users(id)` `ON DELETE RESTRICT`
 - **Indexes:**
   - `idx_request_events_inquiry (inquiry_id, created_at)`
-- **Recorded Event Types:** `request_created`, `request_expired`, `request_renewed`, `request_status_changed`, `offer_sent`, `offer_revised`, `offer_withdrawn`, `offer_accepted`, `offer_declined`, `agreement_proposed`, `agreement_edited`, `agreement_approved`, `agreement_cancelled`, `booking_confirmed`.
+- **Recorded Event Types:** `inquiry_created`, `inquiry_closed`, `inquiry_cancelled`, `request_expired`, `request_renewed`, `quotation_sent`, `quotation_revised`, `quotation_withdrawn`, `quotation_accepted`, `quotation_declined`, `agreement_proposed`, `agreement_revised`, `agreement_approved_partial`, `agreement_confirmed`, `agreement_cancelled`.
 
 | Column | Data Type | Nullability | Default | Notes |
 |---|---|---|---|---|
@@ -831,7 +1202,7 @@ erDiagram
 
 ---
 
-### 3.19 `ai_usage_log`
+### 3.25 `ai_usage_log`
 - **Purpose:** Concurrency-safe per-user AI rate limiting (`10` calls per rolling hour) and model/fallback audit logging without storing raw user prompt text.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
@@ -857,7 +1228,7 @@ erDiagram
 
 ---
 
-## 4. Foreign Key Constraint Summary (46 Total)
+## 4. Foreign Key Constraint Summary (59 Total)
 
 | Table | Foreign Key Count | Referenced Tables |
 |---|---|---|

@@ -121,8 +121,25 @@ HugaTiera/
 │   └── README.md
 │
 ├── docs/
+│   ├── diagrams/
+│   │   ├── 01-data-model-erd-25-tables.png
+│   │   ├── 02-data-model-erd-grouped-overview.png
+│   │   ├── 03-dfd-level-0-context.png
+│   │   ├── 04-dfd-level-1-system.png
+│   │   ├── 05-dfd-level-2-agreement-payment-closure.png
+│   │   ├── 06-system-architecture-diagram.png
+│   │   ├── 07-network-topology-diagram.png
+│   │   ├── 08-workflow-case1-case2-agreement-payment.png
+│   │   ├── 09-workflow-unified-overview.png
+│   │   ├── 10-user-hierarchy-diagram.png
+│   │   └── README.md
 │   ├── implementation/
 │   │   └── implementation-plan.md
+│   ├── screenshots/
+│   │   ├── mobile/          (38 responsive mobile module PNGs)
+│   │   ├── web/             (38 desktop web module PNGs)
+│   │   └── README.md
+│   ├── ui-ux/
 │   ├── api-reference.md
 │   ├── architecture-and-workflows.md
 │   ├── erd-and-dfd.md

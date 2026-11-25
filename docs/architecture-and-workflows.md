@@ -40,6 +40,7 @@ flowchart TB
     UploadMW --> FileStore
     Controllers --> FileStore
     AIService <-->|"HTTPS (Backend-Only API Key)"| GeminiAPI
+    AIService -->|"Read Sanitized Photos"| FileStore
     AIService <-->|"ai_usage_log Quota & Audit"| MySQL
     PayService <-->|"HTTPS Checkout & Verification"| PayMongoAPI
   end
@@ -85,27 +86,55 @@ flowchart TB
   - `Accounts` & Clerk Assignments: Edit user details/roles (`PATCH /api/admin/users/:userId`), toggle activation, safely delete unreferenced accounts (`DELETE /api/admin/users/:userId` with `409` `ON DELETE RESTRICT` protection), and manage `clerk_gardener_assignments`.
   - `Activity` & `Reports`: Monitor platform inquiries/bookings and resolve user reports.
 
+### 2.5 User Role Hierarchy & Delegation Diagram
+
+```mermaid
+flowchart TB
+  Root["HugaTiera Platform Users"]
+  Guest["Guest / Public Visitor<br/>(Unauthenticated)<br/>Browse Landing, Approved Services,<br/>Gardener Profiles, Portfolios & Reviews;<br/>Login & 3-Step Registration"]
+  Auth["Authenticated Users<br/>(HttpOnly JWT Cookie + Live users.is_active = TRUE)"]
+
+  Admin["Administrator<br/>(role = 'administrator')<br/>Internal / Seeded Only (Public Signup Blocked)<br/>Approvals, Categories & Pricing Add-Ons,<br/>Service Moderation, Account CRUD,<br/>Global Clerk Assignments, Analytics & Reports"]
+
+  Client["Client<br/>(role = 'client', can_act_as_client = TRUE)<br/>Public 3-Step Registration (18+)<br/>Smart AI Discovery, Case 1 & Case 2 Requests,<br/>Photos & Price Estimator, Offer Comparison,<br/>Mutual Agreements, Payments, Reviews & AI Chat"]
+
+  Gardener["Gardener / Service Provider<br/>(role = 'gardener', can_act_as_gardener = TRUE<br/>+ Automatic can_act_as_client = TRUE)<br/>Public 3-Step Registration (Requires Admin Approval)<br/>Services & Covers, Portfolio, Working Schedule & Crew Size,<br/>Open Board, Itemized Offers, Mutual Agreements,<br/>Payment Verification, Service Execution & My Clerks"]
+
+  Clerk["Assigned Clerk<br/>(role = 'clerk' — Provider-Managed Only)<br/>Public Signup Blocked (400)<br/>Scoped via clerk_gardener_assignments (403 Guard)<br/>Assigned Gardener Schedules, Crew & Blocked Dates,<br/>Service CRUD/Toggles, Manual Payment Proof Verification & Alerts"]
+
+  Root --> Guest
+  Root --> Auth
+  Auth --> Admin
+  Auth --> Client
+  Auth --> Gardener
+  Client <-->|"Dual-Role Mode Switch (1-Click)<br/>Opt-in / Built-in + Self-Dealing 409 Guard"| Gardener
+  Gardener -->|"Creates, Links & Revokes<br/>(Dashboard -> My Clerks)"| Clerk
+  Admin -.->|"Approves Gardener<br/>(is_approved = TRUE)"| Gardener
+  Admin -.->|"Global Clerk Assignment<br/>& Account Governance"| Clerk
+```
+
 ---
 
 ## 3. Core End-to-End Business Workflows
 
 ### 3.1 Critical Business Rule: Mutual Agreement Before Booking Confirmation
 > [!IMPORTANT]
-> In HugaTiera, **an inquiry, general request, provider expression of interest, quotation, feasibility response, or client offer acceptance NEVER automatically creates a booking**. Both Case 1 (General Service Request) and Case 2 (Direct Service Provider Inquiry), as well as priced-service requests, must pass through a versioned **Mutual Agreement** (`agreements` table). A confirmed booking (`bookings.status = 'accepted'`) is created **only** when both the client and the gardener have approved the **exact same agreement version**.
+> In HugaTiera, **an inquiry, general request, provider expression of interest, quotation, feasibility response, or client offer acceptance NEVER automatically creates a booking**. Both Case 1 (General Service Request) and Case 2 (Direct Service Provider Inquiry), as well as priced-service requests, must pass through a versioned **Mutual Agreement** (`agreements` table). Only when both the client and the gardener approve the **exact same agreement version** does the backend create a **Reservation** (`bookings.status = 'accepted'`, `booking_stage = 'reserved'`), which upgrades to a **Confirmed Paid Booking** (`booking_stage = 'booked'`) once the required deposit is verified.
 
 ### 3.2 Case 1 (General Service Request) vs Case 2 (Direct Provider Inquiry) Flowchart
 
 ```mermaid
 flowchart TD
-  Start(["Client Starts Request (/inquiries/new)"]) --> PhotoUpload["Optional: Upload 1-5 Garden Photos<br/>(sharp EXIF/GPS strip -> request_images)"]
+  Start(["Client Starts Request (/inquiries/new)"]) --> SpecsEst["Fill Category Specs (category_specs) &<br/>Live Per-Sq.m / Add-on Price Estimator<br/>(POST /api/inquiries/estimate)"]
+  SpecsEst --> PhotoUpload["Optional: Upload 1-5 Garden Photos<br/>(sharp EXIF/GPS strip -> request_images)"]
   PhotoUpload --> AIHelp["Optional: Gemini AI Photo Analysis & Requirement Structuring<br/>(Client reviews & edits ai_description / ai_summary)"]
   AIHelp --> ChooseType{"Request Type?"}
 
   %% Case 1 Branch
   ChooseType -->|"Case 1: General Request<br/>(request_type = 'general', gardener_id = NULL)"| OpenBoard["Published to Open Requests Board<br/>(GET /api/inquiries/open — Area-level privacy)"]
-  OpenBoard --> MultiOffers["Approved Gardeners Submit Offers<br/>(response_type: 'offer' | 'interest')"]
+  OpenBoard --> MultiOffers["Approved Gardeners Submit Itemized Offers<br/>(response_type: 'offer' | 'interest', labor + materials)"]
   MultiOffers --> ReviseOrWithdraw["Gardeners May Revise (quotation_revisions) or Withdraw<br/>While status = 'sent' & Not Expired"]
-  ReviseOrWithdraw --> ClientCompare["Client Compares Offers Side-by-Side<br/>(Ratings, Completed Bookings, Experience, Portfolios)"]
+  ReviseOrWithdraw --> ClientCompare["Client Compares Offers Side-by-Side<br/>(Smart AI Score, Ratings, Completed Bookings, Portfolios)"]
   ClientCompare --> AcceptOffer1["Client Accepts One Offer<br/>(quotation.locked_at = NOW(), inquiry.gardener_id = selected,<br/>inquiry.status = 'provider_selected')"]
 
   %% Case 2 Branch
@@ -119,18 +148,20 @@ flowchart TD
   PricedStart(["Client Clicks 'Propose Service Agreement'<br/>on Priced Service (/services/:id)"]) --> DirectServiceAPI["POST /api/agreements/direct-service<br/>(Creates direct inquiry + Version 1 Agreement in 1 TX)"]
 
   %% Convergence on R3 Mutual Agreement Engine
-  AcceptOffer1 --> ProposeAgreement["Client or Gardener Proposes Agreement v1<br/>(Scope, Price, Schedule, Exact Address, Conditions)<br/>inquiry.status = 'in_agreement'"]
+  AcceptOffer1 --> ProposeAgreement["Client or Gardener Proposes Agreement v1<br/>(Scope, Price, Deposit, Schedule, Exact Address, Conditions)<br/>inquiry.status = 'in_agreement'"]
   AcceptOffer2 --> ProposeAgreement
   DirectServiceAPI --> AgreementLoop
 
   ProposeAgreement --> AgreementLoop{"Counterparty Action?"}
-  AgreementLoop -->|"Edits Terms (PUT /api/agreements/:id)"| NewVersion["Marks vN 'superseded', Inserts v(N+1)<br/>Resets Counterparty Approval to NULL"]
+  AgreementLoop -->|"Edits Terms (PUT /api/agreements/:id)"| NewVersion["Marks vN 'superseded', Inserts v(N+1)<br/>Resets Both Approvals to NULL"]
   NewVersion --> AgreementLoop
 
-  AgreementLoop -->|"Approves Current Version<br/>(POST /api/agreements/:id/approve)"| SecondApproval["Atomic Transaction (SELECT ... FOR UPDATE):<br/>1. Verify Schedule Conflict Free<br/>2. Set agreement.status = 'agreed'<br/>3. Create Booking (status = 'accepted', agreement_id)<br/>4. Set inquiry.status = 'confirmed'<br/>5. Auto-decline Competing Open Offers"]
+  AgreementLoop -->|"Approves Current Version<br/>(POST /api/agreements/:id/approve)"| SecondApproval["Atomic Transaction (SELECT ... FOR UPDATE):<br/>1. Validate Working Days, Blocked Dates & Daily Crew Capacity<br/>2. Set agreement.status = 'agreed'<br/>3. Create Reservation (status = 'accepted', booking_stage = 'reserved')<br/>4. Set inquiry.status = 'confirmed' & Auto-decline Competing Offers"]
 
-  SecondApproval --> Execution["Service Execution Lifecycle<br/>(accepted -> in_progress -> completed)"]
-  Execution --> Review["Client Submits Verified Review (1-5 Stars)<br/>(POST /api/reviews)"]
+  SecondApproval --> DepositGate["Deposit Payment Gate (TXN-...):<br/>PayMongo Checkout, Sandbox/Demo, or Manual Receipt Proof<br/>(Verified by Gardener / Assigned Clerk -> booking_stage = 'booked')"]
+  DepositGate --> Execution["Service Execution Lifecycle<br/>(accepted -> in_progress -> completed)<br/>Optional: Event-Based Cancel or Mutual Reschedule"]
+  Execution --> Closure["Final Balance (payment_status = 'fully_paid') +<br/>Mutual Transaction Completion Agreement<br/>(transaction_status = 'closed')"]
+  Closure --> Review["Client Submits Verified Review (1-5 Stars)<br/>(POST /api/reviews)"]
 ```
 
 ### 3.3 Workflow State Transitions Summary
@@ -154,7 +185,8 @@ All AI capabilities are mediated exclusively through `backend/services/ai.servic
 1. **Standalone Garden Planning (`POST /api/ai/garden-plan`):** Generates structured tropical/Zamboanga-appropriate garden planning guidance from a user prompt (up to `3,000` characters).
 2. **Inquiry Requirement Structuring (`POST /api/ai/requirements`):** Takes a client's draft notes, location, and optional photo descriptions and returns structured JSON (`structuredSummary`, `refinedDescription`, `suggestedCategoryId`, `suggestedCategoryName`, `gardeningIdeas`, `followUpQuestions`) that the client can edit and apply to their request.
 3. **Multimodal Garden Photo Analysis (`POST /api/ai/photo-analysis`):** Sends a client's `sharp`-sanitized `request_images` file (`inline_data` base64) to Gemini and saves an editable 2–4 sentence space observation to `request_images.ai_description`.
-4. **Postponed Image Generation Guard:** `generateGardenImage` explicitly throws HTTP `501` (`IMAGE_GENERATION_POSTPONED`) so paid image generation cannot be triggered without future scope approval.
+4. **Smart Hybrid Proximity & Conduct Matching (`GET /api/ai/recommendations`, `POST /api/ai/recommendations/summary`):** Scores approved services, competing offers, and open leads using Zamboanga City barangay proximity, live `categoryId` filtering, verified review ratings, and good-conduct metrics (`smartMatching.js`), with optional Gemini explanation summaries.
+5. **Postponed Image Generation Guard:** `generateGardenImage` explicitly throws HTTP `501` (`IMAGE_GENERATION_POSTPONED`) so paid image generation cannot be triggered without future scope approval.
 
 ### 4.2 Model Configuration & Automatic Fallback (`R6 / R7`)
 
@@ -170,7 +202,7 @@ All AI capabilities are mediated exclusively through `backend/services/ai.servic
 - **Trigger Conditions (`isEligibleForFallback`):** Retries **once** using `GEMINI_FALLBACK_MODEL` (`gemini-3.5-flash-lite`) only when the primary model (`gemini-3.8-flash`) fails with a transient upstream error:
   - HTTP `429` (`PROVIDER_QUOTA` / rate limit)
   - HTTP `500`, `502`, `503`, `504` (`PROVIDER_ERROR` / overload)
-  - Request timeout (`TIMEOUT` / `AbortError` after 20 seconds)
+  - Request timeout (`TIMEOUT` / `AbortError` after 30 seconds)
   - Transient network failure (`NETWORK_ERROR` / `ECONNRESET`)
 - **Non-Retryable Errors:** Never retries on `400` bad request, `401`/`403` invalid API key (`AUTH_ERROR`), or input validation errors.
 - **Single Quota Slot Consumption:** A primary attempt followed by a fallback retry counts as **one** user operation in `ai_usage_log` (updating the single in-flight reservation row rather than inserting a second row).
