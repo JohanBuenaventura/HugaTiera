@@ -1368,40 +1368,53 @@ function OnboardingGuide({ role, form, counts }) {
       { label: 'Get your first booking', to: '/bookings', cta: 'View', done: hasBookings },
     ]
 
+  const completedSteps = checklist.filter((item) => item.done).length
+
   return (
-    <details className="how-it-works-guide">
-      <summary>New here? How HugaTiera works</summary>
-      <div className="how-it-works-body">
-        <p>
-          {isClient
-            ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
-            : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
-        </p>
-        <ol className="booking-stepper" aria-label="How HugaTiera works">
-          {flow.map((step) => (
-            <li className="booking-step" key={step.num}>
-              <span className="booking-step-num" aria-hidden="true">{step.num}</span>
-              <span className="booking-step-copy">
-                <strong>{step.title}</strong>
-                <small>{step.text}</small>
-              </span>
-            </li>
-          ))}
-        </ol>
+    <section className="workspace-onboarding-panel" aria-labelledby="workspace-onboarding-title">
+      <div className="workspace-onboarding-heading">
         <div>
-          <p className="field-note" style={{ margin: '0 0 8px' }}>Getting started</p>
-          <ul className="onboarding-checklist">
-            {checklist.map((item) => (
-              <li key={item.label} className={item.done ? 'is-done' : ''}>
-                <span className="check-mark" aria-hidden="true">{item.done ? '✓' : ''}</span>
-                <span className="check-label">{item.label}</span>
-                {!item.done && <Link to={item.to}>{item.cta}</Link>}
+          <p className="eyebrow">Getting started</p>
+          <h2 id="workspace-onboarding-title">{completedSteps === checklist.length ? "You're all set" : 'Your next steps'}</h2>
+        </div>
+        <span className="workspace-onboarding-progress">
+          {completedSteps} of {checklist.length} complete
+        </span>
+      </div>
+      <ul className="onboarding-checklist workspace-onboarding-list" aria-label="Getting started checklist">
+        {checklist.map((item, index) => (
+          <li className={`workspace-onboarding-item${item.done ? ' is-done' : ''}`} key={item.label}>
+            <div className="workspace-onboarding-item-top">
+              <span className="workspace-onboarding-marker" aria-hidden="true">{item.done ? '✓' : index + 1}</span>
+              <span className="workspace-onboarding-status">{item.done ? 'Complete' : 'To do'}</span>
+            </div>
+            <strong className="workspace-onboarding-label">{item.label}</strong>
+            {!item.done && <Link className="workspace-onboarding-action" to={item.to}>{item.cta}</Link>}
+          </li>
+        ))}
+      </ul>
+      <details className="how-it-works-guide workspace-workflow-guide">
+        <summary>How the request-to-booking flow works</summary>
+        <div className="how-it-works-body">
+          <p>
+            {isClient
+              ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
+              : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
+          </p>
+          <ol className="booking-stepper" aria-label="How HugaTiera works">
+            {flow.map((step) => (
+              <li className="booking-step" key={step.num}>
+                <span className="booking-step-num" aria-hidden="true">{step.num}</span>
+                <span className="booking-step-copy">
+                  <strong>{step.title}</strong>
+                  <small>{step.text}</small>
+                </span>
               </li>
             ))}
-          </ul>
+          </ol>
         </div>
-      </div>
-    </details>
+      </details>
+    </section>
   )
 }
 
@@ -1461,6 +1474,7 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
       <section className="container dashboard-content">
         <div className="dashboard-hero-row">
           <div>
+            <p className="workspace-eyebrow">{roleLabel} workspace</p>
             <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'calendar' ? 'Schedule calendar.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Clerks.' : `Welcome, ${user.firstName}.`}</h1>
             <p className="dashboard-lead" style={{ marginBottom: 0 }}>
               {isProfileView
@@ -1501,8 +1515,6 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                 <>
                   <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
                   <Link className="button button-outline" to="/dashboard?tab=services">My services</Link>
-                  <Link className="button button-outline" to="/dashboard?tab=portfolio">Portfolio</Link>
-                  <Link className="button button-outline" to="/dashboard?tab=clerks">My Clerks</Link>
                 </>
               )}
             </div>

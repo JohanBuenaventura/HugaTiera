@@ -37,6 +37,8 @@
 .member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-toggle {
   border-color: var(--workspace-line);
   color: var(--workspace-muted);
+  box-sizing: border-box;
+  padding: 0;
 }
 
 .member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-toggle:hover,
@@ -1511,5 +1513,800 @@
   .member-workspace .assistant-page-intro,
   .member-workspace .booking-note {
     font-size: 16px;
+  }
+}
+
+/* Client and Gardener workspace direction: marketplace discovery + work queue. */
+.member-workspace {
+  --workspace-bg: #f3f5f1;
+  --workspace-surface-soft: #f8faf7;
+  --workspace-line: #d7dfd8;
+  --workspace-line-soft: #e7ece7;
+  --workspace-muted: #526257;
+  background: var(--workspace-bg);
+}
+
+.member-workspace .app-sidebar[data-user-role='client'],
+.member-workspace .app-sidebar[data-user-role='gardener'] {
+  border-color: #244b36;
+  color: #f3f5ef;
+  background: #193b2b;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-brand,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-brand {
+  color: #fff;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-brand > span:last-child span,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-brand > span:last-child span {
+  color: #f1c66c;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-brand .brand-mark,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-brand .brand-mark {
+  color: #193b2b;
+  background: #f1c66c;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-toggle,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-toggle {
+  border-color: #496555;
+  color: #e2eae3;
+  background: transparent;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-toggle:hover,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-toggle:hover {
+  color: #fff;
+  background: #2a503a;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-section-label,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-section-label {
+  color: #c1d0c4;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a {
+  color: #e0e8e1;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a .app-sidebar-link-icon,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a .app-sidebar-link-icon {
+  color: #c1d0c4;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a:hover,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a:hover {
+  color: #fff;
+  background: #284b37;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a.is-active,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a.is-active {
+  border-color: #57745e;
+  color: #fff;
+  background: #2b5039;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a.is-active .app-sidebar-link-icon,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a.is-active .app-sidebar-link-icon {
+  color: #fff;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-role,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-role {
+  border-color: #496555;
+  color: #fff;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-role small,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-role small {
+  color: #d0ddd2;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-avatar,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-avatar {
+  color: #193b2b;
+  background: #f1c66c;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-switch-role,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-switch-role {
+  border-color: #718775;
+  color: #fff;
+  background: #284b37;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-switch-role:hover,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-switch-role:hover {
+  border-color: #a7b9a9;
+  background: #345b41;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-logout,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-logout {
+  color: #e0e8e1;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-logout:hover,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-logout:hover {
+  border-color: #496555;
+  color: #fff;
+  background: #284b37;
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a:focus-visible,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a:focus-visible,
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-switch-role:focus-visible,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-switch-role:focus-visible,
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-logout:focus-visible,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-logout:focus-visible {
+  outline-color: #f1c66c;
+}
+
+.member-workspace .workspace-eyebrow {
+  margin: 0 0 8px;
+  color: var(--workspace-green);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.member-workspace .dashboard-hero-row {
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+.member-workspace .dashboard-hero-row h1,
+.member-workspace .communication-heading h1,
+.member-workspace .marketplace-content h1,
+.member-workspace .booking-content h1 {
+  letter-spacing: -.045em;
+}
+
+.member-workspace .stat-card,
+.member-workspace .dashboard-panel,
+.member-workspace .marketplace-card,
+.member-workspace .booking-list-item,
+.member-workspace .review-card,
+.member-workspace .conversation-list,
+.member-workspace .message-panel,
+.member-workspace .notification-panel {
+  border-color: var(--workspace-line);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(24, 37, 29, .035);
+}
+
+.member-workspace .stat-grid {
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.member-workspace .stat-card {
+  position: relative;
+  min-height: 92px;
+  align-content: center;
+  gap: 3px;
+  padding: 14px 18px;
+}
+
+.member-workspace .stat-card-primary {
+  border-top: 1px solid var(--workspace-line);
+  border-left: 3px solid var(--workspace-green);
+}
+
+.member-workspace .stat-card strong {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.member-workspace .dashboard-showcase-stack {
+  grid-template-columns: minmax(0, 1.8fr) minmax(270px, .8fr);
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.member-workspace .showcase-panel,
+.member-workspace .showcase-reviews-panel {
+  min-width: 0;
+  align-content: start;
+  gap: 14px;
+  padding: 20px;
+}
+
+.member-workspace .showcase-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.member-workspace .showcase-header h2 {
+  margin-bottom: 5px;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-size: 19px;
+  letter-spacing: -.02em;
+}
+
+.member-workspace .showcase-header .field-note {
+  max-width: 620px;
+  line-height: 1.5;
+}
+
+.member-workspace .dashboard-service-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.member-workspace .showcase-card {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.member-workspace .showcase-card .marketplace-card-media {
+  aspect-ratio: 16 / 8;
+}
+
+.member-workspace .showcase-card .marketplace-card-body {
+  gap: 8px;
+  padding: 14px;
+}
+
+.member-workspace .showcase-card h3 {
+  margin: 0;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  letter-spacing: -.015em;
+}
+
+.member-workspace .showcase-card p {
+  min-height: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.member-workspace .showcase-card .service-meta {
+  padding: 8px 0;
+}
+
+.member-workspace .showcase-card-footer {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-workspace .showcase-card-actions {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.member-workspace .ai-filter-bar {
+  gap: 10px;
+  padding: 13px;
+  border-color: var(--workspace-line);
+  border-radius: 10px;
+  background: var(--workspace-surface-soft);
+}
+
+.member-workspace .ai-filter-inputs {
+  gap: 10px;
+}
+
+.member-workspace .ai-filter-inputs label {
+  gap: 5px;
+  font-size: 12px;
+}
+
+.member-workspace .ai-filter-inputs input,
+.member-workspace .ai-filter-inputs select {
+  height: 40px;
+  border-color: #cbd6ce;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.member-workspace .ai-filter-pills {
+  gap: 5px;
+}
+
+.member-workspace .ai-filter-pills .booking-filter-pill,
+.member-workspace .ai-toggle-chip {
+  min-height: 34px;
+  padding: 7px 10px;
+  border-color: #d1dbd3;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.member-workspace .showcase-reviews-grid {
+  grid-template-columns: 1fr;
+  gap: 9px;
+}
+
+.member-workspace .showcase-review-card {
+  padding: 13px;
+  border-color: var(--workspace-line-soft);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.member-workspace .showcase-review-quote {
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.member-workspace .showcase-review-footer small,
+.member-workspace .showcase-review-footer > div small {
+  color: var(--workspace-muted);
+}
+
+.member-workspace .showcase-cta-strip {
+  gap: 12px;
+  padding: 14px;
+  border-radius: 9px;
+  background: #edf2ed;
+}
+
+.member-workspace .showcase-cta-strip p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.member-workspace .marketplace-content,
+.member-workspace .communication-content,
+.member-workspace .booking-content,
+.member-workspace .detail-content,
+.member-workspace .assistant-page-content {
+  padding-top: 32px;
+}
+
+.member-workspace .marketplace-filters {
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 11px;
+  background: #e9eee9;
+}
+
+.member-workspace .marketplace-filters input,
+.member-workspace .marketplace-filters select,
+.member-workspace .marketplace-filters .search-field {
+  min-height: 42px;
+  border-color: #cbd6ce;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.member-workspace .visual-market-card {
+  border-radius: 11px;
+  box-shadow: 0 2px 8px rgba(24, 37, 29, .035);
+}
+
+.member-workspace .visual-market-card:hover {
+  border-color: #a8b9ac;
+  box-shadow: 0 7px 20px rgba(24, 37, 29, .08);
+  transform: translateY(-2px);
+}
+
+.member-workspace .visual-market-card h2 {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-size: 17px;
+  letter-spacing: -.015em;
+}
+
+.member-workspace .communication-grid {
+  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.member-workspace .conversation-list,
+.member-workspace .message-panel,
+.member-workspace .notification-panel {
+  padding: 20px;
+}
+
+.member-workspace .conversation-item {
+  border-top-color: var(--workspace-line-soft);
+}
+
+.member-workspace .conversation-item.is-selected,
+.member-workspace .notification-item.is-unread {
+  border-color: #c3d3c7;
+  background: #edf3ee;
+}
+
+.member-workspace .message-bubble {
+  border-radius: 12px 12px 12px 4px;
+  color: #25372b;
+  background: #eaf0eb;
+}
+
+.member-workspace .message-bubble.message-own {
+  border-radius: 12px 12px 4px 12px;
+  color: #fff;
+  background: var(--workspace-green);
+}
+
+.member-workspace .message-form {
+  gap: 10px;
+}
+
+.member-workspace .dashboard-overview-grid {
+  gap: 14px;
+  margin-top: 16px !important;
+}
+
+.member-workspace .dashboard-overview-grid > .dashboard-panel {
+  padding: 20px;
+}
+
+@media (max-width: 1200px) {
+  .member-workspace .dashboard-showcase-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .member-workspace .showcase-reviews-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .member-workspace .app-sidebar[data-user-role='client'],
+  .member-workspace .app-sidebar[data-user-role='gardener'] {
+    border-color: #244b36;
+    background: #193b2b;
+  }
+
+  .member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-drawer,
+  .member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-drawer {
+    border-color: #496555;
+    background: #193b2b;
+    box-shadow: 0 14px 28px rgba(18, 38, 27, .25);
+  }
+
+  .member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-section-label,
+  .member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-section-label {
+    color: #c1d0c4;
+  }
+
+  .member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a,
+  .member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a {
+    color: #e0e8e1;
+  }
+
+  .member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a.is-active,
+  .member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a.is-active {
+    color: #fff;
+    background: #2b5039;
+  }
+
+  .member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-role,
+  .member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-role {
+    border-top: 1px solid #496555;
+  }
+}
+
+@media (max-width: 640px) {
+  .member-workspace .dashboard-showcase-stack {
+    gap: 12px;
+  }
+
+  .member-workspace .showcase-panel,
+  .member-workspace .showcase-reviews-panel {
+    padding: 15px;
+  }
+
+  .member-workspace .dashboard-service-grid,
+  .member-workspace .showcase-reviews-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-workspace .showcase-card .marketplace-card-media {
+    aspect-ratio: 16 / 9;
+  }
+
+  .member-workspace .showcase-header {
+    flex-direction: column;
+  }
+
+  .member-workspace .showcase-header-actions,
+  .member-workspace .showcase-header-actions .button {
+    width: 100%;
+  }
+
+  .member-workspace .showcase-cta-strip {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .member-workspace .workspace-eyebrow {
+    margin-bottom: 6px;
+  }
+
+  .member-workspace .dashboard-overview-grid > .dashboard-panel {
+    padding: 16px;
+  }
+}
+
+.member-workspace .workspace-onboarding-panel {
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 12px;
+  background: var(--workspace-surface);
+  box-shadow: 0 2px 8px rgba(24, 37, 29, .035);
+}
+
+.member-workspace .workspace-onboarding-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-workspace .workspace-onboarding-heading .eyebrow {
+  margin: 0 0 3px;
+}
+
+.member-workspace .workspace-onboarding-heading h2 {
+  margin: 0;
+  color: var(--workspace-ink);
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-size: 19px;
+  letter-spacing: -.02em;
+}
+
+.member-workspace .workspace-onboarding-progress {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 999px;
+  color: var(--workspace-muted);
+  background: var(--workspace-surface-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.member-workspace[data-workspace='client'] .workspace-onboarding-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.member-workspace[data-workspace='gardener'] .workspace-onboarding-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.member-workspace .workspace-onboarding-list {
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.member-workspace .workspace-onboarding-item {
+  display: flex;
+  min-width: 0;
+  min-height: 124px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px;
+  border-color: var(--workspace-line);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.member-workspace .workspace-onboarding-item.is-done {
+  border-color: #c3d3c7;
+  background: #f7faf7;
+}
+
+.member-workspace .workspace-onboarding-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.member-workspace .workspace-onboarding-marker {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--workspace-line);
+  border-radius: 50%;
+  color: var(--workspace-green);
+  background: var(--workspace-surface-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.member-workspace .workspace-onboarding-item.is-done .workspace-onboarding-marker {
+  border-color: var(--workspace-green);
+  color: #fff;
+  background: var(--workspace-green);
+}
+
+.member-workspace .workspace-onboarding-status {
+  color: var(--workspace-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.member-workspace .workspace-onboarding-label {
+  color: var(--workspace-ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.member-workspace .workspace-onboarding-action {
+  width: fit-content;
+  margin-top: auto;
+  color: var(--workspace-green);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.member-workspace .workspace-onboarding-action:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.member-workspace .workspace-onboarding-action:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--workspace-green);
+  outline-offset: 3px;
+}
+
+.member-workspace .workspace-workflow-guide {
+  margin: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--workspace-line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.member-workspace .workspace-workflow-guide > summary {
+  padding: 12px 0 0;
+  color: var(--workspace-green);
+}
+
+.member-workspace .workspace-workflow-guide .how-it-works-body {
+  padding: 12px 0 2px;
+}
+
+@media (max-width: 1100px) {
+  .member-workspace[data-workspace='client'] .workspace-onboarding-list,
+  .member-workspace[data-workspace='gardener'] .workspace-onboarding-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .member-workspace .workspace-onboarding-panel {
+    padding: 14px;
+  }
+
+  .member-workspace .workspace-onboarding-heading {
+    align-items: flex-start;
+  }
+
+  .member-workspace[data-workspace='client'] .workspace-onboarding-list,
+  .member-workspace[data-workspace='gardener'] .workspace-onboarding-list {
+    grid-template-columns: 1fr;
+  }
+
+  .member-workspace .workspace-onboarding-item {
+    min-height: 106px;
+  }
+}
+
+.member-workspace .app-sidebar[data-user-role='client'] a,
+.member-workspace .app-sidebar[data-user-role='client'] a:hover,
+.member-workspace .app-sidebar[data-user-role='client'] a:focus-visible,
+.member-workspace .app-sidebar[data-user-role='client'] a:active,
+.member-workspace .app-sidebar[data-user-role='gardener'] a,
+.member-workspace .app-sidebar[data-user-role='gardener'] a:hover,
+.member-workspace .app-sidebar[data-user-role='gardener'] a:focus-visible,
+.member-workspace .app-sidebar[data-user-role='gardener'] a:active {
+  text-decoration: none;
+}
+
+.member-workspace .notification-row-top {
+  align-items: flex-start;
+}
+
+.member-workspace .notification-title-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.member-workspace .notification-title-group > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.member-workspace .notification-type-badge,
+.member-workspace .notification-importance {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.member-workspace .notification-type-badge--message {
+  color: #245b61;
+  background: #e6f1f0;
+}
+
+.member-workspace .notification-type-badge--request {
+  color: #2f5976;
+  background: #e8f0f6;
+}
+
+.member-workspace .notification-type-badge--offer {
+  color: #6c4a17;
+  background: #f7eedc;
+}
+
+.member-workspace .notification-type-badge--agreement {
+  color: #5b477a;
+  background: #eee9f5;
+}
+
+.member-workspace .notification-type-badge--booking {
+  color: #244b36;
+  background: #e6eee8;
+}
+
+.member-workspace .notification-type-badge--payment {
+  color: #72510f;
+  background: #f7eedb;
+}
+
+.member-workspace .notification-type-badge--review {
+  color: #805126;
+  background: #f6eee4;
+}
+
+.member-workspace .notification-type-badge--account,
+.member-workspace .notification-type-badge--general {
+  color: #4a5b50;
+  background: #edf0ec;
+}
+
+.member-workspace .notification-importance--action {
+  color: #704812;
+  background: #f8ecd5;
+}
+
+.member-workspace .notification-importance--urgent {
+  color: #873e36;
+  background: #f7e8e4;
+}
+
+@media (min-width: 761px) {
+  .member-workspace .app-sidebar.is-collapsed[data-user-role='client'] .app-sidebar-nav a.is-active,
+  .member-workspace .app-sidebar.is-collapsed[data-user-role='gardener'] .app-sidebar-nav a.is-active {
+    box-shadow: none;
+  }
+
+  .member-workspace .app-sidebar.is-collapsed[data-user-role='client'] .app-sidebar-nav a.is-active::before,
+  .member-workspace .app-sidebar.is-collapsed[data-user-role='gardener'] .app-sidebar-nav a.is-active::before {
+    display: none;
   }
 }
