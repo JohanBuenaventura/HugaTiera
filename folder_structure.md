@@ -122,6 +122,7 @@ HugaTiera/
 │
 ├── docs/
 │   ├── diagrams/
+│   │   ├── 01-data-model-erd-25-tables.drawio
 │   │   ├── 01-data-model-erd-25-tables.png
 │   │   ├── 01a-erd-domain-identity-and-clerks.png
 │   │   ├── 01b-erd-domain-marketplace-and-pricing.png
@@ -129,6 +130,7 @@ HugaTiera/
 │   │   ├── 01d-erd-domain-agreements-bookings-payments.png
 │   │   ├── 01e-erd-domain-communication-ai-governance.png
 │   │   ├── 02-data-model-erd-grouped-overview.png
+│   │   ├── 03-dfd-level-0-context.drawio
 │   │   ├── 03-dfd-level-0-context.png
 │   │   ├── 04-dfd-level-1-system.png
 │   │   ├── 05-dfd-level-2-agreement-payment-closure.png
@@ -136,7 +138,9 @@ HugaTiera/
 │   │   ├── 07-network-topology-diagram.png
 │   │   ├── 08-workflow-case1-case2-agreement-payment.png
 │   │   ├── 09-workflow-unified-overview.png
+│   │   ├── 10-user-hierarchy-diagram.drawio
 │   │   ├── 10-user-hierarchy-diagram.png
+│   │   ├── 11-user-hierarchy-only.drawio
 │   │   ├── 11-user-hierarchy-only.png
 │   │   └── README.md
 │   ├── implementation/

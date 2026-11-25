@@ -1,0 +1,24 @@
+<mxfile host="app.diagrams.net" modified="2026-11-25T07:00:00.000Z" agent="HugaTiera" version="24.7.17">
+  <diagram id="uh-only" name="User Hierarchy">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1280" pageHeight="640" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="r" value="HugaTiera Users&#10;(All Platform Participants)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d7e3f4;strokeColor=#1f2937;fontStyle=1;fontSize=14;" vertex="1" parent="1"><mxGeometry x="480" y="68" width="320" height="62" as="geometry"/></mxCell>
+        <mxCell id="g" value="Guest / Public Visitor&#10;(Unregistered Visitor)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="120" y="196" width="240" height="64" as="geometry"/></mxCell>
+        <mxCell id="u" value="Registered Users&#10;(Account Holders)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e9eef5;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="700" y="196" width="260" height="64" as="geometry"/></mxCell>
+        <mxCell id="c" value="Client&#10;(Service Requester)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="405" y="344" width="230" height="68" as="geometry"/></mxCell>
+        <mxCell id="p" value="Gardener&#10;(Service Provider — Dual-Role)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="710" y="344" width="240" height="68" as="geometry"/></mxCell>
+        <mxCell id="ad" value="Administrator&#10;(Platform Manager)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1000" y="344" width="220" height="68" as="geometry"/></mxCell>
+        <mxCell id="ck" value="Assigned Clerk&#10;(Provider-Managed Staff)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="700" y="506" width="260" height="68" as="geometry"/></mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="r" target="g"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="r" target="u"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="u" target="c"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="u" target="p"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="u" target="ad"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="Dual-Role" style="edgeStyle=orthogonalEdgeStyle;rounded=0;startArrow=classic;endArrow=classic;strokeColor=#1f2937;" edge="1" parent="1" source="c" target="p"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="Manages / Delegates" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="p" target="ck"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="Assigns / Oversees Globally" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#1f2937;" edge="1" parent="1" source="ad" target="ck"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
