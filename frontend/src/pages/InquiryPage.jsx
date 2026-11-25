@@ -31,6 +31,7 @@ import {
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
+import TransientSuccess from '../components/TransientSuccess'
 import { OTHER_BARANGAY_VALUE, ZAMBOANGA_BARANGAYS } from '../utils/zamboangaAddress'
 
 function formatDate(value) {
@@ -1430,7 +1431,7 @@ function InquiryDetails({ id }) {
           <p>{nextStepGuidance.text}</p>
         </div>
       )}
-      {message && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{message}</div>}
+      {message && <TransientSuccess key={message} message={message} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <div className="inquiry-detail-grid">
         <article className="dashboard-panel">
@@ -2079,7 +2080,9 @@ function InquiryDetails({ id }) {
 
 export default function InquiryPage({ detail = false, create = false }) {
   const { inquiryId } = useParams()
-  return <main className="marketplace-page protected-page"><AppSidebar />{detail ? <InquiryDetails id={inquiryId} /> : create ? <InquiryForm /> : <InquiryList />}</main>
+  const { user } = useAuth()
+  const memberWorkspace = ['client', 'gardener'].includes(user?.role)
+  return <main className={`marketplace-page protected-page${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={user?.role}><AppSidebar />{detail ? <InquiryDetails id={inquiryId} /> : create ? <InquiryForm /> : <InquiryList />}</main>
 }
 
 function InquiryList() {

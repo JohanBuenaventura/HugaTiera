@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { bookingsApi, formatStatusLabel, getStatusBadgeClass } from '../services/bookings'
 import { formatWorkingDaysLabel, parseWorkingDaysArray, profileApi } from '../services/profiles'
+import TransientSuccess from './TransientSuccess'
 
 const WEEKDAY_HEADER = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const JS_DAY_TO_CODE = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
@@ -59,9 +60,9 @@ function formatTimeRange(startVal, endVal) {
   return sameDay ? `${sStr} – ${eStr}` : `${sStr} (${s.toLocaleDateString()}) – ${eStr} (${e.toLocaleDateString()})`
 }
 
-export default function GardenerScheduleCalendar({ profileForm, onUnavailableDatesChange }) {
+export default function GardenerScheduleCalendar({ profileForm, onUnavailableDatesChange, standalone = false }) {
   const todayKey = useMemo(() => toLocalDateKey(new Date()), [])
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(standalone)
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -276,54 +277,56 @@ export default function GardenerScheduleCalendar({ profileForm, onUnavailableDat
   }
 
   return (
-    <section className="dashboard-panel schedule-calendar-dropdown" id="gardener-calendar">
-      <button
-        type="button"
-        className="calendar-dropdown-trigger"
-        aria-expanded={isOpen}
-        aria-controls="gardener-calendar-body"
-        onClick={() => setIsOpen((prev) => !prev)}
-      >
-        <div className="calendar-trigger-left">
-          <span className="calendar-trigger-icon" aria-hidden="true">
-            <CalendarDays size={20} />
-          </span>
-          <div>
-            <p className="eyebrow" style={{ margin: '0 0 2px' }}>Gardener schedule planner</p>
-            <strong>Schedule &amp; Availability Calendar</strong>
-            <div className="calendar-trigger-meta">
-              <span>{upcomingCount} upcoming job{upcomingCount === 1 ? '' : 's'}</span>
-              <span>· {unavailableDates.length} blocked</span>
-              <span>· {formatWorkingDaysLabel(workingDays)} ({workStartTime}–{workEndTime})</span>
-              <span>· <Users size={13} style={{ verticalAlign: 'text-bottom' }} /> Crew: {crewSize} worker{crewSize === 1 ? '' : 's'}/day (max {maxConcurrentJobs} simultaneous)</span>
-            </div>
-            {(urgencySummary.overdue.length > 0 || urgencySummary.urgentToday.length > 0 || urgencySummary.dueTomorrow.length > 0 || urgencySummary.actionNeeded.length > 0) && (
-              <div className="calendar-trigger-urgency-row">
-                {urgencySummary.overdue.length > 0 && (
-                  <span className="urgency-pill urgency-overdue"><AlertTriangle size={12} /> {urgencySummary.overdue.length} Overdue</span>
-                )}
-                {urgencySummary.urgentToday.length > 0 && (
-                  <span className="urgency-pill urgency-today"><BellRing size={12} /> {urgencySummary.urgentToday.length} Urgent Today</span>
-                )}
-                {urgencySummary.dueTomorrow.length > 0 && (
-                  <span className="urgency-pill urgency-tomorrow"><Clock size={12} /> {urgencySummary.dueTomorrow.length} Due Tomorrow</span>
-                )}
-                {urgencySummary.actionNeeded.length > 0 && (
-                  <span className="urgency-pill urgency-action">{urgencySummary.actionNeeded.length} To Do / Action</span>
-                )}
+    <section className={`dashboard-panel schedule-calendar-dropdown${standalone ? ' is-standalone' : ''}`} id="gardener-calendar">
+      {!standalone && (
+        <button
+          type="button"
+          className="calendar-dropdown-trigger"
+          aria-expanded={isOpen}
+          aria-controls="gardener-calendar-body"
+          onClick={() => setIsOpen((prev) => !prev)}
+        >
+          <div className="calendar-trigger-left">
+            <span className="calendar-trigger-icon" aria-hidden="true">
+              <CalendarDays size={20} />
+            </span>
+            <div>
+              <p className="eyebrow" style={{ margin: '0 0 2px' }}>Gardener schedule planner</p>
+              <strong>Schedule &amp; Availability Calendar</strong>
+              <div className="calendar-trigger-meta">
+                <span>{upcomingCount} upcoming job{upcomingCount === 1 ? '' : 's'}</span>
+                <span>· {unavailableDates.length} blocked</span>
+                <span>· {formatWorkingDaysLabel(workingDays)} ({workStartTime}–{workEndTime})</span>
+                <span>· <Users size={13} style={{ verticalAlign: 'text-bottom' }} /> Crew: {crewSize} worker{crewSize === 1 ? '' : 's'}/day (max {maxConcurrentJobs} simultaneous)</span>
               </div>
-            )}
+              {(urgencySummary.overdue.length > 0 || urgencySummary.urgentToday.length > 0 || urgencySummary.dueTomorrow.length > 0 || urgencySummary.actionNeeded.length > 0) && (
+                <div className="calendar-trigger-urgency-row">
+                  {urgencySummary.overdue.length > 0 && (
+                    <span className="urgency-pill urgency-overdue"><AlertTriangle size={12} /> {urgencySummary.overdue.length} Overdue</span>
+                  )}
+                  {urgencySummary.urgentToday.length > 0 && (
+                    <span className="urgency-pill urgency-today"><BellRing size={12} /> {urgencySummary.urgentToday.length} Urgent Today</span>
+                  )}
+                  {urgencySummary.dueTomorrow.length > 0 && (
+                    <span className="urgency-pill urgency-tomorrow"><Clock size={12} /> {urgencySummary.dueTomorrow.length} Due Tomorrow</span>
+                  )}
+                  {urgencySummary.actionNeeded.length > 0 && (
+                    <span className="urgency-pill urgency-action">{urgencySummary.actionNeeded.length} To Do / Action</span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        <span className="calendar-trigger-toggle">
-          {isOpen ? 'Hide calendar' : 'Open calendar'}
-          {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-        </span>
-      </button>
+          <span className="calendar-trigger-toggle">
+            {isOpen ? 'Hide calendar' : 'Open calendar'}
+            {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </span>
+        </button>
+      )}
 
       {isOpen && (
         <div className="calendar-dropdown-body" id="gardener-calendar-body">
-          {notice && <div className="form-success" role="status">{notice}</div>}
+          {notice && <TransientSuccess key={notice} message={notice} />}
           {error && <div className="form-error" role="alert">{error}</div>}
 
           {urgencySummary.priorityQueue.length > 0 && (

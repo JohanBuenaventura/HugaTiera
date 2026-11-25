@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 import { fetchAiUsage, requestGardenPlan } from '../services/ai'
 import AppSidebar from '../components/AppSidebar'
 
@@ -11,6 +12,7 @@ const promptExamples = [
 ]
 
 export default function AssistantPage() {
+  const { user } = useAuth()
   const [input, setInput] = useState('')
   const [answer, setAnswer] = useState('')
   const [resultMeta, setResultMeta] = useState(null)
@@ -44,7 +46,7 @@ export default function AssistantPage() {
   }
 
   return (
-    <main className="marketplace-page protected-page">
+    <main className={`marketplace-page protected-page${['client', 'gardener'].includes(user?.role) ? ' member-workspace' : ''}`} data-workspace={user?.role}>
       <AppSidebar />
       <section className="container assistant-page-content">
         <Link className="back-link" to="/"><ArrowLeft size={15} /> Back home</Link>

@@ -122,7 +122,7 @@ export default function CommunicationPage({ mode = 'messages' }) {
   }
 
   return (
-    <main className="marketplace-page protected-page">
+    <main className={`marketplace-page protected-page${['client', 'gardener'].includes(user?.role) ? ' member-workspace' : ''}`} data-workspace={user?.role}>
       <AppSidebar />
       <section className="container communication-content">
         <div className="communication-heading">

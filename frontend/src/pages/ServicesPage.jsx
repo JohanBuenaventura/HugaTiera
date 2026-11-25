@@ -81,7 +81,7 @@ export default function ServicesPage() {
   }
 
   return (
-    <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+    <main className={`marketplace-page${user ? ' protected-page' : ''}${['client', 'gardener'].includes(user?.role) ? ' member-workspace' : ''}`} data-workspace={user?.role || 'public'}>
       {user ? <AppSidebar /> : <PublicHeader />}
       <section className="container marketplace-content">
         <p className="eyebrow">Explore local help</p>
@@ -130,7 +130,6 @@ export default function ServicesPage() {
                   ) : (
                     <div className="marketplace-card-placeholder" aria-hidden="true">
                       <Leaf size={26} />
-                      <span>{service.category_name}</span>
                     </div>
                   )}
                   <span className="category-pill media-badge">{service.category_name}</span>

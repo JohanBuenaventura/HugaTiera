@@ -21,6 +21,7 @@ import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
 import StarRating from '../components/StarRating'
+import TransientSuccess from '../components/TransientSuccess'
 
 const AGREEMENT_STEPS = [
   { id: 1, label: 'Scope & price' },
@@ -1027,7 +1028,7 @@ function BookingDetails({ id }) {
           </button>
         </div>
       )}
-      {statusMessage && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{statusMessage}</div>}
+      {statusMessage && <TransientSuccess key={statusMessage} message={statusMessage} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <article className="dashboard-panel booking-detail-card">
         <div className="payment-status-panel">
@@ -2101,5 +2102,7 @@ function BookingList() {
 
 export default function BookingPage({ detail = false, create = false }) {
   const { bookingId } = useParams()
-  return <main className="marketplace-page protected-page"><AppSidebar />{detail ? <BookingDetails id={bookingId} /> : create ? <BookingForm /> : <BookingList />}</main>
+  const { user } = useAuth()
+  const memberWorkspace = ['client', 'gardener'].includes(user?.role)
+  return <main className={`marketplace-page protected-page${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={user?.role}><AppSidebar />{detail ? <BookingDetails id={bookingId} /> : create ? <BookingForm /> : <BookingList />}</main>
 }

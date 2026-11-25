@@ -19,6 +19,7 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import TransientSuccess from '../components/TransientSuccess'
 import {
   MIN_REGISTRATION_AGE,
   WEEKDAY_OPTIONS,
@@ -198,7 +199,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   const isUnderage = computedAge !== null && computedAge < MIN_REGISTRATION_AGE
 
   return <form className="profile-form" onSubmit={submit}>
-    {message && <div className="form-success" role="status">{message}</div>}
+    {message && <TransientSuccess key={message} message={message} />}
     {error && <div className="form-error" role="alert">{error}</div>}
     <div className="avatar-upload-row">
       <div className="avatar-preview">
@@ -492,7 +493,7 @@ function GardenerTools({ isApproved, section = 'services' }) {
             </div>
             <Link className="text-link" to="/dashboard">Back to overview</Link>
           </div>
-          {message && <div className="form-success" role="status">{message}</div>}
+          {message && <TransientSuccess key={message} message={message} />}
           {error && <div className="form-error" role="alert">{error}</div>}
           <form className="profile-form" onSubmit={savePortfolio}>
             <label>Title<input required placeholder="e.g. Tropical patio makeover" value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} /></label>
@@ -534,7 +535,7 @@ function GardenerTools({ isApproved, section = 'services' }) {
         <p className="field-note" style={{ marginBottom: '16px' }}>
           {isApproved ? 'Your active services are visible in the public marketplace.' : 'Your services are saved, but they will remain hidden until an administrator approves your gardener profile.'}
         </p>
-        {message && <div className="form-success" role="status">{message}</div>}
+        {message && <TransientSuccess key={message} message={message} />}
         {error && <div className="form-error" role="alert">{error}</div>}
         <form className="profile-form" onSubmit={saveService}>
           <div className="form-row">
@@ -1455,66 +1456,19 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   }
 
   return (
-    <main className="dashboard-page">
+    <main className="dashboard-page member-workspace" data-workspace={role}>
       <AppSidebar />
       <section className="container dashboard-content">
-        <div className="dashboard-topbar">
-          <p className="eyebrow" style={{ margin: 0 }}>{roleLabel} dashboard</p>
-          <div className="dashboard-tabs dashboard-tabs-top" role="tablist" aria-label="Dashboard sections">
-            <Link
-              className={`dashboard-tab${activeTab === 'overview' ? ' is-active' : ''}`}
-              role="tab"
-              aria-selected={activeTab === 'overview'}
-              to="/dashboard"
-            >
-              Overview & activity
-            </Link>
-            {role === 'gardener' && (
-              <>
-                <Link
-                  className={`dashboard-tab${activeTab === 'services' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'services'}
-                  to="/dashboard?tab=services"
-                >
-                  My services
-                </Link>
-                <Link
-                  className={`dashboard-tab${activeTab === 'portfolio' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'portfolio'}
-                  to="/dashboard?tab=portfolio"
-                >
-                  Portfolio
-                </Link>
-                <Link
-                  className={`dashboard-tab${activeTab === 'clerks' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'clerks'}
-                  to="/dashboard?tab=clerks"
-                >
-                  My Clerks
-                </Link>
-              </>
-            )}
-            <Link
-              className={`dashboard-tab${isProfileView ? ' is-active' : ''}`}
-              role="tab"
-              aria-selected={isProfileView}
-              to="/dashboard?tab=profile"
-            >
-              Profile & settings
-            </Link>
-          </div>
-        </div>
         <div className="dashboard-hero-row">
           <div>
-            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Clerks.' : `Welcome, ${user.firstName}.`}</h1>
+            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'calendar' ? 'Schedule calendar.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Clerks.' : `Welcome, ${user.firstName}.`}</h1>
             <p className="dashboard-lead" style={{ marginBottom: 0 }}>
               {isProfileView
                 ? 'Review and update your contact details and public profile information.'
                 : activeTab === 'services'
                   ? 'Create, edit, and manage the gardening services you offer.'
+                  : activeTab === 'calendar'
+                    ? 'Review upcoming jobs, manage availability, and block dates from one place.'
                   : activeTab === 'portfolio'
                     ? 'Showcase your completed garden projects to build client trust.'
                     : activeTab === 'clerks'
@@ -1555,17 +1509,20 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
           )}
         </div>
         {roleError && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{roleError}</div>}
-        {roleNotice && <div className="form-success" role="status" style={{ marginBottom: '12px' }}>{roleNotice}</div>}
-        {role === 'gardener' && (
-          <div className={`form-note ${form.is_approved ? 'form-success' : 'form-error'}`}>
-            {form.is_approved
-              ? 'Your gardener profile is approved and active services are visible publicly.'
-              : 'Your gardener profile is waiting for administrator approval. Your active services are not public yet.'}
-          </div>
-        )}
+        {roleNotice && <TransientSuccess key={roleNotice} message={roleNotice} style={{ marginBottom: '12px' }} />}
 
         {isProfileView ? (
           <>
+            {role === 'gardener' && (
+              <div className={`gardener-approval-status${form.is_approved ? ' is-approved' : ''}`} role="status">
+                <strong>{form.is_approved ? 'Profile approved' : 'Approval pending'}</strong>
+                <span>
+                  {form.is_approved
+                    ? 'Your active services are visible publicly.'
+                    : 'Your active services stay hidden until approval.'}
+                </span>
+              </div>
+            )}
             <section className="dashboard-panel dual-role-card" style={{ marginBottom: '20px' }}>
               <div className="activity-heading">
                 <div>
@@ -1611,6 +1568,12 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
               <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
             </section>
           </>
+        ) : role === 'gardener' && activeTab === 'calendar' ? (
+          <GardenerScheduleCalendar
+            standalone
+            profileForm={form}
+            onUnavailableDatesChange={(nextDates) => onSaved({ profile: { ...form, unavailableDates: nextDates } })}
+          />
         ) : role === 'gardener' && activeTab === 'clerks' ? (
           <GardenerClerksPanel />
         ) : role === 'gardener' && (activeTab === 'services' || activeTab === 'portfolio') ? (
@@ -2804,7 +2767,7 @@ export default function DashboardPage({ profileView = false }) {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const hashTab = location.hash?.startsWith('#admin-') ? location.hash.replace('#admin-', '') : ''
-  const activeTab = resolveDashboardTab(searchParams.get('tab') || hashTab, profileView)
+  const activeTab = resolveDashboardTab(searchParams.get('tab') || hashTab, profileView, user.role)
   const [profileData, setProfileData] = useState({ form: initialProfile, counts: {} })
   const [summary, setSummary] = useState({ counts: {}, users: [] })
   const [error, setError] = useState('')

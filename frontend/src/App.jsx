@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import {
   ArrowRight,
@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
+import './ClientGardener.css'
 import editorialAbout from './assets/editorial-about.jpg'
 import editorialCta from './assets/editorial-cta.jpg'
 import editorialFeature from './assets/editorial-feature.jpg'
@@ -27,20 +28,22 @@ import editorialWhy from './assets/editorial-why.jpg'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import { useAuth } from './hooks/useAuth'
-import { LoginPage, RegisterPage } from './pages/AuthPage'
-import DashboardPage from './pages/DashboardPage'
-import ServicesPage from './pages/ServicesPage'
-import ServiceDetailPage from './pages/ServiceDetailPage'
-import GardenerPage from './pages/GardenerPage'
-import InquiryPage from './pages/InquiryPage'
-import CommunicationPage from './pages/CommunicationPage'
-import BookingPage from './pages/BookingPage'
-import AssistantPage from './pages/AssistantPage'
 import {
   FLOATING_MESSAGE_ICON_LABEL,
   shouldShowFloatingMessageIcon,
 } from './services/profiles'
 import { servicesApi } from './services/services'
+
+const LoginPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: module.LoginPage })))
+const RegisterPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: module.RegisterPage })))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const ServicesPage = lazy(() => import('./pages/ServicesPage'))
+const ServiceDetailPage = lazy(() => import('./pages/ServiceDetailPage'))
+const GardenerPage = lazy(() => import('./pages/GardenerPage'))
+const InquiryPage = lazy(() => import('./pages/InquiryPage'))
+const CommunicationPage = lazy(() => import('./pages/CommunicationPage'))
+const BookingPage = lazy(() => import('./pages/BookingPage'))
+const AssistantPage = lazy(() => import('./pages/AssistantPage'))
 
 const categories = [
   {
@@ -296,32 +299,34 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/services" element={<ServicesPage />} />
-          <Route path="/services/:serviceId" element={<ServiceDetailPage />} />
-          <Route path="/gardeners/:gardenerId" element={<GardenerPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/assistant" element={<AssistantPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/inquiries/:inquiryId" element={<InquiryPage detail />} />
-            <Route element={<ProtectedRoute roles={['client', 'gardener', 'clerk']} />}>
-              <Route path="/notifications" element={<CommunicationPage mode="notifications" />} />
+        <Suspense fallback={<div className="route-loading" role="status" aria-live="polite">Loading page...</div>}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/services" element={<ServicesPage />} />
+            <Route path="/services/:serviceId" element={<ServiceDetailPage />} />
+            <Route path="/gardeners/:gardenerId" element={<GardenerPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/assistant" element={<AssistantPage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/inquiries/:inquiryId" element={<InquiryPage detail />} />
+              <Route element={<ProtectedRoute roles={['client', 'gardener', 'clerk']} />}>
+                <Route path="/notifications" element={<CommunicationPage mode="notifications" />} />
+              </Route>
+              <Route element={<ProtectedRoute roles={['client', 'gardener']} />}>
+                <Route path="/profile" element={<DashboardPage profileView />} />
+                <Route path="/inquiries" element={<InquiryPage />} />
+                <Route path="/inquiries/new" element={<InquiryPage create />} />
+                <Route path="/messages" element={<CommunicationPage mode="messages" />} />
+                <Route path="/bookings" element={<BookingPage />} />
+                <Route path="/bookings/new" element={<BookingPage create />} />
+                <Route path="/bookings/:bookingId" element={<BookingPage detail />} />
+              </Route>
             </Route>
-            <Route element={<ProtectedRoute roles={['client', 'gardener']} />}>
-              <Route path="/profile" element={<DashboardPage profileView />} />
-              <Route path="/inquiries" element={<InquiryPage />} />
-              <Route path="/inquiries/new" element={<InquiryPage create />} />
-              <Route path="/messages" element={<CommunicationPage mode="messages" />} />
-              <Route path="/bookings" element={<BookingPage />} />
-              <Route path="/bookings/new" element={<BookingPage create />} />
-              <Route path="/bookings/:bookingId" element={<BookingPage detail />} />
-            </Route>
-          </Route>
-          <Route path="*" element={<PublicRedirect />} />
-        </Routes>
+            <Route path="*" element={<PublicRedirect />} />
+          </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   )

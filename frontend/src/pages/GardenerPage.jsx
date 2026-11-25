@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, CalendarDays, Clock, Leaf, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
+import TransientSuccess from '../components/TransientSuccess'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
 import { formatWorkingDaysLabel, profileApi } from '../services/profiles'
@@ -15,6 +16,8 @@ export default function GardenerPage() {
   const [reporting, setReporting] = useState(false)
   const [reportForm, setReportForm] = useState({ reason: '', details: '' })
   const [reportStatus, setReportStatus] = useState({ error: '', message: '', submitting: false })
+  const workspace = user?.role || 'public'
+  const memberWorkspace = ['client', 'gardener'].includes(user?.role)
 
   useEffect(() => {
     let active = true
@@ -41,7 +44,7 @@ export default function GardenerPage() {
   }
 
   return (
-    <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+    <main className={`marketplace-page${user ? ' protected-page' : ''}${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={workspace}>
       {user ? (
         <AppSidebar />
       ) : (
@@ -90,7 +93,7 @@ export default function GardenerPage() {
                   </button>
                 </div>
               )}
-              {reportStatus.message && <div className="form-success" role="status" style={{ marginTop: '12px' }}>{reportStatus.message}</div>}
+              {reportStatus.message && <TransientSuccess key={reportStatus.message} message={reportStatus.message} style={{ marginTop: '12px' }} />}
               {reportStatus.error && <div className="form-error" role="alert" style={{ marginTop: '12px' }}>{reportStatus.error}</div>}
               {reporting && (
                 <form className="profile-form" onSubmit={submitReport} style={{ marginTop: '14px', maxWidth: '520px' }}>

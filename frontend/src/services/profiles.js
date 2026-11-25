@@ -195,6 +195,12 @@ export function getDashboardNavLinks(role, unreadCounts = {}) {
   }
   return [
     { to: '/dashboard', label: 'Overview', type: 'route' },
+    ...(role === 'gardener' ? [{ to: '/dashboard?tab=calendar', label: 'Calendar', type: 'route' }] : []),
+    ...(role === 'gardener' ? [
+      { to: '/dashboard?tab=services', label: 'My services', type: 'route' },
+      { to: '/dashboard?tab=portfolio', label: 'Portfolio', type: 'route' },
+      { to: '/dashboard?tab=clerks', label: 'My Clerks', type: 'route' },
+    ] : []),
     ...(role === 'client' ? [{ to: '/services', label: 'Marketplace', type: 'route' }] : []),
     { to: '/inquiries', label: 'Inquiries', badge: unreadCounts.inquiries || 0, type: 'route' },
     { to: '/messages', label: 'Messages', badge: unreadCounts.messages || 0, type: 'route' },
@@ -204,11 +210,14 @@ export function getDashboardNavLinks(role, unreadCounts = {}) {
   ]
 }
 
-export function resolveDashboardTab(tabParam, profileView = false) {
+export function resolveDashboardTab(tabParam, profileView = false, role) {
   if (profileView || tabParam === 'profile' || tabParam === 'settings') {
     return 'profile'
   }
-  if (['services', 'portfolio', 'clerks', 'analytics', 'approvals', 'pricing', 'activity', 'reports', 'accounts', 'schedules', 'payments'].includes(tabParam)) {
+  if (tabParam === 'calendar' && role !== 'gardener') {
+    return 'overview'
+  }
+  if (['services', 'portfolio', 'clerks', 'calendar', 'analytics', 'approvals', 'pricing', 'activity', 'reports', 'accounts', 'schedules', 'payments'].includes(tabParam)) {
     return tabParam
   }
   return 'overview'

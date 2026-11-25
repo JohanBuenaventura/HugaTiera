@@ -699,6 +699,43 @@ h1 { max-width: 580px; margin-bottom: 21px; font-size: clamp(42px, 5vw, 66px); l
 .back-link:hover { color: #173f28; }
 .form-error { border-color: #e4b7a4; color: #9a4e36; background: #fff2eb; }
 .form-success { border-color: #b7c997; color: #41612f; background: #eef5df; }
+.transient-success {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+.transient-success.is-fading {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+}
+.transient-success-dismiss {
+  display: grid;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.transient-success-dismiss:hover {
+  background: rgba(36, 75, 54, .08);
+}
+.transient-success-dismiss:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .transient-success {
+    transition: none;
+  }
+}
 
 .marketplace-filters {
   grid-template-columns: minmax(200px, 1.6fr) repeat(3, 1fr);
@@ -1860,11 +1897,6 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   color: var(--forest);
   background: linear-gradient(145deg, #EEF2EA 0%, #E4EBE0 100%);
   text-align: center;
-}
-.marketplace-card-placeholder span {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
 }
 .media-badge,
 .media-status-badge {

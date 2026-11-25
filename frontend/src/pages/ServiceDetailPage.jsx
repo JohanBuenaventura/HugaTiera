@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, CalendarDays, Clock, Leaf, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
+import TransientSuccess from '../components/TransientSuccess'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
 import { formatWorkingDaysLabel, profileApi } from '../services/profiles'
@@ -15,6 +16,8 @@ export default function ServiceDetailPage() {
   const [reporting, setReporting] = useState(false)
   const [reportForm, setReportForm] = useState({ reason: '', details: '' })
   const [reportStatus, setReportStatus] = useState({ error: '', message: '', submitting: false })
+  const workspace = user?.role || 'public'
+  const memberWorkspace = ['client', 'gardener'].includes(user?.role)
 
   useEffect(() => {
     let active = true
@@ -50,10 +53,10 @@ export default function ServiceDetailPage() {
     }
   }
 
-  if (error) return <main className={`marketplace-page${user ? ' protected-page' : ''}`}>{user ? <AppSidebar /> : <PageHeader />}<section className="container detail-content"><div className="form-error">{error}</div></section></main>
+  if (error) return <main className={`marketplace-page${user ? ' protected-page' : ''}${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={workspace}>{user ? <AppSidebar /> : <PageHeader />}<section className="container detail-content"><div className="form-error">{error}</div></section></main>
   if (!data) {
     return (
-      <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+      <main className={`marketplace-page${user ? ' protected-page' : ''}${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={workspace}>
         {user ? <AppSidebar /> : <PageHeader />}
         <section className="container detail-content">
           <div className="dashboard-panel skeleton-stack" aria-busy="true">
@@ -68,7 +71,7 @@ export default function ServiceDetailPage() {
   const { service, portfolios } = data
 
   return (
-    <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+    <main className={`marketplace-page${user ? ' protected-page' : ''}${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={workspace}>
       {user ? <AppSidebar /> : <PageHeader />}
       <section className="container detail-content">
         <Link className="back-link" to="/services"><ArrowLeft size={15} /> Back to services</Link>
@@ -123,7 +126,7 @@ export default function ServiceDetailPage() {
                 </button>
               </div>
             )}
-            {reportStatus.message && <div className="form-success" role="status" style={{ marginTop: '12px' }}>{reportStatus.message}</div>}
+            {reportStatus.message && <TransientSuccess key={reportStatus.message} message={reportStatus.message} style={{ marginTop: '12px' }} />}
             {reportStatus.error && <div className="form-error" role="alert" style={{ marginTop: '12px' }}>{reportStatus.error}</div>}
             {reporting && (
               <form className="profile-form" onSubmit={submitReport} style={{ marginTop: '14px' }}>
