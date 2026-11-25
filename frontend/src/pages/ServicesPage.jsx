@@ -81,7 +81,7 @@ export default function ServicesPage() {
   }
 
   return (
-    <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+    <main className={`marketplace-page${user ? ' protected-page' : ''}${['client', 'gardener'].includes(user?.role) ? ' member-workspace' : ''}`} data-workspace={user?.role || 'public'}>
       {user ? <AppSidebar /> : <PublicHeader />}
       <section className="container marketplace-content">
         <p className="eyebrow">Explore local help</p>
@@ -90,10 +90,10 @@ export default function ServicesPage() {
           Search active services from approved gardeners in Zamboanga City. Browse provider portfolios or start with an inquiry.
         </p>
 
-        <form className="marketplace-filters" onSubmit={(event) => event.preventDefault()}>
+        <form className="marketplace-filters" role="search" aria-label="Filter gardening services" onSubmit={(event) => event.preventDefault()}>
           <label className="search-field">
-            <Search size={17} />
-            <input placeholder="Search services, gardeners, or keywords" value={filters.keyword} onChange={changeFilter('keyword')} />
+            <Search size={17} aria-hidden="true" />
+            <input aria-label="Search services, gardeners, or keywords" placeholder="Search services, gardeners, or keywords" value={filters.keyword} onChange={changeFilter('keyword')} />
           </label>
           <select aria-label="Filter by category" value={filters.categoryId} onChange={changeFilter('categoryId')}>
             <option value="">All categories</option>
@@ -108,13 +108,13 @@ export default function ServicesPage() {
         </form>
 
         {error && <div className="form-error" role="alert">{error}</div>}
-        {loading && <p className="result-count">Loading services...</p>}
+        {loading && <p className="result-count" role="status">Loading services...</p>}
         {!loading && !error && services.length === 0 && (
-          <div className="empty-state">
+          <div className="empty-state" role="status">
             No approved services match your search yet. Try another keyword or category, or check back after more gardeners are approved.
           </div>
         )}
-        {!loading && <p className="result-count">{pagination.total} service{pagination.total === 1 ? '' : 's'} available</p>}
+        {!loading && <p className="result-count" role="status">{pagination.total} service{pagination.total === 1 ? '' : 's'} available</p>}
 
         <div className="marketplace-grid marketplace-card-grid">
           {services.map((service) => {
@@ -123,20 +123,19 @@ export default function ServicesPage() {
               : (gardenerCovers[service.gardener_id] || null)
             const gardenerName = service.business_name || `${service.first_name} ${service.last_name}`
             return (
-              <article className="marketplace-card visual-market-card" key={service.id}>
+              <article className="marketplace-card visual-market-card" key={service.id} aria-labelledby={`service-title-${service.id}`}>
                 <div className="marketplace-card-media">
                   {coverUrl ? (
                     <img src={coverUrl} alt={`${service.title} by ${gardenerName}`} loading="lazy" />
                   ) : (
                     <div className="marketplace-card-placeholder" aria-hidden="true">
                       <Leaf size={26} />
-                      <span>{service.category_name}</span>
                     </div>
                   )}
                   <span className="category-pill media-badge">{service.category_name}</span>
                 </div>
                 <div className="marketplace-card-body">
-                  <h2>{service.title}</h2>
+                  <h2 id={`service-title-${service.id}`}>{service.title}</h2>
                   <p>{service.description}</p>
                   <div className="service-meta">
                     <Link to={`/gardeners/${service.gardener_id}`}>{gardenerName}</Link>
@@ -145,9 +144,9 @@ export default function ServicesPage() {
                     </strong>
                   </div>
                   <div className="marketplace-card-footer">
-                    <span className="card-area"><MapPin size={13} /> {service.service_area}</span>
+                    <span className="card-area"><MapPin size={13} aria-hidden="true" /> {service.service_area}</span>
                     <Link className="card-cta" to={`/services/${service.id}`}>
-                      View service <ArrowRight size={15} />
+                      View service <ArrowRight size={15} aria-hidden="true" />
                     </Link>
                   </div>
                 </div>
@@ -157,15 +156,15 @@ export default function ServicesPage() {
         </div>
 
         {pagination.pages > 1 && (
-          <div className="pagination">
-            <button type="button" disabled={pagination.page <= 1} onClick={() => setPagination((current) => ({ ...current, page: current.page - 1 }))}>
+          <nav className="pagination" aria-label="Services pagination">
+            <button type="button" aria-label="Previous page" disabled={pagination.page <= 1} onClick={() => setPagination((current) => ({ ...current, page: current.page - 1 }))}>
               Previous
             </button>
-            <span>Page {pagination.page} of {pagination.pages}</span>
-            <button type="button" disabled={pagination.page >= pagination.pages} onClick={() => setPagination((current) => ({ ...current, page: current.page + 1 }))}>
+            <span aria-live="polite">Page {pagination.page} of {pagination.pages}</span>
+            <button type="button" aria-label="Next page" disabled={pagination.page >= pagination.pages} onClick={() => setPagination((current) => ({ ...current, page: current.page + 1 }))}>
               Next
             </button>
-          </div>
+          </nav>
         )}
       </section>
     </main>

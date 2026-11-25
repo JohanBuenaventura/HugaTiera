@@ -20,6 +20,7 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import TransientSuccess from '../components/TransientSuccess'
 import {
   MIN_REGISTRATION_AGE,
   WEEKDAY_OPTIONS,
@@ -199,7 +200,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   const isUnderage = computedAge !== null && computedAge < MIN_REGISTRATION_AGE
 
   return <form className="profile-form" onSubmit={submit}>
-    {message && <div className="form-success" role="status">{message}</div>}
+    {message && <TransientSuccess key={message} message={message} />}
     {error && <div className="form-error" role="alert">{error}</div>}
     <div className="avatar-upload-row">
       <div className="avatar-preview">
@@ -510,7 +511,7 @@ function GardenerTools({ isApproved, section = 'services' }) {
             </div>
             <Link className="text-link" to="/dashboard">Back to overview</Link>
           </div>
-          {message && <div className="form-success" role="status">{message}</div>}
+          {message && <TransientSuccess key={message} message={message} />}
           {error && <div className="form-error" role="alert">{error}</div>}
           <form className="profile-form" onSubmit={savePortfolio}>
             <label>Title<input required placeholder="e.g. Tropical patio makeover" value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} /></label>
@@ -552,7 +553,7 @@ function GardenerTools({ isApproved, section = 'services' }) {
         <p className="field-note" style={{ marginBottom: '16px' }}>
           {isApproved ? 'Your active services are visible in the public marketplace.' : 'Your services are saved, but they will remain hidden until an administrator approves your gardener profile.'}
         </p>
-        {message && <div className="form-success" role="status">{message}</div>}
+        {message && <TransientSuccess key={message} message={message} />}
         {error && <div className="form-error" role="alert">{error}</div>}
         <form className="profile-form" onSubmit={saveService}>
           <div className="form-row">
@@ -752,18 +753,18 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
               Ranked by Zamboanga City barangay proximity ({referenceLocation}), verified review scores, and clean service conduct. Advisory only—you always choose who to inquire or book.
             </p>
           </div>
-          <div className="inline-actions">
+          <div className="inline-actions showcase-header-actions">
             {services.length > 0 && (
               <button
                 type="button"
-                className="table-action"
+                className="button button-outline button-sm"
                 disabled={loadingSummary}
                 onClick={handleExplainTopPicks}
               >
                 <Sparkles size={14} /> {loadingSummary ? 'Summarizing...' : 'AI Explain Top Picks'}
               </button>
             )}
-            <Link className="button button-outline" to="/services">
+            <Link className="button button-outline button-sm" to="/services">
               View all services <ArrowRight size={15} />
             </Link>
           </div>
@@ -772,7 +773,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
         <div className="ai-filter-bar" role="region" aria-label="AI service filters">
           <div className="ai-filter-inputs">
             <label>
-              Your barangay / area
+              <span className="ai-filter-label-text">Your barangay / area</span>
               <input
                 maxLength="120"
                 placeholder="e.g., Tetuan, Sta. Maria, Pasonanca"
@@ -781,7 +782,9 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
               />
             </label>
             <label>
-              What do you need? <span className="label-note">(Category)</span>
+              <span className="ai-filter-label-text">
+                What do you need? <span className="label-note">(Category)</span>
+              </span>
               <select
                 value={selectedCategoryId}
                 onChange={(e) => setSelectedCategoryId(e.target.value)}
@@ -799,7 +802,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                 { key: 'smart_ai', label: 'AI Smart Match' },
                 { key: 'nearby', label: 'Nearest First' },
                 { key: 'top_rated', label: 'Highest Rated' },
-                { key: 'best_conduct', label: 'Best Service Conduct' },
+                { key: 'best_conduct', label: 'Best Conduct' },
               ].map((opt) => (
                 <button
                   key={opt.key}
@@ -817,14 +820,19 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                 <input type="checkbox" checked={nearbyOnly} onChange={(e) => setNearbyOnly(e.target.checked)} />
                 <span>Nearby only</span>
               </label>
-              <label className="ai-toggle-chip">
-                <input type="checkbox" checked={minRating >= 4} onChange={(e) => setMinRating(e.target.checked ? 4 : 0)} />
-                <span>4.0★+ rated</span>
-              </label>
-              <label className="ai-toggle-chip">
-                <input type="checkbox" checked={goodConductOnly} onChange={(e) => setGoodConductOnly(e.target.checked)} />
-                <span>Clean conduct only</span>
-              </label>
+              <details className="ai-filter-more">
+                <summary className="ai-toggle-chip ai-filter-more-summary">More filters</summary>
+                <div className="ai-filter-more-body">
+                  <label className="ai-toggle-chip">
+                    <input type="checkbox" checked={minRating >= 4} onChange={(e) => setMinRating(e.target.checked ? 4 : 0)} />
+                    <span>4.0★+ rated</span>
+                  </label>
+                  <label className="ai-toggle-chip">
+                    <input type="checkbox" checked={goodConductOnly} onChange={(e) => setGoodConductOnly(e.target.checked)} />
+                    <span>Clean conduct only</span>
+                  </label>
+                </div>
+              </details>
             </div>
           </div>
         </div>
@@ -1075,7 +1083,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
               Automatically ranked by proximity to your Zamboanga City service area, matching service categories, low competition, and client conduct.
             </p>
           </div>
-          <Link className="button button-outline" to="/inquiries?tab=open">
+          <Link className="button button-outline button-sm" to="/inquiries?tab=open">
             Open full requests board <ArrowRight size={15} />
           </Link>
         </div>
@@ -1084,7 +1092,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
           <div className="ai-filter-bar" role="region" aria-label="AI open lead filters">
             <div className="ai-filter-inputs">
               <label>
-                Filter near barangay / service area
+                <span className="ai-filter-label-text">Filter near barangay / service area</span>
                 <input
                   maxLength="120"
                   placeholder="e.g., Tetuan, Guiwan, Zamboanga City"
@@ -1098,7 +1106,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
                 {[
                   { key: 'smart_ai', label: 'AI Best Lead' },
                   { key: 'nearby', label: 'Nearest First' },
-                  { key: 'category_match', label: 'Matches My Services' },
+                  { key: 'category_match', label: 'My Services' },
                   { key: 'low_competition', label: 'Low Competition' },
                 ].map((opt) => (
                   <button
@@ -1353,6 +1361,92 @@ function DashboardActivity({ role }) {
   )
 }
 
+function OnboardingGuide({ role, form, counts }) {
+  const isClient = role === 'client'
+  const profileReady = Boolean(
+    form.phone && (isClient ? (form.address || form.city) : (form.serviceArea || form.city))
+  )
+  const hasRequests = Number(counts.inquiries || 0) > 0
+  const hasBookings = Number(counts.bookings || 0) > 0
+  const hasServices = Number(counts.services || 0) > 0
+
+  const flow = isClient
+    ? [
+      { num: 1, title: 'Send a request', text: 'Post a general request or a direct inquiry, with photos.' },
+      { num: 2, title: 'Compare offers', text: 'Approved gardeners send their price and proposed scope.' },
+      { num: 3, title: 'Agree together', text: 'Both approve the same scope, price, and schedule.' },
+      { num: 4, title: 'Get booked', text: 'A booking is created only after both approve.' },
+    ]
+    : [
+      { num: 1, title: 'Find requests', text: 'Browse open requests or reply to direct inquiries.' },
+      { num: 2, title: 'Send an offer', text: 'Share your price, scope, and availability.' },
+      { num: 3, title: 'Agree together', text: 'Both approve the same scope, price, and schedule.' },
+      { num: 4, title: 'Get booked', text: 'A booking is created only after both approve.' },
+    ]
+
+  const checklist = isClient
+    ? [
+      { label: 'Complete your profile', to: '/dashboard?tab=profile', cta: 'Set up', done: profileReady },
+      { label: 'Send your first request or inquiry', to: '/services', cta: 'Start', done: hasRequests },
+      { label: 'Confirm your first booking', to: '/bookings', cta: 'View', done: hasBookings },
+    ]
+    : [
+      { label: 'Complete your provider profile', to: '/dashboard?tab=profile', cta: 'Set up', done: profileReady },
+      { label: 'Get approved and list a service', to: '/dashboard?tab=services', cta: 'Manage', done: Boolean(form.is_approved) && hasServices },
+      { label: 'Respond to a request or send an offer', to: '/inquiries?tab=open', cta: 'Find work', done: hasRequests },
+      { label: 'Get your first booking', to: '/bookings', cta: 'View', done: hasBookings },
+    ]
+
+  const completedSteps = checklist.filter((item) => item.done).length
+
+  return (
+    <section className="workspace-onboarding-panel" aria-labelledby="workspace-onboarding-title">
+      <div className="workspace-onboarding-heading">
+        <div>
+          <p className="eyebrow">Getting started</p>
+          <h2 id="workspace-onboarding-title">{completedSteps === checklist.length ? "You're all set" : 'Your next steps'}</h2>
+        </div>
+        <span className="workspace-onboarding-progress">
+          {completedSteps} of {checklist.length} complete
+        </span>
+      </div>
+      <ul className="onboarding-checklist workspace-onboarding-list" aria-label="Getting started checklist">
+        {checklist.map((item, index) => (
+          <li className={`workspace-onboarding-item${item.done ? ' is-done' : ''}`} key={item.label}>
+            <div className="workspace-onboarding-item-top">
+              <span className="workspace-onboarding-marker" aria-hidden="true">{item.done ? '✓' : index + 1}</span>
+              <span className="workspace-onboarding-status">{item.done ? 'Complete' : 'To do'}</span>
+            </div>
+            <strong className="workspace-onboarding-label">{item.label}</strong>
+            {!item.done && <Link className="workspace-onboarding-action" to={item.to}>{item.cta}</Link>}
+          </li>
+        ))}
+      </ul>
+      <details className="how-it-works-guide workspace-workflow-guide">
+        <summary>How the request-to-booking flow works</summary>
+        <div className="how-it-works-body">
+          <p>
+            {isClient
+              ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
+              : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
+          </p>
+          <ol className="booking-stepper" aria-label="How HugaTiera works">
+            {flow.map((step) => (
+              <li className="booking-step" key={step.num}>
+                <span className="booking-step-num" aria-hidden="true">{step.num}</span>
+                <span className="booking-step-copy">
+                  <strong>{step.title}</strong>
+                  <small>{step.text}</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </details>
+    </section>
+  )
+}
+
 function UserDashboard({ user, profileData, loading = false, onSaved, activeTab }) {
   const { switchRole, enableDualRole } = useAuth()
   const [roleBusy, setRoleBusy] = useState(false)
@@ -1404,66 +1498,20 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
   }
 
   return (
-    <main className="dashboard-page">
+    <main className="dashboard-page member-workspace" data-workspace={role}>
       <AppSidebar />
       <section className="container dashboard-content">
-        <div className="dashboard-topbar">
-          <p className="eyebrow" style={{ margin: 0 }}>{roleLabel} dashboard</p>
-          <div className="dashboard-tabs dashboard-tabs-top" role="tablist" aria-label="Dashboard sections">
-            <Link
-              className={`dashboard-tab${activeTab === 'overview' ? ' is-active' : ''}`}
-              role="tab"
-              aria-selected={activeTab === 'overview'}
-              to="/dashboard"
-            >
-              Overview & activity
-            </Link>
-            {role === 'gardener' && (
-              <>
-                <Link
-                  className={`dashboard-tab${activeTab === 'services' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'services'}
-                  to="/dashboard?tab=services"
-                >
-                  My services
-                </Link>
-                <Link
-                  className={`dashboard-tab${activeTab === 'portfolio' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'portfolio'}
-                  to="/dashboard?tab=portfolio"
-                >
-                  Portfolio
-                </Link>
-                <Link
-                  className={`dashboard-tab${activeTab === 'clerks' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'clerks'}
-                  to="/dashboard?tab=clerks"
-                >
-                  My Clerks
-                </Link>
-              </>
-            )}
-            <Link
-              className={`dashboard-tab${isProfileView ? ' is-active' : ''}`}
-              role="tab"
-              aria-selected={isProfileView}
-              to="/dashboard?tab=profile"
-            >
-              Profile & settings
-            </Link>
-          </div>
-        </div>
         <div className="dashboard-hero-row">
           <div>
-            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Clerks.' : `Welcome, ${user.firstName}.`}</h1>
+            <p className="workspace-eyebrow">{roleLabel} workspace</p>
+            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'calendar' ? 'Schedule calendar.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Clerks.' : `Welcome, ${user.firstName}.`}</h1>
             <p className="dashboard-lead" style={{ marginBottom: 0 }}>
               {isProfileView
                 ? 'Review and update your contact details and public profile information.'
                 : activeTab === 'services'
                   ? 'Create, edit, and manage the gardening services you offer.'
+                  : activeTab === 'calendar'
+                    ? 'Review upcoming jobs, manage availability, and block dates from one place.'
                   : activeTab === 'portfolio'
                     ? 'Showcase your completed garden projects to build client trust.'
                     : activeTab === 'clerks'
@@ -1496,22 +1544,13 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
                 <>
                   <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
                   <Link className="button button-outline" to="/dashboard?tab=services">My services</Link>
-                  <Link className="button button-outline" to="/dashboard?tab=portfolio">Portfolio</Link>
-                  <Link className="button button-outline" to="/dashboard?tab=clerks">My Clerks</Link>
                 </>
               )}
             </div>
           )}
         </div>
         {roleError && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{roleError}</div>}
-        {roleNotice && <div className="form-success" role="status" style={{ marginBottom: '12px' }}>{roleNotice}</div>}
-        {role === 'gardener' && !loading && (
-          <div className={`form-note ${form.is_approved ? 'form-success' : 'form-error'}`}>
-            {form.is_approved
-              ? 'Your gardener profile is approved and active services are visible publicly.'
-              : 'Your gardener profile is waiting for administrator approval. Your active services are not public yet.'}
-          </div>
-        )}
+        {roleNotice && <TransientSuccess message={roleNotice} style={{ marginBottom: '12px' }} />}
 
         {loading && (isProfileView || activeTab === 'overview') ? (
           <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading dashboard details">
@@ -1521,6 +1560,16 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
           </div>
         ) : isProfileView ? (
           <>
+            {role === 'gardener' && (
+              <div className={`gardener-approval-status${form.is_approved ? ' is-approved' : ''}`} role="status">
+                <strong>{form.is_approved ? 'Profile approved' : 'Approval pending'}</strong>
+                <span>
+                  {form.is_approved
+                    ? 'Your active services are visible publicly.'
+                    : 'Your active services stay hidden until approval.'}
+                </span>
+              </div>
+            )}
             <section className="dashboard-panel dual-role-card" style={{ marginBottom: '20px' }}>
               <div className="activity-heading">
                 <div>
@@ -1566,12 +1615,19 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
               <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
             </section>
           </>
+        ) : role === 'gardener' && activeTab === 'calendar' ? (
+          <GardenerScheduleCalendar
+            standalone
+            profileForm={form}
+            onUnavailableDatesChange={(nextDates) => onSaved({ profile: { ...form, unavailableDates: nextDates } })}
+          />
         ) : role === 'gardener' && activeTab === 'clerks' ? (
           <GardenerClerksPanel />
         ) : role === 'gardener' && (activeTab === 'services' || activeTab === 'portfolio') ? (
           <GardenerTools isApproved={form.is_approved} section={activeTab} />
         ) : (
           <>
+            <OnboardingGuide role={role} form={form} counts={counts} />
             <Stats role={role} counts={counts} />
             {role === 'gardener' && (
               <GardenerScheduleCalendar
@@ -2771,7 +2827,7 @@ export default function DashboardPage({ profileView = false }) {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const hashTab = location.hash?.startsWith('#admin-') ? location.hash.replace('#admin-', '') : ''
-  const activeTab = resolveDashboardTab(searchParams.get('tab') || hashTab, profileView)
+  const activeTab = resolveDashboardTab(searchParams.get('tab') || hashTab, profileView, user.role)
   const [profileData, setProfileData] = useState({ form: initialProfile, counts: {} })
   const [summary, setSummary] = useState({ counts: {}, users: [] })
   const [loadedRole, setLoadedRole] = useState(null)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Eye, EyeOff, Link2, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { profileApi } from '../services/profiles'
+import TransientSuccess from './TransientSuccess'
 
 const emptyCreateForm = {
   firstName: '',
@@ -109,7 +110,7 @@ export default function GardenerClerksPanel() {
       </p>
 
       {error && <div className="form-error" role="alert" style={{ marginBottom: '14px' }}>{error}</div>}
-      {notice && <div className="form-success" role="status" style={{ marginBottom: '14px' }}>{notice}</div>}
+      {notice && <TransientSuccess key={notice} message={notice} style={{ marginBottom: '14px' }} />}
 
       <div className="dashboard-grid">
         <div>

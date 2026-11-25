@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Send } from 'lucide-react'
+import {
+  ArrowLeft,
+  Bell,
+  CalendarDays,
+  ClipboardList,
+  CreditCard,
+  FileText,
+  MessageCircle,
+  Send,
+  Star,
+  UserRound,
+} from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { communicationApi } from '../services/communication'
@@ -39,6 +50,47 @@ function notificationPath(notification, user) {
   return null
 }
 
+const notificationPresentationByType = {
+  new_message: { category: 'message', label: 'New message', Icon: MessageCircle },
+  new_inquiry: { category: 'request', label: 'New inquiry', Icon: ClipboardList, requiresAction: true },
+  inquiry_status: { category: 'request', label: 'Request update', Icon: ClipboardList },
+  new_quotation: { category: 'offer', label: 'Offer to review', Icon: FileText, requiresAction: true },
+  quotation_revised: { category: 'offer', label: 'Offer revised', Icon: FileText, requiresAction: true },
+  quotation_status: { category: 'offer', label: 'Offer update', Icon: FileText },
+  agreement_proposed: { category: 'agreement', label: 'Agreement to review', Icon: FileText, requiresAction: true },
+  agreement_revised: { category: 'agreement', label: 'Agreement revised', Icon: FileText, requiresAction: true },
+  agreement_approved: { category: 'agreement', label: 'Agreement update', Icon: FileText },
+  agreement_cancelled: { category: 'agreement', label: 'Agreement status', Icon: FileText },
+  booking_confirmed: { category: 'booking', label: 'Booking confirmed', Icon: CalendarDays },
+  booking_status: { category: 'booking', label: 'Booking update', Icon: CalendarDays },
+  booking_reschedule: { category: 'booking', label: 'Schedule update', Icon: CalendarDays },
+  booking_reminder: { category: 'booking', label: 'Schedule reminder', Icon: CalendarDays },
+  booking_payment: { category: 'payment', label: 'Payment update', Icon: CreditCard },
+  new_review: { category: 'review', label: 'New review', Icon: Star },
+  clerk_assignment: { category: 'account', label: 'Account update', Icon: UserRound },
+}
+
+function getNotificationPresentation(notification) {
+  const type = notification.notification_type
+  const presentation = notificationPresentationByType[type] || {
+    category: 'general',
+    label: 'Update',
+    Icon: Bell,
+  }
+  const title = notification.title || ''
+  const urgentReminder = type === 'booking_reminder' && /^(Overdue schedule:|Urgent\s+—)/i.test(title)
+  const actionRequired = presentation.requiresAction
+    || (type === 'booking_reschedule' && /^Reschedule requested/i.test(title))
+    || (type === 'booking_payment' && /^Payment proof (submitted|rejected)/i.test(title))
+    || urgentReminder
+
+  return {
+    ...presentation,
+    label: urgentReminder ? 'Urgent schedule' : presentation.label,
+    priority: urgentReminder ? 'urgent' : actionRequired ? 'action' : null,
+  }
+}
+
 export default function CommunicationPage({ mode = 'messages' }) {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -54,6 +106,7 @@ export default function CommunicationPage({ mode = 'messages' }) {
   const [error, setError] = useState('')
   const initialParamHandled = useRef(false)
   const isNotificationsView = mode === 'notifications'
+  const isMemberWorkspace = ['client', 'gardener'].includes(user?.role)
 
   const loadConversations = useCallback(() => {
     if (isNotificationsView) return Promise.resolve()
@@ -132,7 +185,7 @@ export default function CommunicationPage({ mode = 'messages' }) {
   }
 
   return (
-    <main className="marketplace-page protected-page">
+    <main className={`marketplace-page protected-page${isMemberWorkspace ? ' member-workspace' : ''}`} data-workspace={user?.role}>
       <AppSidebar />
       <section className="container communication-content">
         <div className="communication-heading">
@@ -198,24 +251,41 @@ export default function CommunicationPage({ mode = 'messages' }) {
                     </p>
                   )}
                   <div className="notification-list notification-feed-compact">
-                    {shown.map((notification) => (
-                      <button
-                        className={`notification-item${notification.read_at ? '' : ' is-unread'}`}
-                        type="button"
-                        onClick={() => openNotification(notification)}
-                        key={notification.id}
-                      >
-                        <span className="notification-icon" aria-hidden="true" />
-                        <div className="notification-body">
-                          <div className="notification-row-top">
-                            <strong>{notification.title}</strong>
-                            <small>{new Date(notification.created_at).toLocaleString()}</small>
+                    {shown.map((notification) => {
+                      const presentation = isMemberWorkspace ? getNotificationPresentation(notification) : null
+                      const Icon = presentation?.Icon
+                      return (
+                        <button
+                          className={`notification-item${notification.read_at ? '' : ' is-unread'}`}
+                          type="button"
+                          onClick={() => openNotification(notification)}
+                          key={notification.id}
+                        >
+                          <span className="notification-icon" aria-hidden="true" />
+                          <div className="notification-body">
+                            <div className="notification-row-top">
+                              <div className="notification-title-group">
+                                <strong>{notification.title}</strong>
+                                {presentation && (
+                                  <span className={`notification-type-badge notification-type-badge--${presentation.category}`}>
+                                    {Icon && <Icon size={12} strokeWidth={2} aria-hidden="true" />}
+                                    {presentation.label}
+                                  </span>
+                                )}
+                                {presentation?.priority && (
+                                  <span className={`notification-importance notification-importance--${presentation.priority}`}>
+                                    {presentation.priority === 'urgent' ? 'Urgent' : 'Action needed'}
+                                  </span>
+                                )}
+                              </div>
+                              <small>{new Date(notification.created_at).toLocaleString()}</small>
+                            </div>
+                            <p>{notification.message}</p>
                           </div>
-                          <p>{notification.message}</p>
-                        </div>
-                        {notificationPath(notification, user) && <span className="notification-link">Open</span>}
-                      </button>
-                    ))}
+                          {notificationPath(notification, user) && <span className="notification-link">Open</span>}
+                        </button>
+                      )
+                    })}
                   </div>
                   {filtered.length > visibleNotifCount && (
                     <div style={{ marginTop: '16px', textAlign: 'center' }}>

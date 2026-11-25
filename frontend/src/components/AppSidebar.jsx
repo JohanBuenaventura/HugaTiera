@@ -84,9 +84,13 @@ export default function AppSidebar() {
     Messages: MessageCircle,
     Notifications: Bell,
     Bookings: CalendarDays,
+    Calendar: CalendarDays,
     Schedules: CalendarDays,
     Payments: CreditCard,
     Services: Briefcase,
+    'My services': Briefcase,
+    Portfolio: ClipboardList,
+    'My Clerks': Users,
     Profile: Settings,
     Approvals: ShieldCheck,
     Activity: BarChart3,
@@ -143,7 +147,7 @@ export default function AppSidebar() {
 
   return (
     <>
-      <aside className={`app-sidebar${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' is-mobile-open' : ''}`}>
+      <aside className={`app-sidebar${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' is-mobile-open' : ''}`} data-user-role={user.role}>
         <div className="app-sidebar-topline">
           <Link
             className="brand app-sidebar-brand"

@@ -100,6 +100,16 @@ CREATE TABLE pricing_addons (
   INDEX idx_pricing_addons_active_type (is_active, item_type)
 ) ENGINE=InnoDB;
 
+INSERT INTO pricing_addons (name, item_type, unit, unit_price_min, unit_price_max, description) VALUES
+  ('Ornamental / Potted Plants (Small-Medium)', 'plant', 'per plant', 80.00, 250.00, 'Common tropical ornamentals, indoor/outdoor potted greens.'),
+  ('Shrubs / Hedges / Flowering Plants', 'plant', 'per plant', 150.00, 400.00, 'Bougainvillea, santan, gumamela, hedge plants, and medium shrubs.'),
+  ('Carpet / Carabao Grass Turf', 'plant', 'per sq.m', 120.00, 250.00, 'Fresh sod/turf supply for lawn installation or patching.'),
+  ('Garden Loam Soil / Compost', 'material', 'per bag', 70.00, 150.00, 'Sacked garden loam soil or organic compost mix.'),
+  ('Organic Fertilizer / Plant Care Mix', 'material', 'per bag', 120.00, 250.00, 'Organic fertilizer, vermicast, or soil conditioner.'),
+  ('Decorative Stones / Mulch / Edging', 'material', 'per sq.m', 150.00, 350.00, 'Pebbles, river stones, wood mulch, or pathway border materials.'),
+  ('Green Waste Hauling & Debris Disposal', 'disposal', 'per load', 300.00, 700.00, 'Hauling and proper disposal of cut branches, weeds, and garden debris.'),
+  ('Power Equipment Use (Brush Cutter / Chainsaw)', 'equipment', 'flat', 250.00, 600.00, 'Fuel and usage allowance for motorized brush cutters or chainsaws.');
+
 CREATE TABLE services (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   gardener_id INT UNSIGNED NOT NULL,

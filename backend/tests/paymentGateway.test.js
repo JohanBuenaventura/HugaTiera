@@ -77,6 +77,9 @@ async function seedUser({ email, password, role, firstName, lastName }) {
 
 describe('Step 3 (Migration 013): Third-Party Payment Gateway (PayMongo + Sandbox/Demo Fallback)', () => {
   before(async () => {
+    const [[dbRow]] = await pool.query('SELECT DATABASE() AS db')
+    assert.equal(dbRow.db, 'hugatiera_db_migration_test', 'Must run against hugatiera_db_migration_test')
+
     server = http.createServer(app)
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
     const { port } = server.address()

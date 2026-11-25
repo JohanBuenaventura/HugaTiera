@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Calculator, ClipboardCheck, Leaf, MapPin, ShieldCheck, Sparkles, Star } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Calculator, Check, CheckCircle2, ClipboardCheck, Leaf, MapPin, ShieldCheck, Sparkles, Star } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -31,6 +31,8 @@ import {
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
+import TransientSuccess from '../components/TransientSuccess'
+import { OTHER_BARANGAY_VALUE, ZAMBOANGA_BARANGAYS } from '../utils/zamboangaAddress'
 
 function formatDate(value) {
   if (!value) return null
@@ -39,7 +41,16 @@ function formatDate(value) {
   return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+const INQUIRY_STEPS = [
+  { id: 1, label: 'Basics' },
+  { id: 2, label: 'Size & estimate' },
+  { id: 3, label: 'Details & photos' },
+  { id: 4, label: 'Review & send' },
+]
+
 function InquiryForm() {
+  const [barangayChoice, setBarangayChoice] = useState('')
+  const [customBarangay, setCustomBarangay] = useState('')
   const [params] = useSearchParams()
   const serviceId = params.get('serviceId')
   const gardenerId = params.get('gardenerId')
@@ -80,6 +91,7 @@ function InquiryForm() {
   const [aiNotice, setAiNotice] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [inquiryStep, setInquiryStep] = useState(1)
 
   useEffect(() => {
     servicesApi.categories().then((result) => setCategories(result.categories || [])).catch(() => {})
@@ -92,6 +104,24 @@ function InquiryForm() {
   }, [gardenerId, isGeneralRequest, serviceId, validGardenerId, validServiceId])
 
   const change = (field) => (event) => setForm({ ...form, [field]: event.target.value })
+
+  function updateBarangayChoice(value) {
+    setBarangayChoice(value)
+    if (value !== OTHER_BARANGAY_VALUE) {
+      setCustomBarangay('')
+      setForm((current) => ({ ...current, location: value ? `Brgy. ${value}, Zamboanga City` : '' }))
+      return
+    }
+    setForm((current) => ({ ...current, location: customBarangay ? `Brgy. ${customBarangay}, Zamboanga City` : '' }))
+  }
+
+  function updateCustomBarangay(value) {
+    setCustomBarangay(value)
+    setForm((current) => ({
+      ...current,
+      location: value ? `Brgy. ${value}, Zamboanga City` : '',
+    }))
+  }
 
   function toggleAddonItem(addonId, checked) {
     setSelectedAddonsMap((current) => {
@@ -273,8 +303,31 @@ function InquiryForm() {
     }
   }
 
+  function validateInquiryStep(formEl) {
+    const panel = formEl?.querySelector('.inquiry-step-panel')
+    if (!panel) return true
+    const fields = Array.from(panel.querySelectorAll('[required]'))
+    const invalid = fields.find((field) => !field.checkValidity())
+    if (invalid) {
+      invalid.reportValidity()
+      return false
+    }
+    return true
+  }
+
+  function handleBackStep() {
+    setError('')
+    setInquiryStep((current) => Math.max(1, current - 1))
+  }
+
   async function submit(event) {
     event.preventDefault()
+    if (inquiryStep < INQUIRY_STEPS.length) {
+      if (!validateInquiryStep(event.currentTarget)) return
+      setError('')
+      setInquiryStep((current) => Math.min(INQUIRY_STEPS.length, current + 1))
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -354,9 +407,41 @@ function InquiryForm() {
         </div>
       )}
       <form className="dashboard-panel profile-form inquiry-form" onSubmit={submit}>
-        <label>Subject
-          <input required maxLength="200" value={form.subject} onChange={change('subject')} placeholder="e.g. Small backyard garden improvement" />
-        </label>
+        <nav className="register-stepper inquiry-stepper" aria-label="Request steps">
+          {INQUIRY_STEPS.map((item) => {
+            const isActive = inquiryStep === item.id
+            const isDone = inquiryStep > item.id
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`register-step-pill${isActive ? ' is-active' : ''}${isDone ? ' is-done is-clickable' : ''}`}
+                disabled={!isDone}
+                aria-current={isActive ? 'step' : undefined}
+                onClick={() => {
+                  if (isDone) {
+                    setError('')
+                    setInquiryStep(item.id)
+                  }
+                }}
+              >
+                <span className="register-step-num" aria-hidden="true">
+                  {isDone ? <Check size={12} strokeWidth={3} /> : item.id}
+                </span>
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
+        </nav>
+        <p className="field-note inquiry-step-note">
+          Fields marked <span className="required-mark" aria-hidden="true">*</span> are required. Each step is checked before you continue.
+        </p>
+        {inquiryStep === 1 && (
+          <div className="inquiry-step-panel">
+            <p className="auth-section-title">Step 1 of 4 · The basics</p>
+            <label>Subject <span className="required-mark" aria-hidden="true">*</span>
+              <input required maxLength="200" value={form.subject} onChange={change('subject')} placeholder="e.g. Small backyard garden improvement" />
+            </label>
         {isGeneralRequest ? (
           <div className="form-row">
             <label>Service category (helps compute per-m² estimate)
@@ -389,8 +474,18 @@ function InquiryForm() {
             </select>
           </label>
         ))}
-
-        <div className="category-specs-panel" role="region" aria-label={activeCategoryTemplate.title}>
+            <div className="register-step-actions">
+              <button className="button" type="submit">
+                <span>Continue to size &amp; estimate</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+        {inquiryStep === 2 && (
+          <div className="inquiry-step-panel">
+            <p className="auth-section-title">Step 2 of 4 · Size &amp; indicative estimate</p>
+            <div className="category-specs-panel" role="region" aria-label={activeCategoryTemplate.title}>
           <div className="category-specs-header">
             <div>
               <p className="eyebrow" style={{ margin: '0 0 2px' }}>
@@ -497,7 +592,7 @@ function InquiryForm() {
 
           <div className="form-row form-row-3">
             <label>
-              {activeCategoryTemplate.areaLabel}
+              {activeCategoryTemplate.areaLabel} <span className="required-mark" aria-hidden="true">*</span>
               <input
                 type="number"
                 required
@@ -667,9 +762,24 @@ function InquiryForm() {
             />
           </label>
         </div>
-        <label>What are you looking for?
-          <textarea required rows="5" maxLength="5000" value={form.description} onChange={change('description')} placeholder={activeCategoryTemplate.descriptionPlaceholder} />
-        </label>
+            <div className="register-step-actions">
+              <button type="button" className="register-back-btn" onClick={handleBackStep}>
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button className="button" type="submit">
+                <span>Continue to details &amp; photos</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+        {inquiryStep === 3 && (
+          <div className="inquiry-step-panel">
+            <p className="auth-section-title">Step 3 of 4 · Details &amp; garden photos</p>
+            <label>What are you looking for? <span className="required-mark" aria-hidden="true">*</span>
+              <textarea required rows="5" maxLength="5000" value={form.description} onChange={change('description')} placeholder={activeCategoryTemplate.descriptionPlaceholder} />
+            </label>
         <div className="inline-actions" style={{ marginBottom: '6px' }}>
           <button
             className="button button-outline"
@@ -723,9 +833,21 @@ function InquiryForm() {
             <input type="date" value={form.requestedDate} onChange={change('requestedDate')} />
           </label>
           <label>Service area / barangay (area-level only)
-            <input maxLength="255" value={form.location} onChange={change('location')} placeholder="e.g. Tetuan, Zamboanga City (exact address shared later)" />
+            <select value={barangayChoice} onChange={(event) => updateBarangayChoice(event.target.value)}>
+              <option value="">Select barangay...</option>
+              {ZAMBOANGA_BARANGAYS.map((brgy) => <option key={brgy} value={brgy}>{brgy}</option>)}
+              <option value={OTHER_BARANGAY_VALUE}>Other (type manually)</option>
+            </select>
           </label>
         </div>
+        {barangayChoice === OTHER_BARANGAY_VALUE && (
+          <label>Specify barangay
+            <input maxLength="80" value={customBarangay} onChange={(event) => updateCustomBarangay(event.target.value)} placeholder="Enter barangay name" />
+          </label>
+        )}
+        {form.location && (
+          <p className="field-note">Shared with providers as: <strong>{form.location}</strong> — exact address shared later.</p>
+        )}
         <label>Garden photos (up to 5 JPEG, PNG, or WebP images; GPS/EXIF stripped automatically)
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto || uploadedImages.length >= 5} onChange={handlePhotoUpload} />
         </label>
@@ -762,14 +884,44 @@ function InquiryForm() {
             ))}
           </div>
         )}
-        <p className="form-note">
-          {isGeneralRequest
-            ? 'Your open request will be visible to approved gardeners on the Open Requests Board with area-level location only. Multiple gardeners can submit offers for you to compare before reaching a mutual agreement.'
-            : 'This is an inquiry, not a confirmed booking. The gardener will evaluate feasibility and respond with an offer or suggested modifications, followed by mutual agreement.'}
-        </p>
-        <button className="button" type="submit" disabled={saving || uploadingPhoto}>
-          {saving ? 'Sending...' : (isGeneralRequest ? 'Post general service request' : 'Send direct inquiry')}
-        </button>
+            <div className="register-step-actions">
+              <button type="button" className="register-back-btn" onClick={handleBackStep}>
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button className="button" type="submit">
+                <span>Review your request</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+        {inquiryStep === 4 && (
+          <div className="inquiry-step-panel">
+            <p className="auth-section-title">Step 4 of 4 · Review &amp; send</p>
+            <dl className="inquiry-review-summary">
+              <div><dt>Subject</dt><dd>{form.subject || 'Not provided'}</dd></div>
+              <div><dt>Area</dt><dd>{form.areaSqm ? `${form.areaSqm} sq.m` : 'Not provided'}</dd></div>
+              <div><dt>Preferred date</dt><dd>{form.requestedDate ? formatDate(form.requestedDate) : 'Not specified'}</dd></div>
+              <div><dt>Service area</dt><dd>{form.location || 'Not specified'}</dd></div>
+              <div><dt>Garden photos</dt><dd>{uploadedImages.length > 0 ? `${uploadedImages.length} attached` : 'None attached'}</dd></div>
+            </dl>
+            <p className="form-note">
+              {isGeneralRequest
+                ? 'Your open request will be visible to approved gardeners on the Open Requests Board with area-level location only. Multiple gardeners can submit offers for you to compare before reaching a mutual agreement.'
+                : 'This is an inquiry, not a confirmed booking. The gardener will evaluate feasibility and respond with an offer or suggested modifications, followed by mutual agreement.'}
+            </p>
+            <div className="register-step-actions">
+              <button type="button" className="register-back-btn" onClick={handleBackStep}>
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button className="button" type="submit" disabled={saving || uploadingPhoto}>
+                {saving ? 'Sending...' : (isGeneralRequest ? 'Post general service request' : 'Send direct inquiry')}
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </section>
   )
@@ -799,6 +951,12 @@ const RESPONSE_TYPE_LABELS = {
   interest: 'Expression of interest',
 }
 
+const RESPONSE_STEPS = [
+  { id: 1, label: 'Response & price' },
+  { id: 2, label: 'Details & schedule' },
+  { id: 3, label: 'Review & send' },
+]
+
 function InquiryDetails({ id }) {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -820,6 +978,7 @@ function InquiryDetails({ id }) {
   })
   const [editingQuoteId, setEditingQuoteId] = useState(null)
   const [editingAgreement, setEditingAgreement] = useState(false)
+  const [agreementEditStep, setAgreementEditStep] = useState(1)
   const [agreementForm, setAgreementForm] = useState({
     scopeOfWork: '',
     amount: '',
@@ -838,6 +997,7 @@ function InquiryDetails({ id }) {
   const [offerNearbyOnly, setOfferNearbyOnly] = useState(false)
   const [offerGoodConductOnly, setOfferGoodConductOnly] = useState(false)
   const [offerAiRanking, setOfferAiRanking] = useState(null)
+  const [responseStep, setResponseStep] = useState(1)
   const load = useCallback(() => inquiriesApi.get(id).then((res) => {
     setData(res)
     if (res?.activeAgreement) {
@@ -877,6 +1037,7 @@ function InquiryDetails({ id }) {
   }, [user.role, data?.inquiry?.id, data?.quotations, offerSortBy, offerNearbyOnly, offerGoodConductOnly])
   function startReviseQuote(quote) {
     setEditingQuoteId(quote.id)
+    setResponseStep(1)
     setForm({
       responseType: quote.response_type || 'offer',
       amount: quote.amount ?? '',
@@ -895,6 +1056,7 @@ function InquiryDetails({ id }) {
   }
   function cancelReviseQuote() {
     setEditingQuoteId(null)
+    setResponseStep(1)
     setForm({
       responseType: 'offer',
       amount: '',
@@ -922,8 +1084,32 @@ function InquiryDetails({ id }) {
       return next
     })
   }
+  function validateResponseStep(formEl) {
+    const panel = formEl?.querySelector('.response-step-panel')
+    if (!panel) return true
+    const fields = Array.from(panel.querySelectorAll('[required]'))
+    const invalid = fields.find((field) => !field.checkValidity())
+    if (invalid) {
+      invalid.reportValidity()
+      return false
+    }
+    return true
+  }
+
+  function handleResponseBackStep() {
+    setError('')
+    setResponseStep((current) => Math.max(1, current - 1))
+  }
+
   async function sendQuote(event) {
-    event.preventDefault(); setError(''); setMessage(''); setSubmittingQuote(true)
+    event.preventDefault()
+    if (responseStep < RESPONSE_STEPS.length) {
+      if (!validateResponseStep(event.currentTarget)) return
+      setError('')
+      setResponseStep((current) => Math.min(RESPONSE_STEPS.length, current + 1))
+      return
+    }
+    setError(''); setMessage(''); setSubmittingQuote(true)
     try {
       if (editingQuoteId) {
         await inquiriesApi.reviseQuote(editingQuoteId, form)
@@ -948,6 +1134,7 @@ function InquiryDetails({ id }) {
         estimatedHours: '',
         validUntil: '',
       })
+      setResponseStep(1)
       await load()
     } catch (quoteError) {
       setError(quoteError.message)
@@ -1013,6 +1200,7 @@ function InquiryDetails({ id }) {
         expectedVersion: agreement.version,
       })
       setEditingAgreement(false)
+      setAgreementEditStep(1)
       setMessage(`Agreement updated to v${res.agreement.version}. Both parties must approve v${res.agreement.version}.`)
       await load()
     } catch (editErr) {
@@ -1021,6 +1209,21 @@ function InquiryDetails({ id }) {
       setUpdatingStatus(false)
     }
   }
+  function submitAgreementRevision(event) {
+    event.preventDefault()
+    if (agreementEditStep === 1) {
+      const panel = event.currentTarget.querySelector('.agreement-edit-panel')
+      const invalid = Array.from(panel.querySelectorAll('[required]')).find((field) => !field.checkValidity())
+      if (invalid) {
+        invalid.reportValidity()
+        return
+      }
+      setAgreementEditStep(2)
+      return
+    }
+    saveAgreementRevision(event, activeAgreement)
+  }
+
   async function openConversation(targetGardenerId = null) {
     try {
       const result = await communicationApi.createConversation(inquiry.id, targetGardenerId)
@@ -1049,6 +1252,119 @@ function InquiryDetails({ id }) {
     && ['open', 'responded'].includes(inquiry.status)
     && !myAcceptedQuote
     && (!myActiveSentQuote || editingQuoteId === myActiveSentQuote.id)
+
+  const inquiryStageIndex = inquiry.status === 'confirmed'
+    ? 4
+    : ['provider_selected', 'in_agreement'].includes(inquiry.status)
+      ? 3
+      : inquiry.status === 'responded'
+        ? 2
+        : 1
+  const inquiryFlowClosed = ['closed', 'cancelled', 'expired'].includes(inquiry.status)
+  const inquirySteps = [
+    {
+      num: 1,
+      label: 'Request sent',
+      sub: inquiry.request_type === 'general' ? 'Visible to gardeners' : 'Sent to provider',
+    },
+    {
+      num: 2,
+      label: 'Offers in',
+      sub: quotations.length > 0
+        ? `${quotations.length} offer${quotations.length === 1 ? '' : 's'} received`
+        : 'Waiting for offers',
+    },
+    {
+      num: 3,
+      label: 'Agree terms',
+      sub: activeAgreement ? `Agreement v${activeAgreement.version}` : 'Both must approve',
+    },
+    {
+      num: 4,
+      label: 'Booking confirmed',
+      sub: inquiry.status === 'confirmed' ? 'Schedule locked in' : 'Only after both approve',
+    },
+  ]
+
+  const myApprovalKey = user.role === 'gardener' ? 'gardener_approved_at' : 'client_approved_at'
+  const otherParty = user.role === 'gardener' ? 'client' : 'provider'
+  let nextStepGuidance
+  if (inquiry.status === 'expired') {
+    nextStepGuidance = {
+      tone: 'danger',
+      title: 'This request has expired',
+      text: user.role === 'client'
+        ? 'It is no longer accepting offers. Use "Renew expired request" above to keep it open longer.'
+        : 'The client can renew it if they still need help. New offers cannot be sent right now.',
+    }
+  } else if (inquiry.status === 'cancelled') {
+    nextStepGuidance = {
+      tone: 'danger',
+      title: 'This inquiry was cancelled',
+      text: 'No further offers or agreements can be made. You can still review the history below.',
+    }
+  } else if (inquiry.status === 'closed') {
+    nextStepGuidance = {
+      tone: 'info',
+      title: 'This inquiry is closed',
+      text: 'It is no longer accepting offers, but you can still review the details and history below.',
+    }
+  } else if (inquiry.status === 'confirmed') {
+    nextStepGuidance = {
+      tone: 'success',
+      title: 'Booking confirmed',
+      text: user.role === 'client'
+        ? 'Both parties approved the same agreement. Open the booking to pay the deposit and lock in the schedule.'
+        : 'Both parties approved the same agreement. Open the booking to confirm the deposit and schedule.',
+    }
+  } else if (activeAgreement && activeAgreement.status === 'proposed') {
+    nextStepGuidance = activeAgreement[myApprovalKey]
+      ? {
+        tone: 'info',
+        title: 'Waiting for the other party',
+        text: `You approved v${activeAgreement.version}. The ${otherParty} must approve the same version before a booking is created.`,
+      }
+      : {
+        tone: 'warning',
+        title: 'Action needed: approve the agreement',
+        text: `Review the scope, price, and schedule for v${activeAgreement.version} below. Approve it to move forward, or edit it to propose a new version.`,
+      }
+  } else if (['provider_selected', 'in_agreement'].includes(inquiry.status)) {
+    nextStepGuidance = {
+      tone: 'info',
+      title: 'Agreement in progress',
+      text: user.role === 'client'
+        ? 'A provider was selected. Set the final scope, price, and schedule, then both of you must approve the same version before a booking is created.'
+        : 'The client selected a provider. Agree on the final scope, price, and schedule, then both of you must approve the same version before a booking is created.',
+    }
+  } else if (inquiry.status === 'responded') {
+    nextStepGuidance = user.role === 'client'
+      ? {
+        tone: 'info',
+        title: `You have ${quotations.length} offer${quotations.length === 1 ? '' : 's'} to compare`,
+        text: 'Review the offers below and accept the one you prefer. Accepting an offer is not a booking yet — it starts the mutual agreement.',
+      }
+      : {
+        tone: 'info',
+        title: 'Your offer was sent',
+        text: 'Wait for the client to accept it or ask for changes. You can revise or withdraw your offer until it is accepted.',
+      }
+  } else {
+    nextStepGuidance = user.role === 'client'
+      ? {
+        tone: 'info',
+        title: 'Waiting for offers',
+        text: inquiry.request_type === 'general'
+          ? 'Your request is live for approved gardeners. Offers will appear here — an inquiry is not a booking yet.'
+          : 'Your inquiry was sent. The provider will respond with an offer or suggested changes.',
+      }
+      : {
+        tone: 'info',
+        title: 'This request is open for offers',
+        text: "Review the client's request and photos, then send an offer with your price and proposed scope.",
+      }
+  }
+
   return (
     <section className="container inquiry-content">
       <Link className="back-link" to="/inquiries"><ArrowLeft size={15} /> Back to inquiries</Link>
@@ -1087,7 +1403,35 @@ function InquiryDetails({ id }) {
           </button>
         )}
       </div>
-      {message && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{message}</div>}
+      {!inquiryFlowClosed && (
+        <ol className="booking-stepper inquiry-stepper" aria-label="Inquiry progress">
+          {inquirySteps.map((step) => {
+            const done = step.num < inquiryStageIndex
+            const active = step.num === inquiryStageIndex
+            return (
+              <li
+                key={step.num}
+                className={`booking-step${done ? ' is-done' : ''}${active ? ' is-current' : ''}`}
+              >
+                <span className="booking-step-num" aria-hidden="true">
+                  {done ? <CheckCircle2 size={16} /> : step.num}
+                </span>
+                <span className="booking-step-copy">
+                  <strong>{step.label}</strong>
+                  <small>{step.sub}</small>
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+      {nextStepGuidance && (
+        <div className={`booking-next-banner tone-${nextStepGuidance.tone}`} role="status">
+          <strong>{nextStepGuidance.title}</strong>
+          <p>{nextStepGuidance.text}</p>
+        </div>
+      )}
+      {message && <TransientSuccess key={message} message={message} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <div className="inquiry-detail-grid">
         <article className="dashboard-panel">
@@ -1436,9 +1780,14 @@ function InquiryDetails({ id }) {
               <small>
                 Schedule: {new Date(activeAgreement.scheduled_start).toLocaleString()} to {new Date(activeAgreement.scheduled_end).toLocaleString()} · Location: {activeAgreement.location}
               </small>
-              <p className="form-note" style={{ marginTop: '8px' }}>
-                Client approval: {activeAgreement.client_approved_at ? 'Approved' : 'Pending'} · Gardener approval: {activeAgreement.gardener_approved_at ? 'Approved' : 'Pending'}
-              </p>
+              <div className="agreement-approval-row" aria-label="Approval status">
+                <span className={`approval-chip${activeAgreement[myApprovalKey] ? ' is-approved' : ''}`}>
+                  You: {activeAgreement[myApprovalKey] ? 'Approved' : 'Waiting'}
+                </span>
+                <span className={`approval-chip${activeAgreement[user.role === 'gardener' ? 'client_approved_at' : 'gardener_approved_at'] ? ' is-approved' : ''}`}>
+                  {otherParty}: {activeAgreement[user.role === 'gardener' ? 'client_approved_at' : 'gardener_approved_at'] ? 'Approved' : 'Waiting'}
+                </span>
+              </div>
               {activeAgreement.status === 'proposed' && (
                 <div className="inline-actions" style={{ marginTop: '10px' }}>
                   {((user.role === 'client' && !activeAgreement.client_approved_at) || (user.role === 'gardener' && !activeAgreement.gardener_approved_at)) && (
@@ -1446,8 +1795,11 @@ function InquiryDetails({ id }) {
                       {updatingStatus ? 'Saving...' : `Approve v${activeAgreement.version}`}
                     </button>
                   )}
-                  <button className="table-action" type="button" onClick={() => setEditingAgreement((open) => !open)}>
-                    {editingAgreement ? 'Cancel edit' : 'Edit terms (creates new version)'}
+                  <button className="table-action" type="button" onClick={() => {
+                    setAgreementEditStep(1)
+                    setEditingAgreement((open) => !open)
+                  }}>
+                    {editingAgreement ? 'Cancel edit' : 'Edit terms (new version resets both approvals)'}
                   </button>
                 </div>
               )}
@@ -1457,35 +1809,85 @@ function InquiryDetails({ id }) {
                 </div>
               )}
               {editingAgreement && activeAgreement.status === 'proposed' && (
-                <form className="profile-form" onSubmit={(e) => saveAgreementRevision(e, activeAgreement)} style={{ marginTop: '14px' }}>
-                  <label>Scope of work
-                    <textarea required rows="3" value={agreementForm.scopeOfWork} onChange={(e) => setAgreementForm({ ...agreementForm, scopeOfWork: e.target.value })} />
-                  </label>
-                  <div className="form-row">
-                    <label>Agreed price (PHP)
-                      <input required type="number" min="0" step="0.01" value={agreementForm.amount} onChange={(e) => setAgreementForm({ ...agreementForm, amount: e.target.value })} />
-                    </label>
-                    <label>Price basis
-                      <input value={agreementForm.priceBasis} onChange={(e) => setAgreementForm({ ...agreementForm, priceBasis: e.target.value })} />
-                    </label>
-                  </div>
-                  <div className="form-row">
-                    <label>Start date and time
-                      <input required type="datetime-local" value={agreementForm.scheduledStart} onChange={(e) => setAgreementForm({ ...agreementForm, scheduledStart: e.target.value })} />
-                    </label>
-                    <label>End date and time
-                      <input required type="datetime-local" value={agreementForm.scheduledEnd} onChange={(e) => setAgreementForm({ ...agreementForm, scheduledEnd: e.target.value })} />
-                    </label>
-                  </div>
-                  <label>Location
-                    <input required maxLength="255" value={agreementForm.location} onChange={(e) => setAgreementForm({ ...agreementForm, location: e.target.value })} />
-                  </label>
-                  <label>Conditions
-                    <textarea rows="2" value={agreementForm.conditions} onChange={(e) => setAgreementForm({ ...agreementForm, conditions: e.target.value })} />
-                  </label>
-                  <button className="button" type="submit" disabled={updatingStatus}>
-                    {updatingStatus ? 'Saving...' : `Save as v${activeAgreement.version + 1} (resets approvals)`}
-                  </button>
+                <form className="profile-form agreement-edit-form" onSubmit={submitAgreementRevision} style={{ marginTop: '14px' }}>
+                  <nav className="register-stepper" aria-label="Agreement edit steps">
+                    {[{ id: 1, label: 'Terms' }, { id: 2, label: 'Review & save' }].map((step) => {
+                      const isActive = agreementEditStep === step.id
+                      const isDone = agreementEditStep > step.id
+                      return (
+                        <button
+                          key={step.id}
+                          type="button"
+                          className={`register-step-pill${isActive ? ' is-active' : ''}${isDone ? ' is-done is-clickable' : ''}`}
+                          disabled={!isDone}
+                          aria-current={isActive ? 'step' : undefined}
+                          onClick={() => { if (isDone) setAgreementEditStep(step.id) }}
+                        >
+                          <span className="register-step-num" aria-hidden="true">
+                            {isDone ? <Check size={12} strokeWidth={3} /> : step.id}
+                          </span>
+                          <span>{step.label}</span>
+                        </button>
+                      )
+                    })}
+                  </nav>
+                  {agreementEditStep === 1 && (
+                    <div className="agreement-edit-panel">
+                      <p className="auth-section-title">Step 1 of 2 · Terms</p>
+                      <label>Scope of work
+                        <textarea required rows="3" value={agreementForm.scopeOfWork} onChange={(e) => setAgreementForm({ ...agreementForm, scopeOfWork: e.target.value })} />
+                      </label>
+                      <div className="form-row">
+                        <label>Agreed price (PHP)
+                          <input required type="number" min="0" step="0.01" value={agreementForm.amount} onChange={(e) => setAgreementForm({ ...agreementForm, amount: e.target.value })} />
+                        </label>
+                        <label>Price basis
+                          <input value={agreementForm.priceBasis} onChange={(e) => setAgreementForm({ ...agreementForm, priceBasis: e.target.value })} />
+                        </label>
+                      </div>
+                      <div className="form-row">
+                        <label>Start date and time
+                          <input required type="datetime-local" value={agreementForm.scheduledStart} onChange={(e) => setAgreementForm({ ...agreementForm, scheduledStart: e.target.value })} />
+                        </label>
+                        <label>End date and time
+                          <input required type="datetime-local" value={agreementForm.scheduledEnd} onChange={(e) => setAgreementForm({ ...agreementForm, scheduledEnd: e.target.value })} />
+                        </label>
+                      </div>
+                      <label>Location
+                        <input required maxLength="255" value={agreementForm.location} onChange={(e) => setAgreementForm({ ...agreementForm, location: e.target.value })} />
+                      </label>
+                      <label>Conditions
+                        <textarea rows="2" value={agreementForm.conditions} onChange={(e) => setAgreementForm({ ...agreementForm, conditions: e.target.value })} />
+                      </label>
+                      <div className="register-step-actions">
+                        <button className="button" type="submit">
+                          <span>Review changes</span>
+                          <ArrowRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {agreementEditStep === 2 && (
+                    <div className="agreement-edit-panel">
+                      <p className="auth-section-title">Step 2 of 2 · Review &amp; save</p>
+                      <dl className="inquiry-review-summary">
+                        <div><dt>Scope of work</dt><dd>{agreementForm.scopeOfWork || 'Not provided'}</dd></div>
+                        <div><dt>Agreed price</dt><dd>{agreementForm.amount ? `₱${Number(agreementForm.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Not provided'}</dd></div>
+                        <div><dt>Schedule</dt><dd>{agreementForm.scheduledStart && agreementForm.scheduledEnd ? `${agreementForm.scheduledStart} to ${agreementForm.scheduledEnd}` : 'Not provided'}</dd></div>
+                        <div><dt>Location</dt><dd>{agreementForm.location || 'Not provided'}</dd></div>
+                      </dl>
+                      <p className="form-note">Saving creates v{activeAgreement.version + 1} and resets both approvals. Both parties must approve the new version.</p>
+                      <div className="register-step-actions">
+                        <button type="button" className="register-back-btn" onClick={() => setAgreementEditStep(1)}>
+                          <ArrowLeft size={16} />
+                          <span>Back</span>
+                        </button>
+                        <button className="button" type="submit" disabled={updatingStatus}>
+                          {updatingStatus ? 'Saving...' : `Save as v${activeAgreement.version + 1} (resets approvals)`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </form>
               )}
             </div>
@@ -1513,8 +1915,37 @@ function InquiryDetails({ id }) {
                 {inquiry.price_comment && <p className="field-note" style={{ margin: '4px 0 0' }}>Client note: &ldquo;{inquiry.price_comment}&rdquo;</p>}
               </div>
             )}
-            <label>Response type
-              <select value={form.responseType} onChange={change('responseType')}>
+            <nav className="register-stepper response-stepper" aria-label="Response steps">
+              {RESPONSE_STEPS.map((item) => {
+                const isActive = responseStep === item.id
+                const isDone = responseStep > item.id
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`register-step-pill${isActive ? ' is-active' : ''}${isDone ? ' is-done is-clickable' : ''}`}
+                    disabled={!isDone}
+                    aria-current={isActive ? 'step' : undefined}
+                    onClick={() => {
+                      if (isDone) {
+                        setError('')
+                        setResponseStep(item.id)
+                      }
+                    }}
+                  >
+                    <span className="register-step-num" aria-hidden="true">
+                      {isDone ? <Check size={12} strokeWidth={3} /> : item.id}
+                    </span>
+                    <span>{item.label}</span>
+                  </button>
+                )
+              })}
+            </nav>
+            {responseStep === 1 && (
+              <div className="response-step-panel">
+                <p className="auth-section-title">Step 1 of 3 · Response &amp; price</p>
+                <label>Response type
+                  <select value={form.responseType} onChange={change('responseType')}>
                 <option value="offer">Standard offer</option>
                 {inquiry.request_type === 'general' && <option value="interest">Expression of interest</option>}
                 <option value="feasible">Feasible as requested</option>
@@ -1568,9 +1999,20 @@ function InquiryDetails({ id }) {
                 </label>
               </>
             )}
-            <label>Details
-              <textarea required rows="4" value={form.details} onChange={change('details')} placeholder="Explain what is included, feasibility assessment, and any conditions." />
-            </label>
+                <div className="register-step-actions">
+                  <button className="button" type="submit">
+                    <span>Continue to details &amp; schedule</span>
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+            {responseStep === 2 && (
+              <div className="response-step-panel">
+                <p className="auth-section-title">Step 2 of 3 · Details &amp; schedule</p>
+                <label>Details <span className="required-mark" aria-hidden="true">*</span>
+                  <textarea required rows="4" value={form.details} onChange={change('details')} placeholder="Explain what is included, feasibility assessment, and any conditions." />
+                </label>
             {form.responseType === 'modifications' && (
               <label>Proposed modifications
                 <textarea required rows="3" value={form.proposedChanges} onChange={change('proposedChanges')} placeholder="Describe suggested adjustments to scope, schedule, or materials." />
@@ -1593,16 +2035,42 @@ function InquiryDetails({ id }) {
                 <label>Quotation valid until<input type="date" value={form.validUntil} onChange={change('validUntil')} /></label>
               </>
             )}
-            <div className="inline-actions">
-              <button className="button" type="submit" disabled={submittingQuote}>
-                {submittingQuote ? 'Saving...' : editingQuoteId ? 'Save revised offer' : 'Send response'}
-              </button>
-              {editingQuoteId && (
-                <button className="table-action" type="button" onClick={cancelReviseQuote}>
-                  Cancel edit
-                </button>
-              )}
-            </div>
+                <div className="register-step-actions">
+                  <button type="button" className="register-back-btn" onClick={handleResponseBackStep}>
+                    <ArrowLeft size={16} />
+                    <span>Back</span>
+                  </button>
+                  <button className="button" type="submit">
+                    <span>Review response</span>
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+            {responseStep === 3 && (
+              <div className="response-step-panel">
+                <p className="auth-section-title">Step 3 of 3 · Review &amp; send</p>
+                <dl className="inquiry-review-summary">
+                  <div><dt>Response</dt><dd>{RESPONSE_TYPE_LABELS[form.responseType] || form.responseType}</dd></div>
+                  <div><dt>Total indicative amount</dt><dd>{form.amount ? `₱${Number(form.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Not specified'}</dd></div>
+                  <div><dt>Availability</dt><dd>{form.availabilityStart || form.availabilityEnd ? `${form.availabilityStart || 'Not set'} to ${form.availabilityEnd || 'Not set'}` : 'Not specified'}</dd></div>
+                </dl>
+                <div className="register-step-actions">
+                  <button type="button" className="register-back-btn" onClick={handleResponseBackStep}>
+                    <ArrowLeft size={16} />
+                    <span>Back</span>
+                  </button>
+                  <button className="button" type="submit" disabled={submittingQuote}>
+                    {submittingQuote ? 'Saving...' : editingQuoteId ? 'Save revised offer' : 'Send response'}
+                  </button>
+                </div>
+                {editingQuoteId && (
+                  <button className="table-action" type="button" onClick={cancelReviseQuote}>
+                    Cancel edit
+                  </button>
+                )}
+              </div>
+            )}
           </form>
         )}
       </div>
@@ -1612,7 +2080,9 @@ function InquiryDetails({ id }) {
 
 export default function InquiryPage({ detail = false, create = false }) {
   const { inquiryId } = useParams()
-  return <main className="marketplace-page protected-page"><AppSidebar />{detail ? <InquiryDetails id={inquiryId} /> : create ? <InquiryForm /> : <InquiryList />}</main>
+  const { user } = useAuth()
+  const memberWorkspace = ['client', 'gardener'].includes(user?.role)
+  return <main className={`marketplace-page protected-page${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={user?.role}><AppSidebar />{detail ? <InquiryDetails id={inquiryId} /> : create ? <InquiryForm /> : <InquiryList />}</main>
 }
 
 function InquiryList() {
@@ -1719,11 +2189,10 @@ function InquiryList() {
               </select>
             </label>
             <label>Filter by barangay / area
-              <input
-                value={filters.area}
-                onChange={(e) => setFilters({ ...filters, area: e.target.value })}
-                placeholder="e.g. Tetuan, Pasonanca, Zamboanga City"
-              />
+              <select value={filters.area} onChange={(e) => setFilters({ ...filters, area: e.target.value })}>
+                <option value="">All barangays</option>
+                {ZAMBOANGA_BARANGAYS.map((brgy) => <option key={brgy} value={brgy}>{brgy}</option>)}
+              </select>
             </label>
           </div>
         </div>
