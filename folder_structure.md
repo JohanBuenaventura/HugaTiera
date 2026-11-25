@@ -1,6 +1,6 @@
 # HugaTiera – Folder Structure
 
-This document reflects the **actual current repository structure** of HugaTiera (verified November 24, 2026 on `main`).
+This document reflects the **actual current repository structure** of HugaTiera (verified November 25, 2026 on `mobile-res`).
 
 ```text
 HugaTiera/
@@ -121,8 +121,40 @@ HugaTiera/
 │   └── README.md
 │
 ├── docs/
+│   ├── diagrams/
+│   │   ├── 01-data-model-erd-25-tables.drawio
+│   │   ├── 01-data-model-erd-25-tables.png
+│   │   ├── 01a-erd-domain-identity-and-clerks.png
+│   │   ├── 01b-erd-domain-marketplace-and-pricing.png
+│   │   ├── 01c-erd-domain-requests-and-quotations.png
+│   │   ├── 01d-erd-domain-agreements-bookings-payments.png
+│   │   ├── 01e-erd-domain-communication-ai-governance.png
+│   │   ├── 02-data-model-erd-grouped-overview.png
+│   │   ├── 03-dfd-level-0-context.drawio
+│   │   ├── 03-dfd-level-0-context.png
+│   │   ├── 04-dfd-level-1-system.png
+│   │   ├── 05-dfd-level-2-agreement-payment-closure.png
+│   │   ├── 06-system-architecture-diagram.png
+│   │   ├── 07-network-topology-diagram.png
+│   │   ├── 08-workflow-case1-case2-agreement-payment.png
+│   │   ├── 09-workflow-unified-overview.png
+│   │   ├── 10-user-hierarchy-diagram.drawio
+│   │   ├── 10-user-hierarchy-diagram.png
+│   │   ├── 11-user-hierarchy-only.drawio
+│   │   ├── 11-user-hierarchy-only.png
+│   │   └── README.md
 │   ├── implementation/
 │   │   └── implementation-plan.md
+│   ├── screenshots/
+│   │   ├── mobile/          (38 responsive mobile module PNGs)
+│   │   ├── web/             (38 desktop web module PNGs)
+│   │   └── README.md
+│   ├── ui-ux/
+│   │   ├── implementation-roadmap.md
+│   │   ├── mobbin-research.md
+│   │   ├── project-inventory.md
+│   │   ├── recommended-changes.md
+│   │   └── ui-ux-audit.md
 │   ├── api-reference.md
 │   ├── architecture-and-workflows.md
 │   ├── erd-and-dfd.md
@@ -138,10 +170,14 @@ HugaTiera/
 │   │   │   ├── AiAssistantWidget.jsx
 │   │   │   ├── AppSidebar.jsx
 │   │   │   ├── ClerkDashboard.jsx
+│   │   │   ├── ErrorBoundary.jsx
 │   │   │   ├── GardenerClerksPanel.jsx
 │   │   │   ├── GardenerScheduleCalendar.jsx
+│   │   │   ├── Modal.jsx
 │   │   │   ├── ProtectedRoute.jsx
-│   │   │   └── StructuredAddressFields.jsx
+│   │   │   ├── StarRating.jsx
+│   │   │   ├── StructuredAddressFields.jsx
+│   │   │   └── TransientSuccess.jsx
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx
 │   │   │   └── auth-context.js
@@ -172,9 +208,11 @@ HugaTiera/
 │   │   │   ├── reviews.js
 │   │   │   └── services.js
 │   │   ├── utils/
+│   │   │   ├── currency.js
 │   │   │   └── zamboangaAddress.js
 │   │   ├── App.css
 │   │   ├── App.jsx
+│   │   ├── ClientGardener.css
 │   │   ├── index.css
 │   │   └── main.jsx
 │   ├── .env.example

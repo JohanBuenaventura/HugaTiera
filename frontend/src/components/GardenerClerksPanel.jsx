@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Eye, EyeOff, Link2, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
+import { Eye, EyeOff, Link2, Plus, ShieldCheck, Trash2, UserPlus, Users, X } from 'lucide-react'
 import { profileApi } from '../services/profiles'
+import Modal from './Modal'
+import TransientSuccess from './TransientSuccess'
 
 const emptyCreateForm = {
   firstName: '',
@@ -14,6 +16,7 @@ const emptyCreateForm = {
 export default function GardenerClerksPanel() {
   const [clerks, setClerks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [formOpen, setFormOpen] = useState(false)
   const [mode, setMode] = useState('create')
   const [createForm, setCreateForm] = useState(emptyCreateForm)
   const [assignForm, setAssignForm] = useState({ email: '', notes: '' })
@@ -56,7 +59,8 @@ export default function GardenerClerksPanel() {
     try {
       const res = await profileApi.createMyClerk(createForm)
       setCreateForm(emptyCreateForm)
-      setNotice(`Clerk account created for ${res.clerk?.clerk_name || createForm.email}! They can now sign in at /login to manage your schedules, services, and payment verifications.`)
+      setFormOpen(false)
+      setNotice(`Staff account created for ${res.clerk?.clerk_name || createForm.email}. They can now sign in at /login to help manage your schedule, services, and payment checks.`)
       await loadClerks()
     } catch (err) {
       setError(err.message)
@@ -71,7 +75,8 @@ export default function GardenerClerksPanel() {
     try {
       const res = await profileApi.assignExistingClerk(assignForm)
       setAssignForm({ email: '', notes: '' })
-      setNotice(`Linked existing clerk ${res.clerk?.clerk_name || assignForm.email} to your gardener account.`)
+      setFormOpen(false)
+      setNotice(`Added ${res.clerk?.clerk_name || assignForm.email} to your team.`)
       await loadClerks()
     } catch (err) {
       setError(err.message)
@@ -96,24 +101,29 @@ export default function GardenerClerksPanel() {
   }
 
   return (
-    <section className="dashboard-panel" aria-label="Manage assigned clerks">
+    <section className="dashboard-panel" aria-label="Manage assigned staff">
       <div className="activity-heading">
         <div>
-          <p className="eyebrow">Account managers &amp; staff</p>
-          <h2>My Clerks</h2>
+          <h2>Your staff ({clerks.length})</h2>
+          <p className="field-note" style={{ margin: '4px 0 0' }}>
+            Staff members (clerks) can update your schedule, manage service listings, and check client payment proofs. They cannot delete your account or change your password.
+          </p>
         </div>
-        <span className="panel-count">{clerks.length} assigned</span>
+        <button
+          type="button"
+          className="button"
+          onClick={() => { setFormOpen((open) => !open); setError('') }}
+        >
+          {formOpen ? <><X size={16} /> Close form</> : <><Plus size={16} /> Add staff member</>}
+        </button>
       </div>
-      <p className="field-note" style={{ marginBottom: '16px' }}>
-        Add a trusted clerk to help manage your working schedule, daily crew size, blocked dates, service listings, and client payment verifications. Clerks can only manage accounts explicitly assigned to them, and you can revoke access anytime.
-      </p>
 
       {error && <div className="form-error" role="alert" style={{ marginBottom: '14px' }}>{error}</div>}
-      {notice && <div className="form-success" role="status" style={{ marginBottom: '14px' }}>{notice}</div>}
+      {notice && <TransientSuccess key={notice} message={notice} onDismiss={() => setNotice('')} style={{ marginBottom: '14px' }} />}
 
-      <div className="dashboard-grid">
-        <div>
-          <div className="payment-channel-tabs" role="tablist" aria-label="Add clerk method">
+      {formOpen && (
+        <div className="managed-form-drawer" style={{ marginBottom: '20px' }}>
+          <div className="payment-channel-tabs" role="tablist" aria-label="Add staff method">
             <button
               type="button"
               role="tab"
@@ -121,7 +131,7 @@ export default function GardenerClerksPanel() {
               className={`payment-channel-tab${mode === 'create' ? ' is-active' : ''}`}
               onClick={() => { setMode('create'); setError('') }}
             >
-              <UserPlus size={15} /> Create New Clerk Account
+              <UserPlus size={15} /> Create new staff login
             </button>
             <button
               type="button"
@@ -130,7 +140,7 @@ export default function GardenerClerksPanel() {
               className={`payment-channel-tab${mode === 'assign' ? ' is-active' : ''}`}
               onClick={() => { setMode('assign'); setError('') }}
             >
-              <Link2 size={15} /> Link Existing Clerk
+              <Link2 size={15} /> Add existing clerk account
             </button>
           </div>
 
@@ -160,12 +170,12 @@ export default function GardenerClerksPanel() {
               </div>
               <div className="form-row">
                 <label>
-                  Clerk email address
+                  Email address
                   <input
                     type="email"
                     required
                     maxLength="255"
-                    placeholder="clerk@yourgarden.ph"
+                    placeholder="helper@yourgarden.ph"
                     value={createForm.email}
                     onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                   />
@@ -182,14 +192,14 @@ export default function GardenerClerksPanel() {
                 </label>
               </div>
               <label>
-                Temporary password <span className="label-note">(8–72 characters)</span>
+                Starting password <span className="label-note">(8–72 characters)</span>
                 <div className="password-input-wrap">
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
                     minLength="8"
                     maxLength="72"
-                    placeholder="Create a secure password for your clerk"
+                    placeholder="Create a password to share with your helper"
                     value={createForm.password}
                     onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                   />
@@ -204,17 +214,22 @@ export default function GardenerClerksPanel() {
                 </div>
               </label>
               <label>
-                Role note <span className="label-note">(Optional)</span>
+                What do they help with? <span className="label-note">(Optional)</span>
                 <input
                   maxLength="255"
-                  placeholder="e.g., Manages weekday schedules and verifies GCash receipts"
+                  placeholder="e.g., Manages weekday schedules and checks GCash receipts"
                   value={createForm.notes}
                   onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
                 />
               </label>
-              <button className="button" type="submit" disabled={busy}>
-                <UserPlus size={15} /> {busy ? 'Creating clerk...' : 'Create & assign clerk'}
-              </button>
+              <div className="inline-actions">
+                <button className="button" type="submit" disabled={busy}>
+                  <UserPlus size={15} /> {busy ? 'Creating...' : 'Create staff login'}
+                </button>
+                <button className="button button-outline" type="button" onClick={() => setFormOpen(false)}>
+                  Cancel
+                </button>
+              </div>
             </form>
           ) : (
             <form className="profile-form" onSubmit={handleAssignExisting}>
@@ -228,85 +243,95 @@ export default function GardenerClerksPanel() {
                   value={assignForm.email}
                   onChange={(e) => setAssignForm({ ...assignForm, email: e.target.value })}
                 />
-                <span className="field-note">Only active accounts already registered with the Clerk role can be linked here.</span>
+                <span className="field-note">Only active accounts already registered as a Clerk can be added here.</span>
               </label>
               <label>
-                Assignment note <span className="label-note">(Optional)</span>
+                What do they help with? <span className="label-note">(Optional)</span>
                 <input
                   maxLength="255"
-                  placeholder="e.g., Weekend schedule & payment clerk"
+                  placeholder="e.g., Weekend schedule & payment checks"
                   value={assignForm.notes}
                   onChange={(e) => setAssignForm({ ...assignForm, notes: e.target.value })}
                 />
               </label>
-              <button className="button" type="submit" disabled={busy}>
-                <Link2 size={15} /> {busy ? 'Linking...' : 'Assign existing clerk'}
-              </button>
+              <div className="inline-actions">
+                <button className="button" type="submit" disabled={busy}>
+                  <Link2 size={15} /> {busy ? 'Adding...' : 'Add to my team'}
+                </button>
+                <button className="button button-outline" type="button" onClick={() => setFormOpen(false)}>
+                  Cancel
+                </button>
+              </div>
             </form>
           )}
         </div>
+      )}
 
-        <div>
-          <h3 style={{ marginTop: 0 }}>Active clerks on your account</h3>
-          {loading ? (
-            <div className="skeleton-stack" aria-busy="true">
-              <div className="skeleton-line" />
-              <div className="skeleton-line short" />
-            </div>
-          ) : clerks.length === 0 ? (
-            <div className="empty-state">
-              <Users size={22} style={{ marginBottom: '6px', color: 'var(--forest)' }} />
-              <p style={{ margin: 0 }}>No clerks assigned yet. Create a clerk account on the left to delegate schedule, service, and payment management.</p>
-            </div>
-          ) : (
-            <div className="managed-list">
-              {clerks.map((clerk) => (
-                <div className="managed-item" key={clerk.assignment_id}>
-                  <div>
-                    <strong>
-                      {clerk.clerk_name} ({clerk.email})
-                    </strong>
-                    <span>
-                      <ShieldCheck size={13} style={{ verticalAlign: 'text-bottom' }} />
-                      {' '}
-                      {clerk.notes || 'Authorized for schedule, crew size, services, and payment verifications.'}
-                      {clerk.phone ? ` · ${clerk.phone}` : ''}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="table-action table-action-danger"
-                    disabled={busy}
-                    onClick={() => setRevokeTarget(clerk)}
-                  >
-                    <Trash2 size={14} /> Revoke
-                  </button>
-                </div>
-              ))}
-            </div>
+      {loading ? (
+        <div className="skeleton-stack" aria-busy="true">
+          <div className="skeleton-line" />
+          <div className="skeleton-line short" />
+        </div>
+      ) : clerks.length === 0 ? (
+        <div className="empty-state managed-empty-state">
+          <Users size={28} aria-hidden="true" />
+          <strong>No staff members added yet</strong>
+          <p>Need someone to help manage your bookings, dates, or payment checks while you&apos;re in the field? Add a trusted helper anytime.</p>
+          {!formOpen && (
+            <button type="button" className="button" onClick={() => setFormOpen(true)}>
+              <Plus size={16} /> Add your first staff member
+            </button>
           )}
         </div>
-      </div>
+      ) : (
+        <div className="managed-list" style={{ marginTop: '14px' }}>
+          {clerks.map((clerk) => (
+            <div className="managed-item" key={clerk.assignment_id}>
+              <div>
+                <strong>{clerk.clerk_name}</strong>
+                <span>{clerk.email}{clerk.phone ? ` · ${clerk.phone}` : ''}</span>
+                <span>
+                  <ShieldCheck size={13} style={{ verticalAlign: 'text-bottom' }} />
+                  {' '}
+                  {clerk.notes || 'Can manage schedule, services, and payment checks.'}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="table-action table-action-danger"
+                disabled={busy}
+                onClick={() => setRevokeTarget(clerk)}
+              >
+                <Trash2 size={14} /> Remove access
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {revokeTarget && (
-        <div className="gateway-demo-backdrop" role="dialog" aria-modal="true" aria-labelledby="revoke-clerk-title" onClick={(e) => { if (e.target === e.currentTarget) setRevokeTarget(null) }}>
-          <div className="gateway-demo-modal">
-            <p className="eyebrow" style={{ marginBottom: '4px' }}>Confirm revocation</p>
-            <h2 id="revoke-clerk-title">Revoke clerk access?</h2>
+      <Modal
+        open={Boolean(revokeTarget)}
+        onClose={() => { if (!busy) setRevokeTarget(null) }}
+        closeDisabled={busy}
+        eyebrow="Confirm removal"
+        title="Remove staff access?"
+      >
+        {revokeTarget && (
+          <>
             <p className="field-note">
-              <strong>{revokeTarget.clerk_name}</strong> ({revokeTarget.email}) will immediately lose permission to edit your schedules, manage your services, or verify payments on your bookings.
+              <strong>{revokeTarget.clerk_name}</strong> ({revokeTarget.email}) will immediately stop having access to your schedule, services, and payment checks.
             </p>
             <div className="gateway-demo-actions">
               <button type="button" className="button button-danger" disabled={busy} onClick={confirmRevoke}>
-                {busy ? 'Revoking...' : 'Yes, revoke access'}
+                {busy ? 'Removing...' : 'Yes, remove access'}
               </button>
               <button type="button" className="table-action" disabled={busy} onClick={() => setRevokeTarget(null)}>
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </section>
   )
 }

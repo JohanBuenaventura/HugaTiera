@@ -20,7 +20,10 @@ import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
+import Modal from '../components/Modal'
 import StarRating from '../components/StarRating'
+import TransientSuccess from '../components/TransientSuccess'
+import { formatPHP } from '../utils/currency'
 
 const AGREEMENT_STEPS = [
   { id: 1, label: 'Scope & price' },
@@ -189,7 +192,6 @@ function BookingForm() {
       <Link className="back-link" to={direct ? `/services/${serviceId}` : (resolvedInquiryId ? `/inquiries/${resolvedInquiryId}` : '/inquiries')}>
         <ArrowLeft size={15} /> Back
       </Link>
-      <p className="eyebrow">{direct ? 'Direct service agreement proposal' : 'Mutual service agreement'}</p>
       <h1>Propose scope, price, and schedule.</h1>
       <p className="booking-note">
         Approving the same agreement version creates a <strong>Reservation</strong> holding the schedule slot. Submitting and verifying at least the required deposit (or full payment) upgrades it into a <strong>Confirmed Booking</strong>.
@@ -342,7 +344,7 @@ function BookingForm() {
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
-              <button className="button" type="submit">
+              <button className="button" type="submit" disabled={checkingSchedule || (activeScheduleCheck && !activeScheduleCheck.available)}>
                 <span>Review agreement</span>
                 <ArrowRight size={16} />
               </button>
@@ -352,6 +354,12 @@ function BookingForm() {
         {agreementStep === 3 && (
           <div className="agreement-step-panel">
             <p className="auth-section-title">Step 3 of 3 · Review &amp; propose</p>
+            {!checkingSchedule && activeScheduleCheck && !activeScheduleCheck.available && (
+              <div className="availability-banner is-conflict" role="alert">
+                <ShieldAlert size={16} />
+                <span>{activeScheduleCheck.message}</span>
+              </div>
+            )}
             <dl className="inquiry-review-summary">
               <div><dt>Scope of work</dt><dd>{form.scopeOfWork || 'Not provided'}</dd></div>
               <div><dt>Agreed price</dt><dd>{form.amount ? `₱${Number(form.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Not provided'}</dd></div>
@@ -412,7 +420,6 @@ function BookingDetails({ id }) {
     receiptFile: null,
   })
   const [paymentChannel, setPaymentChannel] = useState('online')
-  const [paymentStep, setPaymentStep] = useState(1)
   const [gatewayConfig, setGatewayConfig] = useState(null)
   const [activeCheckoutModal, setActiveCheckoutModal] = useState(null)
   const [rejectPaymentTarget, setRejectPaymentTarget] = useState(null)
@@ -918,7 +925,11 @@ function BookingDetails({ id }) {
       >
         <form className="dashboard-panel profile-form review-form" onSubmit={submitReview} style={{ width: '100%', maxWidth: '520px', margin: '0 auto' }}>
           <p className="eyebrow" style={{ textAlign: 'center' }}>Final step</p>
-          <h2 style={{ textAlign: 'center' }}>Review this service</h2>
+          <h2 style={{ textAlign: 'center', marginBottom: '4px' }}>Review this service</h2>
+          <p className="field-note" style={{ textAlign: 'center', marginTop: 0 }}>
+            <strong>{booking.service_title || 'Gardening service'}</strong>
+            {booking.gardener_name ? ` · ${booking.gardener_name}` : ''}
+          </p>
           <div className="review-rating-field" style={{ justifyItems: 'center', textAlign: 'center' }}>
             <span className="review-rating-label">Rating</span>
             <StarRating
@@ -954,13 +965,9 @@ function BookingDetails({ id }) {
   return (
     <section className="container booking-content">
       <Link className="back-link" to="/bookings"><ArrowLeft size={15} /> Back to bookings</Link>
-      <p className="eyebrow">
-        {isTransactionClosed
-          ? `Closed Transaction #${booking.id}`
-          : (isBookedPaid ? `Confirmed Booking #${booking.id}` : `Reservation #${booking.id} (Payment Required)`)}
-      </p>
       <h1>{booking.service_title || 'Gardening service'}</h1>
       <div className="booking-status-row">
+        <span className="category-pill">Booking #{booking.id}</span>
         <span className={getStatusBadgeClass(booking.booking_stage)}>{formatStatusLabel(booking.booking_stage)}</span>
         <span className={getStatusBadgeClass(booking.payment_status)}>{formatStatusLabel(booking.payment_status)}</span>
         <span className={getStatusBadgeClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
@@ -1027,7 +1034,7 @@ function BookingDetails({ id }) {
           </button>
         </div>
       )}
-      {statusMessage && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{statusMessage}</div>}
+      {statusMessage && <TransientSuccess key={statusMessage} message={statusMessage} onDismiss={() => setStatusMessage('')} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <article className="dashboard-panel booking-detail-card">
         <div className="payment-status-panel">
@@ -1086,31 +1093,7 @@ function BookingDetails({ id }) {
                 </button>
               </div>
 
-              {paymentStep === 1 ? (
-                <div className="register-step-actions payment-step-actions">
-                  <button
-                    className="button"
-                    type="button"
-                    onClick={() => setPaymentStep(2)}
-                  >
-                    <span>Continue to payment details</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <p className="auth-section-title">Step 2 of 2 · Payment details</p>
-                  <div className="register-step-actions payment-step-actions">
-                    <button
-                      type="button"
-                      className="register-back-btn"
-                      onClick={() => setPaymentStep(1)}
-                    >
-                      <ArrowLeft size={16} />
-                      <span>Back to payment options</span>
-                    </button>
-                  </div>
-                  {paymentChannel === 'online' ? (
+              {paymentChannel === 'online' ? (
                 <form className="profile-form payment-submit-form" onSubmit={handleOnlineCheckoutStart}>
                   <div className="gateway-info-strip">
                     <ShieldCheck size={16} />
@@ -1216,13 +1199,13 @@ function BookingDetails({ id }) {
                         onClick={() => setPaymentForm({
                           ...paymentForm,
                           paymentType: 'partial',
-                          amount: String(Math.max(20, Number((Number(booking.required_deposit_amount) - Number(booking.amount_paid || 0)).toFixed(2)))),
+                          amount: String(Math.max(1, Number((Number(booking.required_deposit_amount) - Number(booking.amount_paid || 0)).toFixed(2)))),
                         })}
                       >
                         Fill Required Deposit (₱{Math.max(0, Number(booking.required_deposit_amount) - Number(booking.amount_paid || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })})
                       </button>
                     )}
-                    {Number(booking.remaining_balance || 0) >= 20 && (
+                    {Number(booking.remaining_balance || 0) >= 1 && (
                       <button
                         type="button"
                         className="table-action"
@@ -1254,22 +1237,18 @@ function BookingDetails({ id }) {
                   </div>
                 </form>
               )}
-                </>
-              )}
             </div>
           )}
 
-          {activeCheckoutModal && (
-            <div
-              className="gateway-demo-backdrop"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="demo-checkout-title"
-              onClick={(e) => { if (e.target === e.currentTarget && !processingGateway) setActiveCheckoutModal(null) }}
-            >
-              <div className="gateway-demo-modal">
-                <p className="eyebrow" style={{ marginBottom: '4px' }}>HugaTiera Third-Party Checkout Simulator</p>
-                <h2 id="demo-checkout-title">Authorize Online Payment</h2>
+          <Modal
+            open={Boolean(activeCheckoutModal)}
+            onClose={() => { if (!processingGateway) setActiveCheckoutModal(null) }}
+            closeDisabled={processingGateway}
+            eyebrow="HugaTiera Third-Party Checkout Simulator"
+            title="Authorize Online Payment"
+          >
+            {activeCheckoutModal && (
+              <>
                 <p className="field-note">
                   Simulated PayMongo Checkout session (Sandbox / Demo Mode — no real funds are debited). Completing this step verifies your payment immediately and upgrades your booking.
                 </p>
@@ -1277,7 +1256,7 @@ function BookingDetails({ id }) {
                   <div><dt>Transaction code</dt><dd><strong>{activeCheckoutModal.transactionCode}</strong></dd></div>
                   <div><dt>Session ID</dt><dd><code>{activeCheckoutModal.sessionId}</code></dd></div>
                   <div><dt>Payment method</dt><dd>{PAYMENT_METHOD_LABELS[activeCheckoutModal.paymentMethod] || activeCheckoutModal.paymentMethod}</dd></div>
-                  <div><dt>Amount due</dt><dd><strong>₱{Number(activeCheckoutModal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></dd></div>
+                  <div><dt>Amount due</dt><dd><strong>{formatPHP(activeCheckoutModal.amount || 0, { decimals: 2 })}</strong></dd></div>
                 </dl>
                 <div className="gateway-demo-actions">
                   <button
@@ -1305,9 +1284,9 @@ function BookingDetails({ id }) {
                     Close
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </Modal>
 
           {payments.length > 0 && (
             <div className="payment-history-list">
@@ -1416,22 +1395,20 @@ function BookingDetails({ id }) {
             </div>
           )}
 
-          {rejectPaymentTarget && (
-            <div
-              className="gateway-demo-backdrop no-print"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="reject-payment-title"
-              onClick={(e) => {
-                if (e.target === e.currentTarget && !verifyingPaymentId) {
-                  setRejectPaymentTarget(null)
-                  setRejectPaymentReason('')
-                }
-              }}
-            >
-              <div className="gateway-demo-modal">
-                <p className="eyebrow" style={{ marginBottom: '4px' }}>Payment verification</p>
-                <h2 id="reject-payment-title">Reject payment proof?</h2>
+          <Modal
+            open={Boolean(rejectPaymentTarget)}
+            onClose={() => {
+              if (!verifyingPaymentId) {
+                setRejectPaymentTarget(null)
+                setRejectPaymentReason('')
+              }
+            }}
+            closeDisabled={Boolean(verifyingPaymentId)}
+            eyebrow="Payment verification"
+            title="Reject payment proof?"
+          >
+            {rejectPaymentTarget && (
+              <>
                 <p className="field-note">
                   Provide a clear reason for rejecting {rejectPaymentTarget.transaction_code || `Payment #${rejectPaymentTarget.id}`}. The client will be notified so they can re-submit valid proof.
                 </p>
@@ -1472,9 +1449,9 @@ function BookingDetails({ id }) {
                     </button>
                   </div>
                 </form>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </Modal>
         </div>
 
         <div className="detail-facts">
@@ -1945,6 +1922,7 @@ function BookingList() {
   const [bookings, setBookings] = useState([])
   const [covers, setCovers] = useState({})
   const [filter, setFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
@@ -1952,6 +1930,7 @@ function BookingList() {
       .then(async (result) => {
         if (!active) return
         setBookings(result.bookings)
+        setLoading(false)
         const inquiryIds = [...new Set(result.bookings.map((b) => b.inquiry_id).filter(Boolean))]
         if (inquiryIds.length === 0) return
         const settled = await Promise.allSettled(
@@ -1967,7 +1946,12 @@ function BookingList() {
         }
         setCovers(nextCovers)
       })
-      .catch((loadError) => { if (active) setError(loadError.message) })
+      .catch((loadError) => {
+        if (active) {
+          setError(loadError.message)
+          setLoading(false)
+        }
+      })
     return () => { active = false }
   }, [])
 
@@ -1999,7 +1983,6 @@ function BookingList() {
 
   return (
     <section className="container booking-content">
-      <p className="eyebrow">Reservations, payments &amp; confirmed bookings</p>
       <h1>Reservations and bookings.</h1>
       <p className="booking-note">
         Approved agreements start as <strong>Reservations</strong>. Once a partial deposit or full payment is verified, they become <strong>Confirmed Bookings</strong>. After work completion and full payment, both parties sign the closing agreement to unlock rating.
@@ -2024,9 +2007,16 @@ function BookingList() {
           })}
         </div>
       )}
-      {error && <div className="form-error">{error}</div>}
-      {!error && bookings.length === 0 && <div className="empty-state">You do not have any reservations or bookings yet.</div>}
-      {!error && bookings.length > 0 && filteredBookings.length === 0 && (
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {loading && (
+        <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading reservations and bookings">
+          <div className="skeleton-line" />
+          <div className="skeleton-line short" />
+          <div className="skeleton-line" />
+        </div>
+      )}
+      {!loading && !error && bookings.length === 0 && <div className="empty-state">You do not have any reservations or bookings yet.</div>}
+      {!loading && !error && bookings.length > 0 && filteredBookings.length === 0 && (
         <div className="empty-state">No bookings match "{activeFilterDef.label}". Select another tab above to view your other records.</div>
       )}
       <div className="marketplace-grid marketplace-card-grid">
@@ -2052,7 +2042,7 @@ function BookingList() {
                 : 'View booking'))
           return (
             <article className="marketplace-card visual-market-card" key={booking.id}>
-              <div className="marketplace-card-media">
+              <Link className="marketplace-card-media card-media-link" to={`/bookings/${booking.id}`} aria-label={`Open ${booking.service_title || 'booking'}`}>
                 {coverUrl ? (
                   <img src={coverUrl} alt={booking.service_title || 'Gardening service'} loading="lazy" />
                 ) : (
@@ -2064,9 +2054,13 @@ function BookingList() {
                 <span className={`${getStatusBadgeClass(stageBadgeKey)} media-status-badge`}>
                   {stageBadgeLabel}
                 </span>
-              </div>
+              </Link>
               <div className="marketplace-card-body">
-                <h2>{booking.service_title || 'Gardening service'}</h2>
+                <h2>
+                  <Link className="card-title-link" to={`/bookings/${booking.id}`}>
+                    {booking.service_title || 'Gardening service'}
+                  </Link>
+                </h2>
                 <p>
                   {booking.agreed_scope || booking.notes || 'Gardening service arrangement.'}
                 </p>
@@ -2101,5 +2095,7 @@ function BookingList() {
 
 export default function BookingPage({ detail = false, create = false }) {
   const { bookingId } = useParams()
-  return <main className="marketplace-page protected-page"><AppSidebar />{detail ? <BookingDetails id={bookingId} /> : create ? <BookingForm /> : <BookingList />}</main>
+  const { user } = useAuth()
+  const memberWorkspace = ['client', 'gardener'].includes(user?.role)
+  return <main className={`marketplace-page protected-page${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={user?.role}><AppSidebar />{detail ? <BookingDetails id={bookingId} /> : create ? <BookingForm /> : <BookingList />}</main>
 }

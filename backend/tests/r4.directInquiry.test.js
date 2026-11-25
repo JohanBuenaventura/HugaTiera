@@ -3,7 +3,6 @@ const path = require('node:path')
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true })
 
 // Enforce that R4 tests run EXCLUSIVELY against the separate test database
-const ORIGINAL_DB = process.env.DB_NAME || 'hugatiera_db'
 process.env.DB_NAME = 'hugatiera_db_migration_test'
 
 const assert = require('node:assert/strict')
@@ -109,7 +108,6 @@ describe('Step R4 – Case 2 Direct Service Provider Inquiry End-to-End', () => 
       'hugatiera_db_migration_test',
       `Refusing to run R4 tests on ${dbRow.db}; must be hugatiera_db_migration_test`,
     )
-    assert.notEqual(dbRow.db, ORIGINAL_DB, 'Must never run against original database')
 
     server = http.createServer(app)
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))

@@ -1,0 +1,28 @@
+<mxfile host="app.diagrams.net" modified="2026-11-25T07:00:00.000Z" agent="HugaTiera" version="24.7.17">
+  <diagram id="dfd0" name="DFD Level 0 Context">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1480" pageHeight="840" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="p0" value="0.0&#10;HugaTiera Platform" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f2937;fontStyle=1;fontSize=15;" vertex="1" parent="1"><mxGeometry x="615" y="340" width="250" height="140" as="geometry"/></mxCell>
+        <mxCell id="e1" value="External Entity:&#10;Client" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="36" y="95" width="185" height="72" as="geometry"/></mxCell>
+        <mxCell id="e2" value="External Entity:&#10;Gardener" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="36" y="374" width="185" height="72" as="geometry"/></mxCell>
+        <mxCell id="e3" value="External Entity:&#10;Assigned Clerk" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="36" y="655" width="185" height="72" as="geometry"/></mxCell>
+        <mxCell id="e4" value="External Entity:&#10;Administrator" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1259" y="95" width="185" height="72" as="geometry"/></mxCell>
+        <mxCell id="e5" value="External Service:&#10;Google Gemini API" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1259" y="374" width="185" height="72" as="geometry"/></mxCell>
+        <mxCell id="e6" value="External Service:&#10;PayMongo / Sandbox Gateway" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#1f2937;fontStyle=1;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1259" y="655" width="185" height="72" as="geometry"/></mxCell>
+        <mxCell id="f1" value="Registration, requests, photos, agreements, payments, reviews" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="e1" target="p0"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f2" value="AI ranked services, estimates, offers, receipts, notifications" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="p0" target="e1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f3" value="Profile, schedule &amp; crew, My Clerks, services, offers, verification" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="e2" target="p0"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f4" value="Open leads, inquiries, calendar alerts, bookings, reviews" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="p0" target="e2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f5" value="Assigned gardener schedules, services, payment proof checks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="e3" target="p0"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f6" value="Clerk desk, assigned bookings, pending proofs, notifications" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="p0" target="e3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f7" value="KPIs, analytics, approvals, activity, reports, notifications" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="p0" target="e4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f8" value="Approvals, pricing rates, account CRUD, clerk assignments, resolutions" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="e4" target="p0"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f9" value="EXIF-stripped photos &amp; prompt context" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="p0" target="e5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f10" value="Requirements, photo descriptions, garden plans, AI summaries" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="e5" target="p0"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f11" value="Checkout session creation &amp; verification" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="p0" target="e6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f12" value="Hosted checkout URL &amp; verified payment status" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="e6" target="p0"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

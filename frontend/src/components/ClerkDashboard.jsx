@@ -14,7 +14,9 @@ import {
   XCircle,
 } from 'lucide-react'
 import AppSidebar from './AppSidebar'
+import Modal from './Modal'
 import { useAuth } from '../hooks/useAuth'
+import { formatPHP } from '../utils/currency'
 import { clerkApi } from '../services/clerk'
 import { servicesApi } from '../services/services'
 import {
@@ -58,7 +60,8 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
   })
   const [blockForm, setBlockForm] = useState({ startDate: '', endDate: '', reason: '' })
   const [serviceForm, setServiceForm] = useState(emptyNewService)
-  const [rejectDrafts, setRejectDrafts] = useState({})
+  const [rejectTarget, setRejectTarget] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
   const [busyAction, setBusyAction] = useState('')
 
   const applyGardenerForms = useCallback((gardener, catList) => {
@@ -265,9 +268,9 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
     }
   }
 
-  async function handlePaymentDecision(payment, decision) {
+  async function handlePaymentDecision(payment, decision, reasonOverride = '') {
     if (!selectedGardener) return
-    const rejectionReason = (rejectDrafts[payment.id] || '').trim()
+    const rejectionReason = reasonOverride.trim()
     if (decision === 'rejected' && !rejectionReason) {
       setError('Please enter a short rejection reason before rejecting a payment proof.')
       return
@@ -283,7 +286,8 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
           ? `Payment ${payment.transaction_code || `#${payment.id}`} verified! Booking stage is now ${formatStatusLabel(res.booking?.booking_stage || 'booked')}.`
           : `Payment ${payment.transaction_code || `#${payment.id}`} rejected and both parties notified.`,
       )
-      setRejectDrafts((prev) => ({ ...prev, [payment.id]: '' }))
+      setRejectTarget(null)
+      setRejectReason('')
       await loadWorkspace()
     } catch (payErr) {
       setError(payErr.message)
@@ -330,27 +334,27 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
         {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
         {notice && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{notice}</div>}
 
-        <section className="dashboard-stats" aria-label="Clerk summary metrics">
-          <article>
+        <div className="stat-grid clerk-stats" role="region" aria-label="Clerk summary metrics">
+          <div className="stat-card stat-card-primary">
+            <strong>{loading ? '—' : workspace.gardeners.length}</strong>
             <span>Assigned gardeners</span>
-            <strong>{workspace.gardeners.length}</strong>
-          </article>
-          <article>
+          </div>
+          <div className="stat-card">
+            <strong>{loading ? '—' : pendingVerifyCount}</strong>
             <span>Pending payment proofs</span>
-            <strong>{pendingVerifyCount}</strong>
-          </article>
-          <article>
+          </div>
+          <div className="stat-card">
+            <strong>{loading ? '—' : workspace.bookings.length}</strong>
             <span>Managed bookings</span>
-            <strong>{workspace.bookings.length}</strong>
-          </article>
-          <article>
+          </div>
+          <div className="stat-card">
+            <strong>{loading ? '—' : workspace.services.length}</strong>
             <span>Managed services</span>
-            <strong>{workspace.services.length}</strong>
-          </article>
-        </section>
+          </div>
+        </div>
 
         {loading ? (
-          <div className="dashboard-panel skeleton-stack" aria-busy="true">
+          <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading clerk workspace">
             <div className="skeleton-line" />
             <div className="skeleton-line short" />
             <div className="skeleton-line" />
@@ -360,7 +364,7 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
             <p className="eyebrow">No gardeners assigned yet</p>
             <h2>Waiting for a gardener or administrator assignment</h2>
             <p className="form-note">
-              Your Clerk account (<strong>{user?.email}</strong>) is ready! Share this email with a Gardener so they can link you during sign-up or under <strong>Gardener Dashboard → My Clerks → Link Existing Clerk</strong>, or ask an Administrator to assign you under <strong>Admin → Accounts</strong>. Once linked, their schedules, payments, and services will appear here automatically.
+              Your Clerk account (<strong>{user?.email}</strong>) is ready! Share this email with a Gardener so they can link you under <strong>Gardener Dashboard → My Clerks → Link Existing Clerk</strong>, or ask an Administrator to assign you under <strong>Admin → Accounts</strong>. Once linked, their schedules, payments, and services will appear here automatically.
             </p>
           </div>
         ) : (
@@ -418,7 +422,7 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                           <div>
                             <div className="payment-record-title">
                               <strong>
-                                {payment.transaction_code || `Payment #${payment.id}`} · PHP {Number(payment.amount).toLocaleString()}
+                                {payment.transaction_code || `Payment #${payment.id}`} · {formatPHP(payment.amount)}
                               </strong>
                               {payment.gateway_provider && (
                                 <span className="gateway-provider-badge">
@@ -458,19 +462,11 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                               >
                                 <CheckCircle2 size={14} /> {busyAction === `pay-${payment.id}` ? 'Saving...' : 'Verify Payment'}
                               </button>
-                              <input
-                                type="text"
-                                className="clerk-reject-input"
-                                placeholder="Rejection reason (if rejecting)..."
-                                maxLength="300"
-                                value={rejectDrafts[payment.id] || ''}
-                                onChange={(e) => setRejectDrafts((prev) => ({ ...prev, [payment.id]: e.target.value }))}
-                              />
                               <button
                                 className="table-action table-action-danger"
                                 type="button"
                                 disabled={busyAction === `pay-${payment.id}`}
-                                onClick={() => handlePaymentDecision(payment, 'rejected')}
+                                onClick={() => { setRejectTarget(payment); setRejectReason('') }}
                               >
                                 <XCircle size={14} /> Reject
                               </button>
@@ -490,14 +486,14 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                   <p className="eyebrow">Working hours &amp; crew capacity</p>
                   <h2>Schedule for {selectedGardener.display_name}</h2>
                   <form className="profile-form" onSubmit={handleSaveSchedule}>
-                    <div className="weekday-picker" role="group" aria-label="Working days">
+                    <div className="weekday-toggle-grid" role="group" aria-label="Working days">
                       {WEEKDAY_OPTIONS.map((day) => {
                         const checked = parseWorkingDaysArray(scheduleForm.workingDays).includes(day.code)
                         return (
                           <button
                             key={day.code}
                             type="button"
-                            className={`weekday-chip${checked ? ' is-selected' : ''}`}
+                            className={`weekday-pill${checked ? ' is-selected' : ''}`}
                             onClick={() => toggleWorkingDay(day.code)}
                             aria-pressed={checked}
                           >
@@ -734,7 +730,7 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                             <strong>{svc.title}</strong>
                             <span>
                               {svc.category_name} · {svc.workers_required || 1} worker{(svc.workers_required || 1) === 1 ? '' : 's'}
-                              {svc.indicative_price != null ? ` · PHP ${Number(svc.indicative_price).toLocaleString()}` : ''}
+                              {svc.indicative_price != null ? ` · ${formatPHP(svc.indicative_price)}` : ''}
                               {' · '}{svc.is_active ? 'Active' : 'Inactive'}
                             </span>
                           </div>
@@ -787,7 +783,7 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                             <td>{b.client_name}</td>
                             <td>{b.scheduled_start ? new Date(b.scheduled_start).toLocaleString() : 'TBD'}</td>
                             <td>
-                              PHP {Number(b.amount_paid || 0).toLocaleString()} / {Number(b.agreed_amount || 0).toLocaleString()}
+                              {formatPHP(b.amount_paid || 0)} / {formatPHP(b.agreed_amount || 0)}
                               <small>{formatStatusLabel(b.payment_status)}</small>
                             </td>
                             <td>
@@ -805,6 +801,64 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
             )}
           </>
         )}
+
+        <Modal
+          open={Boolean(rejectTarget)}
+          onClose={() => {
+            if (!busyAction) {
+              setRejectTarget(null)
+              setRejectReason('')
+            }
+          }}
+          closeDisabled={Boolean(busyAction)}
+          eyebrow="Payment verification"
+          title="Reject payment proof?"
+        >
+          {rejectTarget && (
+            <>
+              <p className="field-note">
+                Provide a clear reason for rejecting {rejectTarget.transaction_code || `Payment #${rejectTarget.id}`}. Both client and gardener will be notified.
+              </p>
+              <form
+                className="profile-form"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!rejectReason.trim()) return
+                  handlePaymentDecision(rejectTarget, 'rejected', rejectReason)
+                }}
+              >
+                <label>
+                  Rejection reason
+                  <textarea
+                    required
+                    rows="3"
+                    maxLength="300"
+                    placeholder="e.g., Reference number does not match statement or receipt photo is unreadable."
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                  />
+                </label>
+                <div className="gateway-demo-actions">
+                  <button
+                    type="submit"
+                    className="button button-danger"
+                    disabled={busyAction === `pay-${rejectTarget.id}` || !rejectReason.trim()}
+                  >
+                    {busyAction === `pay-${rejectTarget.id}` ? 'Rejecting...' : 'Confirm rejection'}
+                  </button>
+                  <button
+                    type="button"
+                    className="table-action"
+                    disabled={busyAction === `pay-${rejectTarget.id}`}
+                    onClick={() => { setRejectTarget(null); setRejectReason('') }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+        </Modal>
       </section>
     </main>
   )

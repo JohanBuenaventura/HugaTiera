@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeftRight,
   BarChart3,
   Bell,
   Briefcase,
+  CalendarCheck,
   CalendarDays,
   ClipboardList,
   CreditCard,
+  Images,
   Leaf,
   LogOut,
   Menu,
@@ -17,7 +19,10 @@ import {
   PieChart,
   Settings,
   ShieldCheck,
+  Sparkles,
   Store,
+  Tag,
+  UserCog,
   Users,
   X,
 } from 'lucide-react'
@@ -36,8 +41,8 @@ export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('hugatiera.sidebar.collapsed') === 'true')
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  useEffect(() => {
-    if (!user || !['client', 'gardener', 'clerk'].includes(user.role)) return
+  const refreshUnreadCounts = useCallback(() => {
+    if (!user || !['client', 'gardener', 'clerk', 'administrator'].includes(user.role)) return
     communicationApi.notifications().then((result) => {
       const unread = result.notifications.filter((notification) => !notification.read_at)
       const count = (type) => new Set(
@@ -57,6 +62,16 @@ export default function AppSidebar() {
       })
     }).catch(() => {})
   }, [user])
+
+  useEffect(() => {
+    refreshUnreadCounts()
+  }, [refreshUnreadCounts, location.pathname, location.search])
+
+  useEffect(() => {
+    const handleSync = () => refreshUnreadCounts()
+    window.addEventListener('hugatiera:notifications-updated', handleSync)
+    return () => window.removeEventListener('hugatiera:notifications-updated', handleSync)
+  }, [refreshUnreadCounts])
 
   if (!user) return null
 
@@ -83,17 +98,25 @@ export default function AppSidebar() {
     Inquiries: ClipboardList,
     Messages: MessageCircle,
     Notifications: Bell,
-    Bookings: CalendarDays,
+    Bookings: CalendarCheck,
+    Calendar: CalendarDays,
+    Schedule: CalendarDays,
     Schedules: CalendarDays,
     Payments: CreditCard,
     Services: Briefcase,
-    Profile: Settings,
+    'My services': Briefcase,
+    Portfolio: Images,
+    'My Clerks': Users,
+    'My Staff': Users,
+    'AI Assistant': Sparkles,
+    Profile: UserCog,
     Approvals: ShieldCheck,
+    Pricing: Tag,
     Activity: BarChart3,
     Reports: ClipboardList,
     Accounts: Users,
     Marketplace: Store,
-  }[label] || ClipboardList)
+  }[label] || Settings)
 
   async function handleRoleSwitch() {
     if (!user?.isDualRole || switchingRole) return
@@ -141,9 +164,21 @@ export default function AppSidebar() {
     )
   }
 
+  const skipToMainContent = (event) => {
+    const target = document.getElementById('main-content') || document.querySelector('main h1, main')
+    if (!target) return
+    event.preventDefault()
+    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1')
+    target.focus()
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <>
-      <aside className={`app-sidebar${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' is-mobile-open' : ''}`}>
+      <a className="skip-link visually-hidden" href="#main-content" onClick={skipToMainContent}>
+        Skip to main content
+      </a>
+      <aside className={`app-sidebar${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' is-mobile-open' : ''}`} data-user-role={user.role}>
         <div className="app-sidebar-topline">
           <Link
             className="brand app-sidebar-brand"
@@ -176,9 +211,24 @@ export default function AppSidebar() {
           </button>
         </div>
         <div className="app-sidebar-drawer">
-          <div className="app-sidebar-section-label">Navigation</div>
           <nav className="app-sidebar-nav" aria-label="Application navigation">
-            {links.map(renderLink)}
+            {links.map((item, idx) => {
+              const hasGroups = links.some((entry) => Boolean(entry.group))
+              const showGroupHeader = hasGroups
+                ? item.group !== links[idx - 1]?.group
+                : idx === 0
+              const groupLabel = hasGroups ? item.group : 'Navigation'
+              return (
+                <div key={item.label} className="app-sidebar-nav-item-wrap">
+                  {showGroupHeader && (
+                    <div className={`app-sidebar-section-label${idx > 0 ? ' is-secondary' : ''}`}>
+                      {groupLabel}
+                    </div>
+                  )}
+                  {renderLink(item)}
+                </div>
+              )
+            })}
           </nav>
           <div className="app-sidebar-role">
             <span className="app-sidebar-avatar" aria-hidden="true">{user.firstName?.slice(0, 1) || 'H'}</span>

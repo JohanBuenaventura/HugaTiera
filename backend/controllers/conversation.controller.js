@@ -20,21 +20,47 @@ async function listConversations(req, res, next) {
   try {
     const [conversations] = await pool.execute(
       `SELECT c.id, c.client_id, c.gardener_id, c.inquiry_id, c.created_at,
+              CASE WHEN c.client_id = ? THEN c.gardener_id ELSE c.client_id END AS other_party_id,
+              CASE WHEN c.client_id = ? THEN 'gardener' ELSE 'client' END AS other_party_role,
               CASE WHEN c.client_id = ?
                    THEN COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gardener.first_name, ' ', gardener.last_name))
                    ELSE CONCAT(client.first_name, ' ', client.last_name) END AS other_party_name,
               i.subject AS inquiry_subject,
               i.request_type AS inquiry_request_type,
+              i.status AS inquiry_status,
+              i.location AS inquiry_location,
+              s.title AS service_title,
+              latest_booking.booking_id,
+              latest_booking.booking_status,
+              latest_booking.booking_stage,
+              latest_booking.booking_scheduled_start,
               latest.message_text AS latest_message,
               latest.sent_at AS latest_message_at,
+              latest.sender_id AS latest_sender_id,
               COALESCE(unread.unread_count, 0) AS unread_count
        FROM conversations c
        JOIN users client ON client.id = c.client_id
        JOIN users gardener ON gardener.id = c.gardener_id
        LEFT JOIN gardener_profiles gp ON gp.user_id = c.gardener_id
        LEFT JOIN inquiries i ON i.id = c.inquiry_id
+       LEFT JOIN services s ON s.id = i.service_id
        LEFT JOIN (
-         SELECT m1.conversation_id, m1.message_text, m1.sent_at
+         SELECT b1.inquiry_id, b1.client_id, b1.gardener_id,
+                b1.id AS booking_id, b1.status AS booking_status,
+                b1.booking_stage, b1.scheduled_start AS booking_scheduled_start
+         FROM bookings b1
+         JOIN (
+           SELECT inquiry_id, client_id, gardener_id, MAX(id) AS latest_booking_id
+           FROM bookings
+           WHERE inquiry_id IS NOT NULL
+           GROUP BY inquiry_id, client_id, gardener_id
+         ) bmax ON bmax.latest_booking_id = b1.id
+       ) latest_booking
+         ON latest_booking.inquiry_id = c.inquiry_id
+        AND latest_booking.client_id = c.client_id
+        AND latest_booking.gardener_id = c.gardener_id
+       LEFT JOIN (
+         SELECT m1.conversation_id, m1.message_text, m1.sent_at, m1.sender_id
          FROM messages m1
          JOIN (
            SELECT conversation_id, MAX(id) AS latest_id
@@ -49,7 +75,7 @@ async function listConversations(req, res, next) {
        ) unread ON unread.conversation_id = c.id
        WHERE c.client_id = ? OR c.gardener_id = ?
        ORDER BY COALESCE(latest.sent_at, c.created_at) DESC`,
-      [req.user.id, req.user.id, req.user.id, req.user.id],
+      [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id],
     )
     return res.json({ conversations })
   } catch (error) {

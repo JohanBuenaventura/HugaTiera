@@ -81,10 +81,9 @@ export default function ServicesPage() {
   }
 
   return (
-    <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+    <main className={`marketplace-page${user ? ' protected-page' : ''}${['client', 'gardener'].includes(user?.role) ? ' member-workspace' : ''}`} data-workspace={user?.role || 'public'}>
       {user ? <AppSidebar /> : <PublicHeader />}
       <section className="container marketplace-content">
-        <p className="eyebrow">Explore local help</p>
         <h1>Gardening services for your space.</h1>
         <p className="marketplace-lead">
           Search active services from approved gardeners in Zamboanga City. Browse provider portfolios or start with an inquiry.
@@ -124,19 +123,20 @@ export default function ServicesPage() {
             const gardenerName = service.business_name || `${service.first_name} ${service.last_name}`
             return (
               <article className="marketplace-card visual-market-card" key={service.id} aria-labelledby={`service-title-${service.id}`}>
-                <div className="marketplace-card-media">
+                <Link className="marketplace-card-media card-media-link" to={`/services/${service.id}`} aria-label={`View ${service.title}`}>
                   {coverUrl ? (
                     <img src={coverUrl} alt={`${service.title} by ${gardenerName}`} loading="lazy" />
                   ) : (
                     <div className="marketplace-card-placeholder" aria-hidden="true">
                       <Leaf size={26} />
-                      <span>{service.category_name}</span>
                     </div>
                   )}
                   <span className="category-pill media-badge">{service.category_name}</span>
-                </div>
+                </Link>
                 <div className="marketplace-card-body">
-                  <h2 id={`service-title-${service.id}`}>{service.title}</h2>
+                  <h2 id={`service-title-${service.id}`}>
+                    <Link className="card-title-link" to={`/services/${service.id}`}>{service.title}</Link>
+                  </h2>
                   <p>{service.description}</p>
                   <div className="service-meta">
                     <Link to={`/gardeners/${service.gardener_id}`}>{gardenerName}</Link>

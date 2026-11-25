@@ -81,11 +81,12 @@ flowchart LR
 ### Unified Request-to-Confirmation Workflow
 ```mermaid
 flowchart LR
-  A["1. Client Creates Request<br/>Case 1 (General) or Case 2 (Direct)<br/>+ Garden Photos & AI Notes"] --> B["2. Gardener Submits Offer<br/>or Feasibility Response<br/>(Revisable while 'sent')"]
+  A["1. Client Creates Request<br/>Case 1 (General) or Case 2 (Direct)<br/>+ Specs, Estimator, Photos & AI"] --> B["2. Gardener Submits Offer<br/>or Feasibility Response<br/>(Itemized; Revisable while 'sent')"]
   B --> C["3. Client Accepts Offer<br/>(Offer Locked; Status:<br/>'provider_selected')"]
-  C --> D["4. Mutual Agreement (v1..vN)<br/>Scope, Price, Schedule, Location<br/>(Status: 'in_agreement')"]
-  D --> E["5. Both Parties Approve<br/>Same Agreement Version<br/>(Booking Confirmed: 'accepted')"]
-  E --> F["6. Service Execution & Review<br/>('in_progress' -> 'completed'<br/>-> Client 1-5 Star Review)"]
+  C --> D["4. Mutual Agreement (v1..vN)<br/>Scope, Price, Deposit, Schedule<br/>(Status: 'in_agreement')"]
+  D --> E["5. Both Approve Same Version<br/>(Reservation Created:<br/>'accepted' / 'reserved')"]
+  E --> F["6. Deposit Verified (TXN-...)<br/>PayMongo / Sandbox / Receipt<br/>(Confirmed: 'booked')"]
+  F --> G["7. Execution, Closure & Review<br/>('in_progress' -> 'completed'<br/>-> 'fully_paid' & 'closed' -> Review)"]
 ```
 
 ---
@@ -106,8 +107,9 @@ flowchart LR
 | `/bookings` | Protected (`client`, `gardener`) | `pages/BookingPage.jsx` (`BookingsPage`) | Confirmed and historical bookings list with agreement version badges. |
 | `/bookings/new` | Protected (`client`) | `pages/BookingPage.jsx` (`BookingFormPage`) | Redirects/guides users to the R3 Mutual Agreement workflow on the inquiry or service page. |
 | `/bookings/:bookingId` | Protected (`client`, `gardener`) | `pages/BookingPage.jsx` (`BookingDetailPage`) | Booking execution controls, read-only **Mutual Agreement Summary** (`ISS-09`), conversation launcher, and post-completion review form. |
-| `/messages` | Protected (Client, Gardener) | `pages/CommunicationPage.jsx` | 1-to-1 conversation inbox and message threads. |
-| `/notifications` | Protected (Client, Gardener) | `pages/CommunicationPage.jsx` | Compact activity notifications feed with `All`/`Unread` filters and deep-link routing. |
+| `/profile` | Protected (`client`, `gardener`) | `pages/DashboardPage.jsx` (`profileView`) | Account profile, structured billing-style address, working schedule/crew settings, and avatar upload. |
+| `/messages` | Protected (`client`, `gardener`) | `pages/CommunicationPage.jsx` | 1-to-1 conversation inbox and message threads. |
+| `/notifications` | Protected (`client`, `gardener`, `clerk`, `administrator`) | `pages/CommunicationPage.jsx` | Compact activity notifications feed with `All`/`Unread` filters and role-aware deep-link routing. |
 | `/assistant` | Protected (All roles) | `pages/AssistantPage.jsx` | Standalone AI Garden Planning Assistant with quota display and safety disclaimer. |
 
 ---

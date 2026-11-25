@@ -330,6 +330,27 @@ At the beginning of a new coding task:
 
 If the user is asking only a question, brainstorming, or documentation clarification, answer that request without automatically changing application code.
 
+## 18. AI Skills Coordination and Design Preservation
+
+When working on frontend or UI/UX tasks, coordinate active AI skills in this strict priority order:
+
+1. **HugaTiera project truth first:** This `AGENTS.md` (especially Sections 4, 9, and 11), `project_progress.md`, `docs/implementation/implementation-plan.md`, and the actual codebase (`frontend/src/index.css`, `frontend/src/App.css`, `frontend/src/components/`, and `package.json`) always override external skill defaults.
+2. **UI UX Pro Max (`ui-ux-pro-max`):** Use selectively for targeted UX checks (`--domain ux`), React guidance (`--stack react`), and chart selection (`--domain chart`). Do **not** run `--design-system` / `MASTER.md` generation to replace HugaTiera's existing theme.
+3. **Anthropic Frontend Design (`frontend-design`):** Use for visual hierarchy, layout composition, spacing discipline, typography balance, and crisp microcopy. Treat HugaTiera's established palette and typography as a pinned visual direction.
+4. **Modern Web Guidance (`modern-web-guidance`):** Use for HTML/CSS/client-side web standards, accessibility, semantic forms and tables, native dialogs/popovers, and modern browser APIs.
+
+### Skill Override and Preservation Rules
+
+Unless the user explicitly approves a change:
+
+- Preserve the actual stack: **React + Vite** with **plain CSS3** on the frontend and **Node.js + Express.js + MySQL** on the backend (not PHP or MongoDB).
+- Preserve HugaTiera's existing design system and CSS custom properties in `frontend/src/index.css` (`--forest`, `--ivory`, `--amber`, neutral tokens, `DM Sans`, and `Playfair Display`).
+- Keep **`lucide-react`** as the only icon library.
+- Do **not** introduce **Tailwind CSS**, **shadcn/ui**, **Radix UI**, **Phosphor** (`@phosphor-icons/react`), **Heroicons**, or **GSAP**—even when recommended by `ui-ux-pro-max` or sibling skills such as `ui-styling`.
+- Before proposing new UI components or page redesigns, inspect existing reusable components in `frontend/src/components/` and check whether they can be reused or improved.
+- Avoid excessive animations, scroll reveals, and decorative visual effects; favor lightweight CSS transitions and native web platform features.
+- Do not invoke disabled plugins or MCP servers (such as Mobbin MCP).
+
 
 ## Implementation Plan Reference
 

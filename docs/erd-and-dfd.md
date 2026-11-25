@@ -182,6 +182,7 @@ erDiagram
     DATE valid_until
     INT revision_number
     TIMESTAMP locked_at
+    TINYINT active_flag
     TIMESTAMP created_at
     TIMESTAMP updated_at
   }
@@ -253,6 +254,7 @@ erDiagram
     TIMESTAMP client_approved_at
     TIMESTAMP gardener_approved_at
     ENUM status
+    INT active_key UK
     TIMESTAMP created_at
     TIMESTAMP updated_at
   }
@@ -400,15 +402,15 @@ erDiagram
   users ||--o| client_profiles : "has client profile"
   users ||--o| gardener_profiles : "has gardener profile"
   users ||--o{ gardener_unavailable_dates : "blocks unavailable dates"
-  users ||--o{ clerk_gardener_assignments : "clerk or assigned gardener"
+  users ||--o{ clerk_gardener_assignments : "clerk, gardener, or assigner"
   users ||--o{ services : "offers"
   users ||--o{ portfolios : "showcases"
   service_categories ||--o{ services : "classifies"
-  service_categories ||--o{ inquiries : "categorizes"
+  service_categories |o--o{ inquiries : "categorizes"
 
   users ||--o{ inquiries : "submits as client"
-  users ||--o{ inquiries : "receives as gardener"
-  services ||--o{ inquiries : "referenced by"
+  users |o--o{ inquiries : "receives as gardener"
+  services |o--o{ inquiries : "referenced by"
   inquiries ||--o{ inquiry_estimate_items : "itemizes"
   pricing_addons |o--o{ inquiry_estimate_items : "priced from"
 
@@ -416,24 +418,24 @@ erDiagram
   users ||--o{ quotations : "submits offer"
   quotations ||--o{ quotation_revisions : "snapshots"
 
-  inquiries ||--o{ request_images : "attaches"
+  inquiries |o--o{ request_images : "attaches"
   users ||--o{ request_images : "uploads"
-  request_images ||--o{ request_images : "derives from"
+  request_images |o--o{ request_images : "derives from"
 
   inquiries ||--o{ request_events : "logs"
-  quotations ||--o{ request_events : "triggers"
-  agreements ||--o{ request_events : "triggers"
-  users ||--o{ request_events : "acts in"
+  quotations |o--o{ request_events : "triggers"
+  agreements |o--o{ request_events : "triggers"
+  users |o--o{ request_events : "acts in"
 
   inquiries ||--o{ agreements : "negotiates"
-  quotations ||--o{ agreements : "basis for"
-  agreements ||--o| agreements : "supersedes"
-  users ||--o{ agreements : "client or gardener or proposer"
+  quotations |o--o{ agreements : "basis for"
+  agreements |o--o| agreements : "supersedes"
+  users ||--o{ agreements : "client, gardener, or proposer"
 
-  agreements ||--o| bookings : "creates reservation"
-  inquiries ||--o{ bookings : "originates"
-  quotations ||--o{ bookings : "linked offer"
-  services ||--o{ bookings : "booked service"
+  agreements |o--o| bookings : "creates reservation"
+  inquiries |o--o{ bookings : "originates"
+  quotations |o--o{ bookings : "linked offer"
+  services |o--o{ bookings : "booked service"
   users ||--o{ bookings : "client, gardener, or canceller"
 
   bookings ||--o{ booking_payments : "records payments"
@@ -442,7 +444,7 @@ erDiagram
   users ||--o{ booking_reschedule_requests : "requests or responds"
 
   users ||--o{ conversations : "participates"
-  inquiries ||--o{ conversations : "scoped to"
+  inquiries |o--o{ conversations : "scoped to"
   conversations ||--o{ messages : "contains"
   users ||--o{ messages : "sends"
 
@@ -450,9 +452,9 @@ erDiagram
   bookings ||--o| reviews : "reviewed once when closed"
   users ||--o{ reviews : "writes and receives"
 
-  users ||--o{ reports : "submits and resolves"
-  services ||--o{ reports : "reported"
-  messages ||--o{ reports : "reported"
+  users ||--o{ reports : "submits, reported, or resolves"
+  services |o--o{ reports : "reported"
+  messages |o--o{ reports : "reported"
   users ||--o{ ai_usage_log : "consumes quota"
 ```
 
@@ -482,20 +484,20 @@ flowchart LR
   PayMongo["External Entity: PayMongo / Sandbox Gateway"]
   System(["0.0 HugaTiera Platform"])
 
-  Client -->|"Registration (18+, mobile), profile & avatar, requests & category specs, garden photos, agreement approvals, payments, completion confirmation, reviews"| System
-  System -->|"Smart AI ranked services, price estimates, offers, agreements, checkout URLs & receipts, reschedule updates, notifications"| Client
+  Client -->|"3-step registration (18+, structured address), dual-role opt-in, requests & category specs, garden photos, agreements, payments, cancel/reschedule, completion sign-off, reviews"| System
+  System -->|"Smart AI ranked services (by category & barangay), price estimates, offers, agreements, checkout URLs & receipts, reschedule updates, notifications"| Client
 
-  Gardener -->|"Profile, working days & crew size, blocked dates, clerk assignments, services & cover photos, portfolios, itemized offers, payment verification, completion confirmation"| System
+  Gardener -->|"3-step registration (with built-in Client mode), schedule & crew size, blocked dates, My Clerks management, services & covers, portfolios, itemized offers, payment verification, completion sign-off"| System
   System -->|"AI-filtered open leads, direct inquiries, schedule calendar & urgency alerts, bookings, reviews, notifications"| Gardener
 
-  Clerk -->|"Assigned gardener schedule/blocked-date updates, service toggles, manual payment verification"| System
-  System -->|"Clerk workspace, assigned gardener calendars, pending payment proofs, notifications"| Clerk
+  Clerk -->|"Assigned gardener schedule/crew/blocked-date updates, service CRUD/toggles, manual payment proof verification"| System
+  System -->|"Scoped Clerk desk, assigned gardener schedules & bookings, pending payment proofs, notifications"| Clerk
 
-  Admin -->|"Approvals, category & pricing add-on rates, user CRUD & clerk assignments, report resolutions"| System
-  System -->|"KPI counts, analytics logs, pending approvals, activity, reports, account list"| Admin
+  Admin -->|"Approvals, category & pricing add-on rates, user CRUD & global clerk assignments, service moderation, report resolutions"| System
+  System -->|"KPI counts, analytics, pending approvals, activity, reports, account directory, notifications"| Admin
 
   System -->|"Sanitized garden photo & prompt context"| Gemini
-  Gemini -->|"Structured requirements, photo descriptions, tropical garden plans, AI summaries"| System
+  Gemini -->|"Structured requirements, photo descriptions, tropical garden plans, AI recommendation summaries"| System
 
   System -->|"Checkout session creation & status verification"| PayMongo
   PayMongo -->|"Hosted checkout URL & verified payment status"| System
@@ -532,17 +534,18 @@ flowchart TD
   D9[("D9: ai_usage_log")]
   FS[("D10: Local Media Storage (avatars, services, portfolios, payment-receipts, request-images)")]
 
-  Client <-->|"Register, login, switch role, avatar"| P1
-  Gardener <-->|"Register, switch role, manage My Clerks"| P1
-  Clerk <-->|"Login & workspace auth"| P1
-  P1 <-->|"Read/write accounts, flags, assignments"| D1
+  Client <-->|"3-step register, structured address, login, switch role, avatar"| P1
+  Gardener <-->|"3-step register, switch role, manage My Clerks, avatar"| P1
+  Clerk <-->|"Login & scoped workspace auth"| P1
+  P1 <-->|"Read/write accounts, dual-role flags, clerk assignments"| D1
   P1 <-->|"Store/serve avatars"| FS
 
   Gardener <-->|"Service CRUD, cover photos, portfolios"| P2
-  Client -->|"Browse & filter catalog"| P2
-  P2 <-->|"Read/write services, categories, addons"| D2
-  P2 -->|"Verify approval & active status"| D1
-  P2 <-->|"Store/serve covers & portfolios"| FS
+  Clerk <-->|"Create & toggle assigned gardener services"| P2
+  Client -->|"Browse, search & filter catalog"| P2
+  P2 <-->|"Read/write services, categories, pricing addons"| D2
+  P2 -->|"Verify approval, active status & clerk assignment"| D1
+  P2 <-->|"Store/serve service covers & portfolios"| FS
 
   Client <-->|"Case 1/Case 2 request, area/specs, estimator, photos"| P3
   Gardener <-->|"Open board, itemized labor/materials offers"| P3
@@ -550,31 +553,41 @@ flowchart TD
   P3 <-->|"Read/write inquiries, estimate items, photos, events"| D3
   P3 <-->|"Read/write quotations & revisions"| D4
   P3 <-->|"Store/serve EXIF-stripped photos"| FS
+  P3 -->|"Trigger inquiry & offer notifications"| P7
 
-  Client <-->|"Smart service/offer ranks, AI plan & photo analysis"| P4
+  Client <-->|"Category-filtered smart ranks, AI plan, requirements & photo analysis"| P4
   Gardener <-->|"Smart lead ranks & AI plan"| P4
-  P4 -->|"Read services, inquiries, reviews, locations"| D2
-  P4 -->|"Read reviews & conduct metrics"| D8
+  P4 -->|"Read locations, approvals & areas"| D1
+  P4 -->|"Read services & categories"| D2
+  P4 <-->|"Read inquiries/photos & save ai_description"| D3
+  P4 -->|"Read offers for comparison scoring"| D4
+  P4 -->|"Read completed bookings for conduct scoring"| D5
+  P4 -->|"Read reviews & report conduct metrics"| D8
   P4 <-->|"Check/log hourly rate limit"| D9
+  P4 -->|"Read sanitized garden photos"| FS
   P4 <-->|"Text & multimodal requests"| Gemini
 
   Gardener <-->|"Working days, crew size, blocked dates, calendar dropdown"| P5
-  Clerk <-->|"Update assigned gardener schedules & blocked dates"| P5
-  P5 <-->|"Read/write availability, crew capacity & urgency"| D5
-  P5 -->|"Check gardener crew & service workers"| D1
+  Clerk <-->|"Update assigned gardener schedules, crew & blocked dates"| P5
+  P5 <-->|"Read/write blocked dates, schedule & urgency checks"| D5
+  P5 <-->|"Read/update gardener schedule, crew & service workers"| D1
+  P5 -->|"Read service workers_required"| D2
+  P5 -->|"Send booking reminder alerts"| P7
 
   Client <-->|"Agreements, gateway/manual payments, cancel/reschedule, completion sign-off"| P6
   Gardener <-->|"Agreements, verify proofs, execute service, cancel/reschedule, sign-off"| P6
-  Clerk <-->|"Verify assigned gardener payment proofs"| P6
+  Clerk <-->|"Verify assigned gardener manual payment proofs"| P6
   P6 <-->|"Read/write agreements, reservations, bookings, reschedules"| D5
   P6 <-->|"Read/write TXN payment records"| D6
   P6 <-->|"Store/serve payment receipts"| FS
   P6 <-->|"Create & verify checkout sessions"| PayMongo
-  P6 -->|"Validate availability & crew capacity"| P5
-  P6 -->|"Send workflow alerts"| P7
+  P6 -->|"Validate working days & crew capacity"| P5
+  P6 -->|"Send workflow & payment alerts"| P7
 
   Client <-->|"Messages, notifications, gated reviews, reports"| P7
   Gardener <-->|"Messages, notifications, reports"| P7
+  Clerk <-->|"Read assigned gardener notifications"| P7
+  Admin <-->|"Read platform notifications"| P7
   P7 <-->|"Read/write conversations & notifications"| D7
   P7 <-->|"Read/write reviews & reports"| D8
   P7 -->|"Verify completed + fully_paid + closed gate"| D5
@@ -582,8 +595,9 @@ flowchart TD
   Admin <-->|"Approvals, analytics, pricing addons, accounts, clerk assignments, reports"| P8
   P8 <-->|"Manage accounts, approvals & clerk links"| D1
   P8 <-->|"Manage categories, pricing addons & services"| D2
-  P8 -->|"Read activity & booking metrics"| D3
-  P8 -->|"Read bookings & payments"| D5
+  P8 -->|"Read inquiry activity metrics"| D3
+  P8 -->|"Read booking metrics"| D5
+  P8 -->|"Read payment records"| D6
   P8 <-->|"Resolve flagged reports"| D8
 ```
 
@@ -606,29 +620,31 @@ flowchart LR
   D_AGR[("agreements")]
   D_BKG[("bookings + booking_reschedule_requests")]
   D_PAY[("booking_payments (TXN-...)")]
+  D_FS[("Local Media Storage (payment-receipts/)")]
   D_REV[("reviews")]
   D_NOT[("notifications")]
 
-  Client -->|"Propose/approve vN (scope, amount, deposit, schedule)"| P61
-  Gardener -->|"Propose/approve vN"| P61
-  P61 -->|"Both approved -> status = agreed"| D_AGR
+  Client -->|"Propose/edit/approve vN (scope, amount, deposit, schedule)"| P61
+  Gardener -->|"Propose/edit/approve vN"| P61
+  P61 -->|"Both approved on vN -> status = agreed"| D_AGR
 
-  P61 -->|"Check working days & crew capacity"| P62
-  P62 -->|"Insert booking (booking_stage = reserved, payment_status = unpaid)"| D_BKG
+  P61 -->|"Validate working days, blocked dates & crew capacity"| P62
+  P62 -->|"Insert reservation (status = accepted, booking_stage = reserved, payment_status = unpaid)"| D_BKG
 
-  Client -->|"Pay deposit online or upload proof"| P63
-  P63 <-->|"Checkout session & confirmation"| Gateway
+  Client -->|"Pay deposit online or upload receipt proof"| P63
+  P63 <-->|"Checkout session & idempotent confirmation"| Gateway
   P63 -->|"Insert booking_payments with TXN code"| D_PAY
+  P63 -->|"Store EXIF-stripped receipt image"| D_FS
 
-  Gardener -->|"Verify manual proof (or auto-verified by gateway)"| P64
+  Gardener -->|"Verify/reject manual proof (or auto-verified by gateway)"| P64
   P64 -->|"Update amount_paid, booking_stage = booked, payment_status = partially_paid/fully_paid"| D_BKG
-  P64 -->|"Notify parties"| D_NOT
+  P64 -->|"Notify client, gardener & assigned clerk"| D_NOT
 
   Client -->|"Event cancel or propose reschedule"| P65
-  Gardener -->|"Start/complete work or approve reschedule"| P65
-  P65 -->|"Update status / scheduled_start & end"| D_BKG
+  Gardener -->|"Start/complete work or approve reschedule (re-checks crew capacity)"| P65
+  P65 -->|"Update booking status / scheduled_start & end"| D_BKG
 
-  Client -->|"Pay balance & confirm completion"| P66
+  Client -->|"Pay remaining balance & confirm completion"| P66
   Gardener -->|"Verify balance & confirm completion"| P66
   P66 -->|"payment_status = fully_paid, transaction_status = closed"| D_BKG
 

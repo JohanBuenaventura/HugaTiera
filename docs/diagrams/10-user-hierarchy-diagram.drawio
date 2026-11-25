@@ -1,0 +1,24 @@
+<mxfile host="app.diagrams.net" modified="2026-11-25T07:00:00.000Z" agent="HugaTiera" version="24.7.17">
+  <diagram id="uh-full" name="User Hierarchy & RBAC">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1520" pageHeight="920" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="r" value="HugaTiera Platform Users" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d7e3f4;strokeColor=#1f2937;fontStyle=1;fontSize=14;" vertex="1" parent="1"><mxGeometry x="570" y="60" width="380" height="58" as="geometry"/></mxCell>
+        <mxCell id="g" value="Guest / Public Visitor&#10;Unauthenticated public browsing &amp; 3-step signup" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#1f2937;fontSize=12;" vertex="1" parent="1"><mxGeometry x="36" y="170" width="348" height="120" as="geometry"/></mxCell>
+        <mxCell id="a" value="Authenticated Users&#10;(HttpOnly JWT + users.is_active = TRUE)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e9eef5;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="660" y="170" width="640" height="54" as="geometry"/></mxCell>
+        <mxCell id="c" value="Client&#10;(role = 'client')" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="408" y="280" width="324" height="100" as="geometry"/></mxCell>
+        <mxCell id="p" value="Gardener / Service Provider&#10;(role = 'gardener', Built-in Client Mode)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="786" y="280" width="348" height="100" as="geometry"/></mxCell>
+        <mxCell id="ad" value="Administrator&#10;(role = 'administrator')" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1182" y="280" width="302" height="100" as="geometry"/></mxCell>
+        <mxCell id="ck" value="Assigned Clerk&#10;(role = 'clerk', Provider-Managed Only)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#1f2937;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="730" y="480" width="460" height="100" as="geometry"/></mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="r" target="g"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="r" target="a"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="a" target="c"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="a" target="p"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="a" target="ad"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="Dual-Role Switch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;startArrow=classic;endArrow=classic;strokeColor=#1f2937;" edge="1" parent="1" source="c" target="p"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="My Clerks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#1f2937;" edge="1" parent="1" source="p" target="ck"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="Global Assignment" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#1f2937;" edge="1" parent="1" source="ad" target="ck"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

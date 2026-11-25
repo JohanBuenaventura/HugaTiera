@@ -28,6 +28,7 @@ export const servicesApi = {
   mine: () => request('/services/mine'),
   create: (service) => request('/services', { method: 'POST', body: JSON.stringify(service) }),
   update: (id, service) => request(`/services/${id}`, { method: 'PUT', body: JSON.stringify(service) }),
+  updateStatus: (id, isActive) => request(`/services/${id}/status`, { method: 'PATCH', body: JSON.stringify({ isActive }) }),
   remove: (id) => request(`/services/${id}`, { method: 'DELETE' }),
   portfolios: () => request('/portfolios/me'),
   addPortfolio: (formData) => request('/portfolios', { method: 'POST', body: formData }),

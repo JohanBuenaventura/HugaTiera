@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeftRight,
@@ -7,18 +7,26 @@ import {
   Briefcase,
   CalendarDays,
   CheckCircle2,
+  Eye,
+  EyeOff,
+  ExternalLink,
   ImagePlus,
   Leaf,
   MapPin,
   Pencil,
+  Plus,
+  RotateCcw,
   Save,
   ShieldCheck,
   Sparkles,
   Star,
   Trash2,
   UserPlus,
+  Users,
+  X,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import TransientSuccess from '../components/TransientSuccess'
 import {
   MIN_REGISTRATION_AGE,
   WEEKDAY_OPTIONS,
@@ -43,6 +51,8 @@ import { reviewsApi } from '../services/reviews'
 import { fetchSmartRecommendations, requestRecommendationSummary } from '../services/ai'
 import { getRequestImageUrl } from '../services/requestImages'
 import AppSidebar from '../components/AppSidebar'
+import Modal from '../components/Modal'
+import { formatPHP } from '../utils/currency'
 import ClerkDashboard from '../components/ClerkDashboard'
 import GardenerClerksPanel from '../components/GardenerClerksPanel'
 import GardenerScheduleCalendar from '../components/GardenerScheduleCalendar'
@@ -64,6 +74,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   const [unavailableDates, setUnavailableDates] = useState(() => (Array.isArray(profile.unavailableDates) ? profile.unavailableDates : []))
   const [blockForm, setBlockForm] = useState({ startDate: '', endDate: '', reason: '' })
   const [blockBusy, setBlockBusy] = useState(false)
+  const [profileSection, setProfileSection] = useState('basic')
 
   const change = (field) => (event) => setForm({ ...form, [field]: event.target.value })
 
@@ -198,57 +209,83 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   const isUnderage = computedAge !== null && computedAge < MIN_REGISTRATION_AGE
 
   return <form className="profile-form" onSubmit={submit}>
-    {message && <div className="form-success" role="status">{message}</div>}
+    {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} />}
     {error && <div className="form-error" role="alert">{error}</div>}
-    <div className="avatar-upload-row">
-      <div className="avatar-preview">
-        {form.avatarPath ? (
-          <img src={`${profileApi.avatarUrl(userId)}?v=${avatarVersion}`} alt="Profile" />
-        ) : (
-          <span>{initials}</span>
-        )}
+    {role === 'gardener' && (
+      <div className="profile-subtabs" role="tablist" aria-label="Profile sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={profileSection === 'basic'}
+          className={`booking-filter-pill${profileSection === 'basic' ? ' is-active' : ''}`}
+          onClick={() => setProfileSection('basic')}
+        >
+          1. Personal info
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={profileSection === 'business'}
+          className={`booking-filter-pill${profileSection === 'business' ? ' is-active' : ''}`}
+          onClick={() => setProfileSection('business')}
+        >
+          2. Business &amp; work schedule
+        </button>
       </div>
-      <div className="avatar-upload-controls">
-        <strong>Profile picture</strong>
-        <span className="field-note">JPEG, PNG, or WebP up to 5 MB</span>
-        <div className="inline-actions">
-          <label className="button button-outline avatar-file-label">
-            <ImagePlus size={15} />
-            {avatarBusy ? 'Uploading...' : (form.avatarPath ? 'Change photo' : 'Upload photo')}
-            <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={avatarBusy} onChange={handleAvatarChange} />
+    )}
+    {(role !== 'gardener' || profileSection === 'basic') && (
+      <>
+        <div className="avatar-upload-row">
+          <div className="avatar-preview">
+            {form.avatarPath ? (
+              <img src={`${profileApi.avatarUrl(userId)}?v=${avatarVersion}`} alt="Profile" />
+            ) : (
+              <span>{initials}</span>
+            )}
+          </div>
+          <div className="avatar-upload-controls">
+            <strong>Profile picture</strong>
+            <span className="field-note">JPEG, PNG, or WebP up to 5 MB</span>
+            <div className="inline-actions">
+              <label className="button button-outline avatar-file-label">
+                <ImagePlus size={15} />
+                {avatarBusy ? 'Uploading...' : (form.avatarPath ? 'Change photo' : 'Upload photo')}
+                <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={avatarBusy} onChange={handleAvatarChange} />
+              </label>
+              {form.avatarPath && (
+                <button className="table-action" type="button" disabled={avatarBusy} onClick={handleRemoveAvatar}>
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="form-row form-row-3">
+          <label>First name<input required maxLength="100" value={form.firstName} onChange={change('firstName')} /></label>
+          <label>Middle name <span className="label-note">(Optional)</span><input maxLength="100" placeholder="Optional" value={form.middleName || ''} onChange={change('middleName')} /></label>
+          <label>Last name<input required maxLength="100" value={form.lastName} onChange={change('lastName')} /></label>
+        </div>
+        <div className="form-row">
+          <label>
+            Birthday <span className="label-note">(18+ required)</span>
+            <input type="date" max={maxBirthDate} value={form.dateOfBirth || ''} onChange={change('dateOfBirth')} />
           </label>
-          {form.avatarPath && (
-            <button className="table-action" type="button" disabled={avatarBusy} onClick={handleRemoveAvatar}>
-              Remove
-            </button>
-          )}
+          <label>
+            Age <span className="label-note">(Auto-calculated)</span>
+            <div className={`age-readonly-box${isUnderage ? ' is-invalid' : computedAge !== null ? ' is-valid' : ''}`}>
+              {computedAge === null ? (
+                <span className="age-placeholder">Not set</span>
+              ) : isUnderage ? (
+                <span>{computedAge} yrs old — Must be 18 or older</span>
+              ) : (
+                <span>{computedAge} years old</span>
+              )}
+            </div>
+          </label>
         </div>
-      </div>
-    </div>
-    <div className="form-row form-row-3">
-      <label>First name<input required maxLength="100" value={form.firstName} onChange={change('firstName')} /></label>
-      <label>Middle name <span className="label-note">(Optional)</span><input maxLength="100" placeholder="Optional" value={form.middleName || ''} onChange={change('middleName')} /></label>
-      <label>Last name<input required maxLength="100" value={form.lastName} onChange={change('lastName')} /></label>
-    </div>
-    <div className="form-row">
-      <label>
-        Birthday <span className="label-note">(18+ required)</span>
-        <input type="date" max={maxBirthDate} value={form.dateOfBirth || ''} onChange={change('dateOfBirth')} />
-      </label>
-      <label>
-        Age <span className="label-note">(Auto-calculated)</span>
-        <div className={`age-readonly-box${isUnderage ? ' is-invalid' : computedAge !== null ? ' is-valid' : ''}`}>
-          {computedAge === null ? (
-            <span className="age-placeholder">Not set</span>
-          ) : isUnderage ? (
-            <span>{computedAge} yrs old — Must be 18 or older</span>
-          ) : (
-            <span>{computedAge} years old</span>
-          )}
-        </div>
-      </label>
-    </div>
-    <div className="form-row"><label>Mobile number<input type="tel" maxLength="30" placeholder="0917 123 4567" value={form.phone || ''} onChange={change('phone')} /></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
+        <div className="form-row"><label>Mobile number<input type="tel" maxLength="30" placeholder="0917 123 4567" value={form.phone || ''} onChange={change('phone')} /></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
+      </>
+    )}
     {role === 'client' ? (
       <>
         <div className="auth-form-section">
@@ -261,14 +298,14 @@ function ProfileForm({ role, profile, userId, onSaved }) {
         </div>
         <label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label>
       </>
-    ) : (
+    ) : profileSection === 'business' ? (
       <>
-        <div className="form-row"><label>Business or display name<input value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div>
-        <label>Service area<input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label>
-        <label>Professional description<textarea value={form.description || ''} onChange={change('description')} rows="4" /></label>
+        <div className="form-row"><label>Business or display name<input placeholder="e.g. BuenHardino Lawn Care" value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div>
+        <label>Service area <span className="label-note">(Where you work)</span><input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label>
+        <label>About your gardening work<textarea placeholder="Tell homeowners what you specialize in..." value={form.description || ''} onChange={change('description')} rows="4" /></label>
 
         <div className="schedule-settings-box">
-          <p className="auth-section-title">Working days, hours &amp; simultaneous job capacity</p>
+          <p className="auth-section-title">Days &amp; hours you accept work</p>
           <div className="weekday-toggle-grid" role="group" aria-label="Working days">
             {WEEKDAY_OPTIONS.map((day) => {
               const checked = parseWorkingDaysArray(form.workingDays).includes(day.code)
@@ -296,7 +333,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
           </div>
           <div className="form-row">
             <label>
-              Total workers / crew available per day
+              How many workers do you have per day?
               <input
                 type="number"
                 min="1"
@@ -305,10 +342,10 @@ function ProfileForm({ role, profile, userId, onSaved }) {
                 value={form.crewSize ?? form.maxConcurrentJobs ?? 1}
                 onChange={(e) => setForm({ ...form, crewSize: Number(e.target.value) })}
               />
-              <span className="field-note">When all workers are assigned on a day, it is marked Fully Booked.</span>
+              <span className="field-note">When all workers are booked for a day, clients see that date as full.</span>
             </label>
             <label>
-              Simultaneous jobs allowed
+              How many jobs can you do at the same time?
               <select
                 value={String(form.maxConcurrentJobs || 1)}
                 onChange={(e) => {
@@ -316,80 +353,92 @@ function ProfileForm({ role, profile, userId, onSaved }) {
                   setForm({ ...form, maxConcurrentJobs: nextMax, crewSize: Math.max(Number(form.crewSize || 1), nextMax) })
                 }}
               >
-                <option value="1">1 — Solo (no overlapping jobs)</option>
-                <option value="2">2 — Can work 2 jobs simultaneously</option>
-                <option value="3">3 — Can work 3 jobs simultaneously</option>
-                <option value="4">4 — Can work 4 jobs simultaneously</option>
-                <option value="5">5 — Crew / up to 5 simultaneous jobs</option>
+                <option value="1">1 — Solo (one job at a time)</option>
+                <option value="2">2 — Up to 2 jobs at once</option>
+                <option value="3">3 — Up to 3 jobs at once</option>
+                <option value="4">4 — Up to 4 jobs at once</option>
+                <option value="5">5 — Team / up to 5 jobs at once</option>
               </select>
             </label>
           </div>
           <label>
-            Availability &amp; simultaneous-work note <span className="label-note">(Optional — shown to clients)</span>
+            Schedule note for clients <span className="label-note">(Optional)</span>
             <input
               maxLength="255"
-              placeholder="e.g., 2-person crew can handle 2 simultaneous maintenance jobs; closed on holidays"
+              placeholder="e.g., Closed on major holidays; 2-person crew available on weekends"
               value={form.availabilityNotes || ''}
               onChange={change('availabilityNotes')}
             />
           </label>
 
-          <div className="unavailable-dates-section">
-            <strong>Unavailable / blocked dates</strong>
-            <span className="field-note">Block specific dates when you cannot accept jobs. Clients will be prevented from booking these dates.</span>
-            <div className="form-row form-row-3">
-              <label>
-                Start date
-                <input
-                  type="date"
-                  value={blockForm.startDate}
-                  onChange={(e) => setBlockForm({ ...blockForm, startDate: e.target.value })}
-                />
-              </label>
-              <label>
-                End date <span className="label-note">(Optional)</span>
-                <input
-                  type="date"
-                  min={blockForm.startDate || undefined}
-                  value={blockForm.endDate}
-                  onChange={(e) => setBlockForm({ ...blockForm, endDate: e.target.value })}
-                />
-              </label>
-              <label>
-                Reason <span className="label-note">(Optional)</span>
-                <input
-                  maxLength="255"
-                  placeholder="e.g., Holiday, off-platform project"
-                  value={blockForm.reason}
-                  onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })}
-                />
-              </label>
+          <details className="unavailable-dates-section">
+            <summary className="unavailable-dates-summary">
+              <span><strong>Days off / blocked dates</strong> ({unavailableDates.length})</span>
+              <span className="field-note">Or manage visually in <Link className="text-link" to="/dashboard?tab=calendar">Schedule</Link></span>
+            </summary>
+            <div style={{ marginTop: '12px', display: 'grid', gap: '12px' }}>
+              <span className="field-note">Block dates when you are not available so clients cannot book those days.</span>
+              <div className="form-row form-row-3">
+                <label>
+                  Start date
+                  <input
+                    type="date"
+                    value={blockForm.startDate}
+                    onChange={(e) => setBlockForm({ ...blockForm, startDate: e.target.value })}
+                  />
+                </label>
+                <label>
+                  End date <span className="label-note">(Optional)</span>
+                  <input
+                    type="date"
+                    min={blockForm.startDate || undefined}
+                    value={blockForm.endDate}
+                    onChange={(e) => setBlockForm({ ...blockForm, endDate: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Reason <span className="label-note">(Optional)</span>
+                  <input
+                    maxLength="255"
+                    placeholder="e.g., Holiday, family event"
+                    value={blockForm.reason}
+                    onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })}
+                  />
+                </label>
+              </div>
+              <div>
+                <button className="button button-outline" type="button" disabled={blockBusy || !blockForm.startDate} onClick={handleAddUnavailableDate}>
+                  {blockBusy ? 'Saving...' : 'Block date'}
+                </button>
+              </div>
+              {unavailableDates.length > 0 && (
+                <ul className="unavailable-list">
+                  {unavailableDates.map((item) => (
+                    <li key={item.id}>
+                      <span>
+                        <strong>{item.start_date === item.end_date ? item.start_date : `${item.start_date} to ${item.end_date}`}</strong>
+                        {item.reason ? ` — ${item.reason}` : ''}
+                      </span>
+                      <button className="table-action" type="button" disabled={blockBusy} onClick={() => handleRemoveUnavailableDate(item.id)}>
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <div>
-              <button className="button button-outline" type="button" disabled={blockBusy || !blockForm.startDate} onClick={handleAddUnavailableDate}>
-                {blockBusy ? 'Saving...' : 'Add unavailable date'}
-              </button>
-            </div>
-            {unavailableDates.length > 0 && (
-              <ul className="unavailable-list">
-                {unavailableDates.map((item) => (
-                  <li key={item.id}>
-                    <span>
-                      <strong>{item.start_date === item.end_date ? item.start_date : `${item.start_date} to ${item.end_date}`}</strong>
-                      {item.reason ? ` — ${item.reason}` : ''}
-                    </span>
-                    <button className="table-action" type="button" disabled={blockBusy} onClick={() => handleRemoveUnavailableDate(item.id)}>
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          </details>
         </div>
       </>
-    )}
-    <button className="button" type="submit" disabled={saving || isUnderage}><Save size={16} />{saving ? 'Saving...' : 'Save profile'}</button>
+    ) : null}
+    <div className="inline-actions">
+      <button className="button" type="submit" disabled={saving || isUnderage}><Save size={16} />{saving ? 'Saving...' : 'Save profile'}</button>
+      {role === 'gardener' && profileSection === 'basic' && (
+        <button className="button button-outline" type="button" onClick={() => setProfileSection('business')}>
+          Next: Business &amp; schedule <ArrowRight size={15} />
+        </button>
+      )}
+    </div>
   </form>
 }
 
@@ -400,6 +449,8 @@ function Stats({ role, counts }) {
   return <div className="stat-grid">{values.map(([label, value], index) => <div className={`stat-card${index === 0 ? ' stat-card-primary' : ''}`} key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div>
 }
 
+const PRICE_UNIT_PRESETS = ['per visit', 'per day', 'per sqm', 'per project']
+
 function GardenerTools({ isApproved, section = 'services' }) {
   const emptyService = { title: '', description: '', categoryId: '', indicativePrice: '', priceUnit: '', serviceArea: 'Zamboanga City', workersRequired: 1 }
   const [serviceForm, setServiceForm] = useState(emptyService)
@@ -408,25 +459,116 @@ function GardenerTools({ isApproved, section = 'services' }) {
   const [categories, setCategories] = useState([])
   const [services, setServices] = useState([])
   const [portfolios, setPortfolios] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [serviceFormOpen, setServiceFormOpen] = useState(false)
+  const [serviceFilter, setServiceFilter] = useState('active')
   const [editId, setEditId] = useState(null)
+  const [viewingService, setViewingService] = useState(null)
+  const [hideConfirmService, setHideConfirmService] = useState(null)
+
+  const [portfolioFormOpen, setPortfolioFormOpen] = useState(false)
   const [portfolioEditId, setPortfolioEditId] = useState(null)
   const [imageForm, setImageForm] = useState({ title: '', description: '', image: null })
+  const [viewingPortfolio, setViewingPortfolio] = useState(null)
+  const [deleteConfirmPortfolio, setDeleteConfirmPortfolio] = useState(null)
+
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const formPanelRef = useRef(null)
+
+  const servicePreviewUrl = useMemo(
+    () => (serviceImageFile ? URL.createObjectURL(serviceImageFile) : ''),
+    [serviceImageFile],
+  )
+  const portfolioPreviewUrl = useMemo(
+    () => (imageForm.image ? URL.createObjectURL(imageForm.image) : ''),
+    [imageForm.image],
+  )
 
   useEffect(() => {
+    let active = true
     Promise.all([servicesApi.categories(), servicesApi.mine(), servicesApi.portfolios()])
       .then(([categoryResult, serviceResult, portfolioResult]) => {
-        setCategories(categoryResult.categories)
-        setServices(serviceResult.services)
-        setPortfolios(portfolioResult.portfolios)
+        if (!active) return
+        setCategories(categoryResult.categories || [])
+        setServices(serviceResult.services || [])
+        setPortfolios(portfolioResult.portfolios || [])
       })
-      .catch((loadError) => setError(loadError.message))
+      .catch((loadError) => { if (active) setError(loadError.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    if (!servicePreviewUrl) return undefined
+    return () => URL.revokeObjectURL(servicePreviewUrl)
+  }, [servicePreviewUrl])
+
+  useEffect(() => {
+    if (!portfolioPreviewUrl) return undefined
+    return () => URL.revokeObjectURL(portfolioPreviewUrl)
+  }, [portfolioPreviewUrl])
+
+  useEffect(() => {
+    const anyModal = viewingService || hideConfirmService || viewingPortfolio || deleteConfirmPortfolio
+    if (!anyModal) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setViewingService(null)
+        setHideConfirmService(null)
+        setViewingPortfolio(null)
+        setDeleteConfirmPortfolio(null)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [viewingService, hideConfirmService, viewingPortfolio, deleteConfirmPortfolio])
+
+  const scrollToForm = () => {
+    requestAnimationFrame(() => {
+      formPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
+  }
+
   const serviceChange = (field) => (event) => setServiceForm({ ...serviceForm, [field]: event.target.value })
+
+  function openNewServiceForm() {
+    setEditId(null)
+    setServiceForm(emptyService)
+    setServiceImageFile(null)
+    setError('')
+    setServiceFormOpen(true)
+    scrollToForm()
+  }
+
+  function openEditServiceForm(service) {
+    setViewingService(null)
+    setEditId(service.id)
+    setServiceImageFile(null)
+    setServiceForm({
+      title: service.title,
+      description: service.description,
+      categoryId: service.category_id,
+      indicativePrice: service.indicative_price ?? '',
+      priceUnit: service.price_unit || '',
+      serviceArea: service.service_area || 'Zamboanga City',
+      workersRequired: service.workers_required || 1,
+    })
+    setError('')
+    setServiceFormOpen(true)
+    scrollToForm()
+  }
+
+  function closeServiceForm() {
+    setServiceFormOpen(false)
+    setEditId(null)
+    setServiceForm(emptyService)
+    setServiceImageFile(null)
+  }
+
   async function saveService(event) {
-    event.preventDefault(); setMessage(''); setError('')
+    event.preventDefault(); setMessage(''); setError(''); setSaving(true)
     try {
       let targetServiceId = editId
       if (editId) {
@@ -439,46 +581,121 @@ function GardenerTools({ isApproved, section = 'services' }) {
         await servicesApi.uploadServiceImage(targetServiceId, serviceImageFile)
         setServiceImageVersion((v) => v + 1)
       }
-      setServices((await servicesApi.mine()).services)
-      setServiceForm(emptyService); setServiceImageFile(null); setEditId(null)
-      event.target.reset()
-      setMessage('Service listing saved.')
-    } catch (saveError) { setError(saveError.message) }
+      setServices((await servicesApi.mine()).services || [])
+      closeServiceForm()
+      setMessage(editId ? 'Service updated.' : 'New service published.')
+    } catch (saveError) {
+      setError(saveError.message)
+    } finally {
+      setSaving(false)
+    }
   }
+
   async function removeServiceImage(id) {
     setMessage(''); setError('')
     try {
       await servicesApi.deleteServiceImage(id)
-      setServices((await servicesApi.mine()).services)
+      const refreshed = (await servicesApi.mine()).services || []
+      setServices(refreshed)
       setServiceImageVersion((v) => v + 1)
-      setMessage('Service photo removed.')
+      if (viewingService?.id === id) {
+        setViewingService(refreshed.find((s) => s.id === id) || null)
+      }
+      setMessage('Cover photo removed.')
     } catch (removeError) { setError(removeError.message) }
   }
-  async function removeService(id) {
-    try { await servicesApi.remove(id); setServices((current) => current.map((service) => service.id === id ? { ...service, is_active: 0 } : service)); setMessage('Service listing deactivated.') } catch (removeError) { setError(removeError.message) }
+
+  async function confirmHideService() {
+    if (!hideConfirmService) return
+    const targetId = hideConfirmService.id
+    setMessage(''); setError(''); setSaving(true)
+    try {
+      await servicesApi.remove(targetId)
+      setServices((current) => current.map((service) => (service.id === targetId ? { ...service, is_active: 0 } : service)))
+      if (viewingService?.id === targetId) setViewingService(null)
+      setHideConfirmService(null)
+      setMessage('Service hidden from clients. You can show it again anytime.')
+    } catch (removeError) {
+      setError(removeError.message)
+      setHideConfirmService(null)
+    } finally {
+      setSaving(false)
+    }
   }
+
+  async function reactivateService(id) {
+    setMessage(''); setError('')
+    try {
+      await servicesApi.updateStatus(id, true)
+      setServices((current) => current.map((service) => (service.id === id ? { ...service, is_active: 1 } : service)))
+      setMessage('Service is visible to clients again.')
+    } catch (reactivateError) {
+      setError(reactivateError.message)
+    }
+  }
+
+  function openNewPortfolioForm() {
+    setPortfolioEditId(null)
+    setImageForm({ title: '', description: '', image: null })
+    setError('')
+    setPortfolioFormOpen(true)
+    scrollToForm()
+  }
+
+  function openEditPortfolioForm(portfolio) {
+    setViewingPortfolio(null)
+    setPortfolioEditId(portfolio.id)
+    setImageForm({ title: portfolio.title, description: portfolio.description || '', image: null })
+    setError('')
+    setPortfolioFormOpen(true)
+    scrollToForm()
+  }
+
+  function closePortfolioForm() {
+    setPortfolioFormOpen(false)
+    setPortfolioEditId(null)
+    setImageForm({ title: '', description: '', image: null })
+  }
+
   async function savePortfolio(event) {
-    event.preventDefault(); setMessage(''); setError('')
+    event.preventDefault(); setMessage(''); setError(''); setSaving(true)
     try {
       if (portfolioEditId) {
         await servicesApi.updatePortfolio(portfolioEditId, { title: imageForm.title, description: imageForm.description })
-        setPortfolios((await servicesApi.portfolios()).portfolios)
-        setPortfolioEditId(null)
-        setImageForm({ title: '', description: '', image: null })
-        setMessage('Portfolio entry updated.')
+        setPortfolios((await servicesApi.portfolios()).portfolios || [])
+        closePortfolioForm()
+        setMessage('Portfolio details updated.')
       } else {
         const data = new FormData()
         data.append('title', imageForm.title); data.append('description', imageForm.description); data.append('image', imageForm.image)
         await servicesApi.addPortfolio(data)
-        setPortfolios((await servicesApi.portfolios()).portfolios)
-        setImageForm({ title: '', description: '', image: null })
-        event.target.reset()
-        setMessage('Portfolio image uploaded.')
+        setPortfolios((await servicesApi.portfolios()).portfolios || [])
+        closePortfolioForm()
+        setMessage('Work photo added to your portfolio.')
       }
-    } catch (uploadError) { setError(uploadError.message) }
+    } catch (uploadError) {
+      setError(uploadError.message)
+    } finally {
+      setSaving(false)
+    }
   }
-  async function removePortfolio(id) {
-    try { await servicesApi.removePortfolio(id); setPortfolios((current) => current.filter((portfolio) => portfolio.id !== id)); setMessage('Portfolio entry removed.') } catch (removeError) { setError(removeError.message) }
+
+  async function confirmRemovePortfolio() {
+    if (!deleteConfirmPortfolio) return
+    const targetId = deleteConfirmPortfolio.id
+    setSaving(true); setError('')
+    try {
+      await servicesApi.removePortfolio(targetId)
+      setPortfolios((current) => current.filter((portfolio) => portfolio.id !== targetId))
+      if (viewingPortfolio?.id === targetId) setViewingPortfolio(null)
+      setDeleteConfirmPortfolio(null)
+      setMessage('Photo removed from portfolio.')
+    } catch (removeError) {
+      setError(removeError.message)
+      setDeleteConfirmPortfolio(null)
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (section === 'portfolio') {
@@ -487,113 +704,496 @@ function GardenerTools({ isApproved, section = 'services' }) {
         <div className="dashboard-panel">
           <div className="activity-heading">
             <div>
-              <p className="eyebrow">Portfolio</p>
-              <h2>{portfolioEditId ? 'Edit portfolio details.' : 'Show your previous work.'}</h2>
+              <h2>Your work photos ({portfolios.length})</h2>
+              <p className="field-note" style={{ margin: '4px 0 0' }}>
+                Click any photo to view it full size. Clear before-and-after garden photos help homeowners choose you.
+              </p>
             </div>
-            <Link className="text-link" to="/dashboard">Back to overview</Link>
-          </div>
-          {message && <div className="form-success" role="status">{message}</div>}
-          {error && <div className="form-error" role="alert">{error}</div>}
-          <form className="profile-form" onSubmit={savePortfolio}>
-            <label>Title<input required placeholder="e.g. Tropical patio makeover" value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} /></label>
-            <label>Description<textarea rows="2" placeholder="Describe what you built or maintained" value={imageForm.description} onChange={(event) => setImageForm({ ...imageForm, description: event.target.value })} /></label>
-            {!portfolioEditId && <label>Image<input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageForm({ ...imageForm, image: event.target.files[0] })} /><span className="field-note">JPEG, PNG, or WebP up to 5 MB</span></label>}
             <div className="inline-actions">
-              <button className="button" type="submit">{portfolioEditId ? <><Save size={16} />Update portfolio</> : <><ImagePlus size={16} />Upload portfolio image</>}</button>
-              {portfolioEditId && <button className="table-action" type="button" onClick={() => { setPortfolioEditId(null); setImageForm({ title: '', description: '', image: null }) }}>Cancel edit</button>}
+              <button
+                type="button"
+                className="button"
+                onClick={() => (portfolioFormOpen && !portfolioEditId ? closePortfolioForm() : openNewPortfolioForm())}
+              >
+                {portfolioFormOpen && !portfolioEditId ? <><X size={16} /> Close form</> : <><ImagePlus size={16} /> Add work photo</>}
+              </button>
             </div>
-          </form>
-          <div className="portfolio-list">
-            {portfolios.length === 0 && <p className="form-note">No portfolio photos uploaded yet.</p>}
-            {portfolios.map((portfolio) => (
-              <div className="portfolio-item" key={portfolio.id}>
-                <img src={servicesApi.imageUrl(portfolio.id)} alt={portfolio.title} />
-                <div><strong>{portfolio.title}</strong><span>{portfolio.description || 'No description'}</span></div>
-                <div className="item-actions" style={{ marginLeft: 'auto' }}>
-                  <button type="button" aria-label={`Edit ${portfolio.title}`} onClick={() => { setPortfolioEditId(portfolio.id); setImageForm({ title: portfolio.title, description: portfolio.description || '', image: null }) }}><Pencil size={15} /></button>
-                  <button type="button" aria-label={`Remove ${portfolio.title}`} onClick={() => removePortfolio(portfolio.id)}><Trash2 size={15} /></button>
-                </div>
-              </div>
-            ))}
           </div>
+
+          {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} />}
+          {error && <div className="form-error" role="alert">{error}</div>}
+
+          {portfolioFormOpen && (
+            <div className="managed-form-drawer" ref={formPanelRef}>
+              <div className="managed-form-drawer-head">
+                <strong>{portfolioEditId ? 'Edit photo details' : 'Upload a finished garden photo'}</strong>
+                <button type="button" className="table-action" onClick={closePortfolioForm}>
+                  <X size={14} /> Cancel
+                </button>
+              </div>
+              <form className="profile-form" onSubmit={savePortfolio}>
+                <label>
+                  Photo title
+                  <input required placeholder="e.g. Tropical patio makeover in Tetuan" value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} />
+                </label>
+                <label>
+                  Short description <span className="label-note">(Optional)</span>
+                  <textarea rows="2" placeholder="Describe what you cleaned, planted, or built" value={imageForm.description} onChange={(event) => setImageForm({ ...imageForm, description: event.target.value })} />
+                </label>
+                {!portfolioEditId && (
+                  <label>
+                    Choose photo
+                    <input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageForm({ ...imageForm, image: event.target.files?.[0] || null })} />
+                    <span className="field-note">JPEG, PNG, or WebP up to 5 MB</span>
+                  </label>
+                )}
+                {portfolioPreviewUrl && (
+                  <div className="managed-photo-preview">
+                    <img src={portfolioPreviewUrl} alt="Preview before upload" />
+                    <span className="field-note">Photo preview</span>
+                  </div>
+                )}
+                <div className="inline-actions">
+                  <button className="button" type="submit" disabled={saving}>
+                    {portfolioEditId ? <><Save size={16} /> {saving ? 'Saving...' : 'Save changes'}</> : <><ImagePlus size={16} /> {saving ? 'Uploading...' : 'Upload photo'}</>}
+                  </button>
+                  <button className="button button-outline" type="button" onClick={closePortfolioForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="skeleton-stack" aria-busy="true" style={{ marginTop: '18px' }}>
+              <div className="skeleton-line" />
+              <div className="skeleton-line short" />
+            </div>
+          ) : portfolios.length === 0 ? (
+            <div className="empty-state managed-empty-state">
+              <ImagePlus size={28} aria-hidden="true" />
+              <strong>No work photos uploaded yet</strong>
+              <p>Upload photos of gardens you&apos;ve trimmed, cleaned, or landscaped so clients can trust your work.</p>
+              {!portfolioFormOpen && (
+                <button type="button" className="button" onClick={openNewPortfolioForm}>
+                  <Plus size={16} /> Upload your first photo
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="managed-card-grid">
+              {portfolios.map((portfolio) => (
+                <article className="managed-visual-card" key={portfolio.id}>
+                  <button
+                    type="button"
+                    className="managed-visual-media-btn"
+                    onClick={() => setViewingPortfolio(portfolio)}
+                    aria-label={`View ${portfolio.title}`}
+                  >
+                    <img src={servicesApi.imageUrl(portfolio.id)} alt={portfolio.title} loading="lazy" />
+                  </button>
+                  <div className="managed-visual-body">
+                    <button
+                      type="button"
+                      className="managed-visual-title-btn"
+                      onClick={() => setViewingPortfolio(portfolio)}
+                    >
+                      {portfolio.title}
+                    </button>
+                    <p className="managed-visual-desc">{portfolio.description || 'No description added yet.'}</p>
+                    <div className="managed-visual-actions">
+                      <button type="button" className="button button-outline button-sm" onClick={() => setViewingPortfolio(portfolio)}>
+                        <Eye size={14} /> View
+                      </button>
+                      <button type="button" className="button button-outline button-sm" onClick={() => openEditPortfolioForm(portfolio)}>
+                        <Pencil size={14} /> Edit
+                      </button>
+                      <button type="button" className="table-action table-action-danger" onClick={() => setDeleteConfirmPortfolio(portfolio)}>
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
+
+        {viewingPortfolio && (
+          <div className="gateway-demo-backdrop" role="dialog" aria-modal="true" aria-labelledby="view-portfolio-title" onClick={(e) => { if (e.target === e.currentTarget) setViewingPortfolio(null) }}>
+            <div className="gateway-demo-modal managed-preview-modal">
+              <div className="managed-preview-head">
+                <h2 id="view-portfolio-title">{viewingPortfolio.title}</h2>
+                <button type="button" className="table-action" onClick={() => setViewingPortfolio(null)} aria-label="Close preview">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="managed-preview-image-wrap">
+                <img src={servicesApi.imageUrl(viewingPortfolio.id)} alt={viewingPortfolio.title} />
+              </div>
+              <p className="field-note" style={{ margin: '10px 0 0', fontSize: '14px', color: 'var(--workspace-ink)' }}>
+                {viewingPortfolio.description || 'No description provided.'}
+              </p>
+              <div className="gateway-demo-actions">
+                <button type="button" className="button button-sm" onClick={() => openEditPortfolioForm(viewingPortfolio)}>
+                  <Pencil size={14} /> Edit details
+                </button>
+                <button type="button" className="table-action" onClick={() => setViewingPortfolio(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {deleteConfirmPortfolio && (
+          <div className="gateway-demo-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-portfolio-title" onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirmPortfolio(null) }}>
+            <div className="gateway-demo-modal">
+              <h2 id="delete-portfolio-title">Delete this photo?</h2>
+              <p className="field-note">
+                <strong>{deleteConfirmPortfolio.title}</strong> will be permanently removed from your public portfolio.
+              </p>
+              <div className="gateway-demo-actions">
+                <button type="button" className="button button-danger" disabled={saving} onClick={confirmRemovePortfolio}>
+                  {saving ? 'Deleting...' : 'Yes, delete photo'}
+                </button>
+                <button type="button" className="table-action" disabled={saving} onClick={() => setDeleteConfirmPortfolio(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     )
   }
+
+  const activeServices = services.filter((s) => Boolean(s.is_active))
+  const hiddenServices = services.filter((s) => !s.is_active)
+  const visibleServices = serviceFilter === 'all'
+    ? services
+    : serviceFilter === 'hidden'
+      ? hiddenServices
+      : activeServices
+  const editingServiceObj = editId ? services.find((s) => s.id === editId) : null
 
   return (
     <section className="profile-settings-panel">
       <div className="dashboard-panel">
         <div className="activity-heading">
           <div>
-            <p className="eyebrow">Service listings</p>
-            <h2>{editId ? 'Edit a service.' : 'Manage your services.'}</h2>
+            <h2>Your services ({activeServices.length} active)</h2>
+            <p className="field-note" style={{ margin: '4px 0 0' }}>
+              {isApproved
+                ? 'Click any service to preview how clients see it, or use Edit to update details and pricing.'
+                : 'Your services are saved, and will appear in the public marketplace once an administrator approves your profile.'}
+            </p>
           </div>
-          <Link className="text-link" to="/dashboard">Back to overview</Link>
-        </div>
-        <p className="field-note" style={{ marginBottom: '16px' }}>
-          {isApproved ? 'Your active services are visible in the public marketplace.' : 'Your services are saved, but they will remain hidden until an administrator approves your gardener profile.'}
-        </p>
-        {message && <div className="form-success" role="status">{message}</div>}
-        {error && <div className="form-error" role="alert">{error}</div>}
-        <form className="profile-form" onSubmit={saveService}>
-          <div className="form-row">
-            <label>Title<input required placeholder="e.g. Weekly lawn & hedge care" value={serviceForm.title} onChange={serviceChange('title')} /></label>
-            <label>Category<select required value={serviceForm.categoryId} onChange={serviceChange('categoryId')}><option value="">Choose a category</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
-          </div>
-          <label>Description<textarea required rows="3" placeholder="Outline what is included in this service" value={serviceForm.description} onChange={serviceChange('description')} /></label>
-          <div className="form-row">
-            <label>Indicative price<input type="number" min="0" step="0.01" placeholder="Optional" value={serviceForm.indicativePrice} onChange={serviceChange('indicativePrice')} /><span className="field-note">Optional</span></label>
-            <label>Price unit<input placeholder="per visit, per sqm..." value={serviceForm.priceUnit} onChange={serviceChange('priceUnit')} /></label>
-          </div>
-          <div className="form-row">
-            <label>Service area<input required value={serviceForm.serviceArea} onChange={serviceChange('serviceArea')} /></label>
-            <label>
-              Workers needed for this service
-              <input type="number" required min="1" max="20" value={serviceForm.workersRequired ?? 1} onChange={serviceChange('workersRequired')} />
-              <span className="field-note">Counts toward your daily crew limit (e.g., 1 for lawn care, 3 for landscaping).</span>
-            </label>
-          </div>
-          <label>
-            Cover / business design photo
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setServiceImageFile(event.target.files?.[0] || null)} />
-            <span className="field-note">Optional. JPEG, PNG, or WebP up to 5 MB shown on marketplace cards.</span>
-          </label>
           <div className="inline-actions">
-            <button className="button" type="submit"><Save size={16} />{editId ? 'Update service' : 'Publish service'}</button>
-            {editId && <button className="table-action" type="button" onClick={() => { setEditId(null); setServiceForm(emptyService); setServiceImageFile(null) }}>Cancel edit</button>}
+            <button
+              type="button"
+              className="button"
+              onClick={() => (serviceFormOpen && !editId ? closeServiceForm() : openNewServiceForm())}
+            >
+              {serviceFormOpen && !editId ? <><X size={16} /> Close form</> : <><Plus size={16} /> Add new service</>}
+            </button>
           </div>
-        </form>
-        <div className="managed-list">
-          {services.length === 0 && <p className="form-note">No service listings created yet.</p>}
-          {services.map((service) => (
-            <div className={`managed-item ${service.is_active ? '' : 'is-inactive'}`} key={service.id}>
-              <div className="managed-item-main">
-                {service.image_path && (
-                  <img
-                    className="managed-service-thumb"
-                    src={`${servicesApi.serviceImageUrl(service.id)}?v=${serviceImageVersion}`}
-                    alt={service.title}
-                  />
-                )}
-                <div>
-                  <strong>{service.title}</strong>
-                  <span>{service.category_name} · {service.workers_required || 1} worker{(service.workers_required || 1) === 1 ? '' : 's'} · {service.is_active ? 'Active' : 'Inactive'}{service.is_active && !isApproved ? ' · Pending approval' : ''}</span>
-                </div>
+        </div>
+
+        {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} />}
+        {error && <div className="form-error" role="alert">{error}</div>}
+
+        {serviceFormOpen && (
+          <div className="managed-form-drawer" ref={formPanelRef}>
+            <div className="managed-form-drawer-head">
+              <strong>{editId ? `Editing: ${editingServiceObj?.title || 'Service'}` : 'Add a new gardening service'}</strong>
+              <button type="button" className="table-action" onClick={closeServiceForm}>
+                <X size={14} /> Cancel
+              </button>
+            </div>
+            <form className="profile-form" onSubmit={saveService}>
+              <div className="form-row">
+                <label>
+                  Service name
+                  <input required placeholder="e.g. Weekly lawn & hedge care" value={serviceForm.title} onChange={serviceChange('title')} />
+                </label>
+                <label>
+                  Type of work
+                  <select required value={serviceForm.categoryId} onChange={serviceChange('categoryId')}>
+                    <option value="">Choose a category</option>
+                    {categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}
+                  </select>
+                </label>
               </div>
-              {service.is_active && (
-                <div className="item-actions">
-                  {service.image_path && (
-                    <button type="button" className="table-action" onClick={() => removeServiceImage(service.id)}>Remove photo</button>
-                  )}
-                  <button type="button" aria-label={`Edit ${service.title}`} onClick={() => { setEditId(service.id); setServiceImageFile(null); setServiceForm({ title: service.title, description: service.description, categoryId: service.category_id, indicativePrice: service.indicative_price || '', priceUnit: service.price_unit || '', serviceArea: service.service_area, workersRequired: service.workers_required || 1 }) }}><Pencil size={15} /></button>
-                  <button type="button" aria-label={`Deactivate ${service.title}`} onClick={() => removeService(service.id)}><Trash2 size={15} /></button>
+              <label>
+                What is included
+                <textarea required rows="3" placeholder="Explain clearly what you will do for the client (trimming, cleanup, hauling leaves, etc.)" value={serviceForm.description} onChange={serviceChange('description')} />
+              </label>
+              <div className="form-row">
+                <label>
+                  Starting price (₱) <span className="label-note">(Optional)</span>
+                  <input type="number" min="0" step="0.01" placeholder="Leave blank for custom quote" value={serviceForm.indicativePrice} onChange={serviceChange('indicativePrice')} />
+                  <span className="field-note">Clients see this as a starting estimate, not a locked final price.</span>
+                </label>
+                <label>
+                  Charged per <span className="label-note">(Optional)</span>
+                  <input placeholder="e.g. per visit, per day, per sqm" value={serviceForm.priceUnit} onChange={serviceChange('priceUnit')} />
+                  <div className="unit-preset-row">
+                    {PRICE_UNIT_PRESETS.map((unit) => (
+                      <button
+                        key={unit}
+                        type="button"
+                        className={`unit-preset-chip${serviceForm.priceUnit === unit ? ' is-selected' : ''}`}
+                        onClick={() => setServiceForm((prev) => ({ ...prev, priceUnit: unit }))}
+                      >
+                        {unit}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Service area
+                  <input required placeholder="e.g. Zamboanga City or Tetuan, Sta. Maria" value={serviceForm.serviceArea} onChange={serviceChange('serviceArea')} />
+                </label>
+                <label>
+                  Workers needed for this job
+                  <input type="number" required min="1" max="20" value={serviceForm.workersRequired ?? 1} onChange={serviceChange('workersRequired')} />
+                  <span className="field-note">How many people from your team do this job (e.g., 1 for lawn care, 3 for landscaping).</span>
+                </label>
+              </div>
+              <label>
+                Cover photo <span className="label-note">(Optional — helps your listing stand out)</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setServiceImageFile(event.target.files?.[0] || null)} />
+                <span className="field-note">JPEG, PNG, or WebP up to 5 MB.</span>
+              </label>
+              {(servicePreviewUrl || editingServiceObj?.image_path) && (
+                <div className="managed-photo-preview">
+                  <img
+                    src={servicePreviewUrl || `${servicesApi.serviceImageUrl(editingServiceObj.id)}?v=${serviceImageVersion}`}
+                    alt="Service cover preview"
+                  />
+                  <div>
+                    <span className="field-note">{servicePreviewUrl ? 'New photo selected' : 'Current cover photo'}</span>
+                    {!servicePreviewUrl && editingServiceObj?.image_path && (
+                      <button type="button" className="table-action" style={{ marginTop: '6px' }} onClick={() => removeServiceImage(editingServiceObj.id)}>
+                        Remove photo
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
-            </div>
-          ))}
-        </div>
+              <div className="inline-actions">
+                <button className="button" type="submit" disabled={saving}>
+                  <Save size={16} /> {saving ? 'Saving...' : (editId ? 'Save changes' : 'Publish service')}
+                </button>
+                <button className="button button-outline" type="button" onClick={closeServiceForm}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {hiddenServices.length > 0 && (
+          <div className="booking-filter-bar" role="tablist" aria-label="Filter your services" style={{ marginTop: '14px', marginBottom: '4px' }}>
+            {[
+              { key: 'active', label: 'Active', count: activeServices.length },
+              { key: 'hidden', label: 'Hidden', count: hiddenServices.length },
+              { key: 'all', label: 'All', count: services.length },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={serviceFilter === tab.key}
+                className={`booking-filter-pill${serviceFilter === tab.key ? ' is-active' : ''}`}
+                onClick={() => setServiceFilter(tab.key)}
+              >
+                <span>{tab.label}</span>
+                <span className="booking-filter-count">{tab.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="skeleton-stack" aria-busy="true" style={{ marginTop: '18px' }}>
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+          </div>
+        ) : services.length === 0 ? (
+          <div className="empty-state managed-empty-state">
+            <Briefcase size={28} aria-hidden="true" />
+            <strong>You haven&apos;t listed any services yet</strong>
+            <p>Add the gardening jobs you offer—like lawn mowing, tree trimming, or yard cleanup—so homeowners can find and contact you.</p>
+            {!serviceFormOpen && (
+              <button type="button" className="button" onClick={openNewServiceForm}>
+                <Plus size={16} /> Add your first service
+              </button>
+            )}
+          </div>
+        ) : visibleServices.length === 0 ? (
+          <div className="empty-state" style={{ marginTop: '14px' }}>
+            No {serviceFilter} services right now. Switch tabs above to see your other services.
+          </div>
+        ) : (
+          <div className="managed-card-grid">
+            {visibleServices.map((service) => {
+              const hasPrice = service.indicative_price !== null && service.indicative_price !== undefined
+              const statusLabel = !service.is_active
+                ? 'Hidden'
+                : (isApproved ? 'Active' : 'Pending approval')
+              const statusClass = !service.is_active
+                ? 'inquiry-status status-cancelled'
+                : (isApproved ? 'inquiry-status status-accepted' : 'inquiry-status status-pending')
+              return (
+                <article className={`managed-visual-card${service.is_active ? '' : ' is-inactive'}`} key={service.id}>
+                  <button
+                    type="button"
+                    className="managed-visual-media-btn"
+                    onClick={() => setViewingService(service)}
+                    aria-label={`Preview ${service.title}`}
+                  >
+                    {service.image_path ? (
+                      <img
+                        src={`${servicesApi.serviceImageUrl(service.id)}?v=${serviceImageVersion}`}
+                        alt={service.title}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="managed-visual-placeholder" aria-hidden="true">
+                        <Leaf size={24} />
+                        <span>{service.category_name || 'Gardening service'}</span>
+                      </div>
+                    )}
+                    <span className="category-pill media-badge">{service.category_name}</span>
+                    <span className={`${statusClass} managed-visual-status`}>{statusLabel}</span>
+                  </button>
+                  <div className="managed-visual-body">
+                    <button
+                      type="button"
+                      className="managed-visual-title-btn"
+                      onClick={() => setViewingService(service)}
+                    >
+                      {service.title}
+                    </button>
+                    <p className="managed-visual-desc">{service.description}</p>
+                    <div className="managed-visual-meta">
+                      <strong className="card-price">
+                        {hasPrice
+                          ? `From ₱${Number(service.indicative_price).toLocaleString()}${service.price_unit ? ` ${service.price_unit}` : ''}`
+                          : 'Quote on request'}
+                      </strong>
+                      <span>
+                        <Users size={13} aria-hidden="true" /> {service.workers_required || 1} worker{(service.workers_required || 1) === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="managed-visual-area">
+                      <MapPin size={13} aria-hidden="true" /> {service.service_area || 'Zamboanga City'}
+                    </div>
+                    <div className="managed-visual-actions">
+                      <button type="button" className="button button-outline button-sm" onClick={() => setViewingService(service)}>
+                        <Eye size={14} /> View
+                      </button>
+                      {service.is_active ? (
+                        <>
+                          <button type="button" className="button button-sm" onClick={() => openEditServiceForm(service)}>
+                            <Pencil size={14} /> Edit
+                          </button>
+                          <button type="button" className="table-action table-action-danger" onClick={() => setHideConfirmService(service)}>
+                            <EyeOff size={14} /> Hide
+                          </button>
+                        </>
+                      ) : (
+                        <button type="button" className="button button-sm" onClick={() => reactivateService(service.id)}>
+                          <RotateCcw size={14} /> Show again
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
       </div>
+
+      {viewingService && (
+        <div className="gateway-demo-backdrop" role="dialog" aria-modal="true" aria-labelledby="view-service-title" onClick={(e) => { if (e.target === e.currentTarget) setViewingService(null) }}>
+          <div className="gateway-demo-modal managed-preview-modal">
+            <div className="managed-preview-head">
+              <div>
+                <span className="category-pill">{viewingService.category_name}</span>
+                <h2 id="view-service-title" style={{ marginTop: '6px' }}>{viewingService.title}</h2>
+              </div>
+              <button type="button" className="table-action" onClick={() => setViewingService(null)} aria-label="Close preview">
+                <X size={16} />
+              </button>
+            </div>
+            {viewingService.image_path && (
+              <div className="managed-preview-image-wrap">
+                <img src={`${servicesApi.serviceImageUrl(viewingService.id)}?v=${serviceImageVersion}`} alt={viewingService.title} />
+              </div>
+            )}
+            <p style={{ margin: '12px 0', color: 'var(--workspace-ink)', lineHeight: 1.6 }}>
+              {viewingService.description}
+            </p>
+            <div className="detail-facts" style={{ margin: '10px 0' }}>
+              <span>
+                <strong>Starting price</strong>
+                {viewingService.indicative_price !== null && viewingService.indicative_price !== undefined
+                  ? `₱${Number(viewingService.indicative_price).toLocaleString()} ${viewingService.price_unit || ''}`
+                  : 'Custom quote on request'}
+              </span>
+              <span>
+                <strong>Service area</strong>
+                {viewingService.service_area || 'Zamboanga City'}
+              </span>
+              <span>
+                <strong>Workers needed</strong>
+                {viewingService.workers_required || 1} worker{(viewingService.workers_required || 1) === 1 ? '' : 's'}
+              </span>
+              <span>
+                <strong>Visibility</strong>
+                {!viewingService.is_active ? 'Hidden from clients' : (isApproved ? 'Live in marketplace' : 'Waiting for admin approval')}
+              </span>
+            </div>
+            <div className="gateway-demo-actions">
+              {Boolean(viewingService.is_active) && isApproved && (
+                <Link className="button button-outline button-sm" to={`/services/${viewingService.id}`}>
+                  <ExternalLink size={14} /> Open client view
+                </Link>
+              )}
+              {Boolean(viewingService.is_active) && (
+                <button type="button" className="button button-sm" onClick={() => openEditServiceForm(viewingService)}>
+                  <Pencil size={14} /> Edit service
+                </button>
+              )}
+              <button type="button" className="table-action" onClick={() => setViewingService(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hideConfirmService && (
+        <div className="gateway-demo-backdrop" role="dialog" aria-modal="true" aria-labelledby="hide-service-title" onClick={(e) => { if (e.target === e.currentTarget) setHideConfirmService(null) }}>
+          <div className="gateway-demo-modal">
+            <h2 id="hide-service-title">Hide this service?</h2>
+            <p className="field-note">
+              <strong>{hideConfirmService.title}</strong> will no longer appear to homeowners in the marketplace. Your past bookings stay safe, and you can show it again anytime from the <strong>Hidden</strong> tab.
+            </p>
+            <div className="gateway-demo-actions">
+              <button type="button" className="button button-danger" disabled={saving} onClick={confirmHideService}>
+                {saving ? 'Hiding...' : 'Yes, hide service'}
+              </button>
+              <button type="button" className="table-action" disabled={saving} onClick={() => setHideConfirmService(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -617,7 +1217,7 @@ function formatInquirySubtitle(inquiry, role) {
   } else if (inquiry.my_quotation_id) {
     const offerStatus = formatStatusLabel(inquiry.my_quotation_status || 'sent')
     const amountLabel = inquiry.my_quotation_amount != null
-      ? ` (PHP ${Number(inquiry.my_quotation_amount).toLocaleString()})`
+      ? ` (${formatPHP(inquiry.my_quotation_amount)})`
       : ''
     parts.push(`Offer ${offerStatus}${amountLabel}`)
   }
@@ -627,7 +1227,6 @@ function formatInquirySubtitle(inquiry, role) {
 function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
-  const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [referenceLocation, setReferenceLocation] = useState(defaultLocation || 'Zamboanga City')
   const [locationInput, setLocationInput] = useState(defaultLocation || '')
@@ -642,10 +1241,9 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
 
   useEffect(() => {
     let active = true
-    Promise.all([reviewsApi.recent(4), servicesApi.categories()])
-      .then(([revRes, catRes]) => {
+    servicesApi.categories()
+      .then((catRes) => {
         if (!active) return
-        setReviews(revRes?.reviews || [])
         setCategories(catRes?.categories || [])
       })
       .catch(() => {})
@@ -713,7 +1311,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
   }
 
   return (
-    <section className="dashboard-showcase-stack" aria-label="AI recommended gardening services and verified reviews">
+    <section className="dashboard-showcase-full" aria-label="AI recommended gardening services">
       <div className="dashboard-panel showcase-panel">
         <div className="showcase-header">
           <div>
@@ -825,7 +1423,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
           </div>
         ) : (
           <div className="marketplace-card-grid dashboard-service-grid">
-            {services.map((service) => {
+            {services.slice(0, 6).map((service) => {
               const providerName = service.business_name || `${service.first_name || ''} ${service.last_name || ''}`.trim()
               const ratingCount = Number(service.review_count || 0)
               const avgRating = service.average_rating != null ? Number(service.average_rating).toFixed(1) : null
@@ -833,13 +1431,12 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
               const ai = service.ai_match
               return (
                 <article className="marketplace-card visual-market-card showcase-card" key={service.id}>
-                  <div className="marketplace-card-media">
+                  <Link className="marketplace-card-media card-media-link" to={`/services/${service.id}`} aria-label={`View ${service.title}`}>
                     {service.image_path ? (
                       <img src={servicesApi.serviceImageUrl(service.id)} alt={service.title} loading="lazy" />
                     ) : (
                       <div className="marketplace-card-placeholder" aria-hidden="true">
-                        <Leaf size={28} />
-                        <span>{service.category_name || 'Gardening service'}</span>
+                        <Leaf size={22} />
                       </div>
                     )}
                     <span className="category-pill media-badge">{service.category_name || 'Gardening'}</span>
@@ -852,7 +1449,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                         <><CheckCircle2 size={12} /> Verified</>
                       )}
                     </span>
-                  </div>
+                  </Link>
                   <div className="marketplace-card-body">
                     <div className="ai-card-badges">
                       {ai?.conduct?.cleanConduct && (
@@ -866,7 +1463,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                         </span>
                       )}
                     </div>
-                    <h3>{service.title}</h3>
+                    <h3><Link className="card-title-link" to={`/services/${service.id}`}>{service.title}</Link></h3>
                     <p>{service.description}</p>
                     {ai?.reasons?.length > 0 && (
                       <div className="ai-reason-chips">
@@ -891,7 +1488,7 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
                         <MapPin size={13} /> {ai?.proximity?.label || service.service_area || 'Zamboanga City'}
                       </span>
                       <div className="showcase-card-actions">
-                        <Link className="table-action" to={`/inquiries/new?serviceId=${service.id}`}>
+                        <Link className="button button-outline button-sm" to={`/inquiries/new?serviceId=${service.id}`}>
                           Inquire
                         </Link>
                         <Link className="button button-sm" to={`/services/${service.id}`}>
@@ -912,86 +1509,89 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
             <p>Upload a photo of your yard, get an instant estimate, and let nearby verified gardeners compete with offers.</p>
           </div>
           <div className="inline-actions">
-            <Link className="button" to="/inquiries/new?type=general">
+            <Link className="button button-sm" to="/inquiries/new?type=general">
               Post a General Request <ArrowRight size={15} />
             </Link>
-            <Link className="button button-outline" to="/assistant">
+            <Link className="button button-outline button-sm" to="/assistant">
               <Sparkles size={15} /> Plan with AI
             </Link>
           </div>
         </div>
       </div>
-
-      <div className="dashboard-panel showcase-reviews-panel">
-        <div className="showcase-header">
-          <div>
-            <p className="eyebrow" style={{ marginBottom: '6px' }}>Trusted by Zamboanga homeowners</p>
-            <h2 style={{ marginBottom: '4px' }}>Recent verified client reviews</h2>
-          </div>
-          <Link className="text-link" to="/services">
-            Browse top gardeners <ArrowRight size={15} />
-          </Link>
-        </div>
-
-        {reviews.length === 0 ? (
-          <div className="trust-highlights-grid">
-            <div className="trust-highlight-card">
-              <Award size={20} />
-              <strong>Verified Local Gardeners</strong>
-              <p>Every public gardener profile is reviewed and approved by the administrator before listing services.</p>
-            </div>
-            <div className="trust-highlight-card">
-              <CheckCircle2 size={20} />
-              <strong>Mutual Service Agreements</strong>
-              <p>Lock in scope, price, schedule, and deposit terms together before work begins—no surprise fees.</p>
-            </div>
-            <div className="trust-highlight-card">
-              <Star size={20} />
-              <strong>Verified Completed-Job Ratings</strong>
-              <p>Reviews come strictly from clients whose gardening project was completed, paid, and mutually closed.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="showcase-reviews-grid">
-            {reviews.map((rev) => (
-              <article className="showcase-review-card" key={rev.id}>
-                <div className="showcase-review-top">
-                  <span className="showcase-stars" aria-label={`${rev.rating} out of 5 stars`}>
-                    {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
-                  </span>
-                  <small>{new Date(rev.created_at).toLocaleDateString()}</small>
-                </div>
-                <p className="showcase-review-quote">
-                  &ldquo;{rev.review_text || 'Great gardening work and smooth transaction!'}&rdquo;
-                </p>
-                <div className="showcase-review-footer">
-                  <div>
-                    <strong>{rev.client_name}</strong>
-                    <small>
-                      for {rev.gardener_name}{rev.service_title ? ` · ${rev.service_title}` : ''}
-                    </small>
-                  </div>
-                  <Link className="table-action" to={rev.service_id ? `/services/${rev.service_id}` : `/gardeners/${rev.gardener_id}`}>
-                    View provider
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </div>
     </section>
   )
 }
 
-function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboanga City' }) {
-  const [openRequests, setOpenRequests] = useState([])
+function ClientReviewsPanel() {
   const [reviews, setReviews] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [areaInput, setAreaInput] = useState(defaultArea || '')
-  const [sortBy, setSortBy] = useState('smart_ai')
-  const [nearbyOnly, setNearbyOnly] = useState(false)
-  const [goodConductOnly, setGoodConductOnly] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    reviewsApi.recent(4)
+      .then((res) => { if (active) setReviews(res?.reviews || []) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  return (
+    <section className="dashboard-panel showcase-reviews-panel">
+      <div className="activity-heading">
+        <div>
+          <p className="eyebrow">Trusted by Zamboanga homeowners</p>
+          <h2>Recent verified client reviews</h2>
+        </div>
+        <Link className="button button-outline button-sm" to="/services">
+          Browse gardeners <ArrowRight size={14} />
+        </Link>
+      </div>
+
+      {reviews.length === 0 ? (
+        <div className="trust-highlights-grid">
+          <div className="trust-highlight-card">
+            <Award size={18} />
+            <strong>Verified Local Gardeners</strong>
+            <p>Every public gardener profile is approved by the administrator before listing services.</p>
+          </div>
+          <div className="trust-highlight-card">
+            <CheckCircle2 size={18} />
+            <strong>Mutual Service Agreements</strong>
+            <p>Lock in scope, price, schedule, and deposit terms together before work begins.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="showcase-reviews-grid">
+          {reviews.map((rev) => (
+            <article className="showcase-review-card" key={rev.id}>
+              <div className="showcase-review-top">
+                <span className="showcase-stars" aria-label={`${rev.rating} out of 5 stars`}>
+                  {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
+                </span>
+                <small>{new Date(rev.created_at).toLocaleDateString()}</small>
+              </div>
+              <p className="showcase-review-quote">
+                &ldquo;{rev.review_text || 'Great gardening work and smooth transaction!'}&rdquo;
+              </p>
+              <div className="showcase-review-footer">
+                <div>
+                  <strong>{rev.client_name}</strong>
+                  <small>
+                    for {rev.gardener_name}{rev.service_title ? ` · ${rev.service_title}` : ''}
+                  </small>
+                </div>
+                <Link className="button button-outline button-sm" to={rev.service_id ? `/services/${rev.service_id}` : `/gardeners/${rev.gardener_id}`}>
+                  View
+                </Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function GardenerReviewsPanel({ userId }) {
+  const [reviews, setReviews] = useState([])
 
   useEffect(() => {
     let active = true
@@ -1002,6 +1602,60 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
       .catch(() => {})
     return () => { active = false }
   }, [userId])
+
+  const avgRating = reviews.length > 0
+    ? (reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length).toFixed(1)
+    : null
+
+  return (
+    <section className="dashboard-panel showcase-reviews-panel">
+      <div className="activity-heading">
+        <div>
+          <p className="eyebrow">Your reputation &amp; social proof</p>
+          <h2>
+            Client reviews {avgRating ? `· ★ ${avgRating} (${reviews.length})` : ''}
+          </h2>
+        </div>
+        <Link className="button button-outline button-sm" to={`/gardeners/${userId}`}>
+          Public profile <ArrowRight size={14} />
+        </Link>
+      </div>
+      {reviews.length === 0 ? (
+        <p className="form-note" style={{ margin: 0 }}>
+          No client reviews yet. Once you complete a paid booking and close the Transaction Completion Agreement, your client&apos;s rating and testimonial will appear here and boost your AI recommendation rank.
+        </p>
+      ) : (
+        <div className="showcase-reviews-grid">
+          {reviews.slice(0, 4).map((rev) => (
+            <article className="showcase-review-card" key={rev.id}>
+              <div className="showcase-review-top">
+                <span className="showcase-stars" aria-label={`${rev.rating} out of 5 stars`}>
+                  {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
+                </span>
+                <small>{new Date(rev.created_at).toLocaleDateString()}</small>
+              </div>
+              <p className="showcase-review-quote">
+                &ldquo;{rev.review_text || 'Rated 5 stars by client.'}&rdquo;
+              </p>
+              <div className="showcase-review-footer">
+                <strong>{rev.client_name}</strong>
+                <small>Verified completed booking</small>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function GardenerOpportunityShowcase({ isApproved, defaultArea = 'Zamboanga City' }) {
+  const [openRequests, setOpenRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [areaInput, setAreaInput] = useState(defaultArea || '')
+  const [sortBy, setSortBy] = useState('smart_ai')
+  const [nearbyOnly, setNearbyOnly] = useState(false)
+  const [goodConductOnly, setGoodConductOnly] = useState(false)
 
   useEffect(() => {
     if (!isApproved) {
@@ -1017,7 +1671,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
         sortBy,
         nearbyOnly,
         goodConductOnly,
-        limit: 6,
+        limit: 3,
       })
         .then((res) => {
           if (active) setOpenRequests(res?.recommendations || [])
@@ -1025,7 +1679,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
         .catch(() => {
           if (!active) return
           inquiriesApi.listOpen().then((fallback) => {
-            if (active) setOpenRequests((fallback?.requests || fallback?.inquiries || []).slice(0, 6))
+            if (active) setOpenRequests((fallback?.requests || fallback?.inquiries || []).slice(0, 3))
           }).catch(() => {})
         })
         .finally(() => {
@@ -1038,19 +1692,15 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
     }
   }, [isApproved, defaultArea, areaInput, sortBy, nearbyOnly, goodConductOnly])
 
-  const avgRating = reviews.length > 0
-    ? (reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length).toFixed(1)
-    : null
-
   return (
-    <section className="dashboard-showcase-stack" aria-label="AI filtered open client leads and gardener reviews">
+    <section className="dashboard-showcase-full" aria-label="AI filtered open client leads">
       <div className="dashboard-panel showcase-panel">
         <div className="showcase-header">
           <div>
             <p className="eyebrow" style={{ marginBottom: '6px' }}>AI nearby client lead matching</p>
             <h2 style={{ marginBottom: '4px' }}>Open client service requests near your area</h2>
             <p className="field-note" style={{ margin: 0 }}>
-              Automatically ranked by proximity to your Zamboanga City service area, matching service categories, low competition, and client conduct.
+              Top nearby client leads ranked by proximity, matching services, and low competition.
             </p>
           </div>
           <Link className="button button-outline button-sm" to="/inquiries?tab=open">
@@ -1059,18 +1709,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
         </div>
 
         {isApproved && (
-          <div className="ai-filter-bar" role="region" aria-label="AI open lead filters">
-            <div className="ai-filter-inputs">
-              <label>
-                <span className="ai-filter-label-text">Filter near barangay / service area</span>
-                <input
-                  maxLength="120"
-                  placeholder="e.g., Tetuan, Guiwan, Zamboanga City"
-                  value={areaInput}
-                  onChange={(e) => setAreaInput(e.target.value)}
-                />
-              </label>
-            </div>
+          <div className="ai-filter-bar ai-filter-bar-compact" role="region" aria-label="AI open lead filters">
             <div className="ai-filter-controls">
               <div className="ai-filter-pills" role="group" aria-label="Sort client leads">
                 {[
@@ -1091,13 +1730,21 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
                 ))}
               </div>
               <div className="ai-filter-toggles">
+                <input
+                  className="ai-filter-inline-input"
+                  aria-label="Filter near barangay or service area"
+                  maxLength="120"
+                  placeholder="Area (e.g., Tetuan)"
+                  value={areaInput}
+                  onChange={(e) => setAreaInput(e.target.value)}
+                />
                 <label className="ai-toggle-chip">
                   <input type="checkbox" checked={nearbyOnly} onChange={(e) => setNearbyOnly(e.target.checked)} />
                   <span>Nearby only</span>
                 </label>
                 <label className="ai-toggle-chip">
                   <input type="checkbox" checked={goodConductOnly} onChange={(e) => setGoodConductOnly(e.target.checked)} />
-                  <span>Clean client record</span>
+                  <span>Clean record</span>
                 </label>
               </div>
             </div>
@@ -1123,20 +1770,19 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
               const ai = req.ai_match
               return (
                 <article className="marketplace-card visual-market-card showcase-card" key={req.id}>
-                  <div className="marketplace-card-media">
+                  <Link className="marketplace-card-media card-media-link" to={`/inquiries/${req.id}`} aria-label={`View ${req.subject}`}>
                     {firstImg ? (
                       <img src={getRequestImageUrl(firstImg.id)} alt={req.subject} loading="lazy" />
                     ) : (
                       <div className="marketplace-card-placeholder" aria-hidden="true">
-                        <Briefcase size={26} />
-                        <span>{req.category_name || 'Client service request'}</span>
+                        <Briefcase size={20} />
                       </div>
                     )}
                     <span className="category-pill media-badge">{req.category_name || 'General request'}</span>
                     <span className="showcase-rating-pill">
                       {ai ? <><Sparkles size={12} /> {ai.matchScore}% Fit</> : (hasMyOffer ? 'Offer Sent' : 'Open Lead')}
                     </span>
-                  </div>
+                  </Link>
                   <div className="marketplace-card-body">
                     <div className="ai-card-badges">
                       {ai?.clientConductLabel && (
@@ -1146,7 +1792,7 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
                       )}
                       {hasMyOffer && <span className="inquiry-status status-accepted">Offer Sent</span>}
                     </div>
-                    <h3>{req.subject}</h3>
+                    <h3><Link className="card-title-link" to={`/inquiries/${req.id}`}>{req.subject}</Link></h3>
                     <p>{req.ai_summary || req.description}</p>
                     {ai?.reasons?.length > 0 && (
                       <div className="ai-reason-chips">
@@ -1176,45 +1822,6 @@ function GardenerOpportunityShowcase({ userId, isApproved, defaultArea = 'Zamboa
                 </article>
               )
             })}
-          </div>
-        )}
-      </div>
-
-      <div className="dashboard-panel showcase-reviews-panel">
-        <div className="showcase-header">
-          <div>
-            <p className="eyebrow" style={{ marginBottom: '6px' }}>Your reputation &amp; social proof</p>
-            <h2 style={{ marginBottom: '4px' }}>
-              Client reviews {avgRating ? `· ★ ${avgRating} (${reviews.length})` : ''}
-            </h2>
-          </div>
-          <Link className="text-link" to={`/gardeners/${userId}`}>
-            View public profile <ArrowRight size={15} />
-          </Link>
-        </div>
-        {reviews.length === 0 ? (
-          <p className="field-note" style={{ margin: 0 }}>
-            No client reviews yet. Once you complete a paid booking and close the Transaction Completion Agreement, your client&apos;s rating and testimonial will appear here and boost your AI recommendation rank!
-          </p>
-        ) : (
-          <div className="showcase-reviews-grid">
-            {reviews.slice(0, 4).map((rev) => (
-              <article className="showcase-review-card" key={rev.id}>
-                <div className="showcase-review-top">
-                  <span className="showcase-stars" aria-label={`${rev.rating} out of 5 stars`}>
-                    {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
-                  </span>
-                  <small>{new Date(rev.created_at).toLocaleDateString()}</small>
-                </div>
-                <p className="showcase-review-quote">
-                  &ldquo;{rev.review_text || 'Rated 5 stars by client.'}&rdquo;
-                </p>
-                <div className="showcase-review-footer">
-                  <strong>{rev.client_name}</strong>
-                  <small>Verified completed booking</small>
-                </div>
-              </article>
-            ))}
           </div>
         )}
       </div>
@@ -1250,9 +1857,9 @@ function DashboardActivity({ role }) {
           </div>
           <div className="inline-actions">
             {role === 'gardener' && (
-              <Link className="table-action" to="/inquiries?tab=open">Open board</Link>
+              <Link className="button button-outline button-sm" to="/inquiries?tab=open">Open board</Link>
             )}
-            <Link className="text-link" to="/inquiries">View all</Link>
+            <Link className="button button-outline button-sm" to="/inquiries">View all</Link>
           </div>
         </div>
         {offersWaitingCount > 0 && (
@@ -1288,7 +1895,7 @@ function DashboardActivity({ role }) {
             <p className="eyebrow">Schedule &amp; payments</p>
             <h2>{role === 'gardener' ? 'Reservations & bookings.' : 'Your reservations & bookings.'}</h2>
           </div>
-          <Link className="text-link" to="/bookings">View all</Link>
+          <Link className="button button-outline button-sm" to="/bookings">View all</Link>
         </div>
         {!error && bookings.length === 0 && (
           <p className="form-note">
@@ -1367,44 +1974,93 @@ function OnboardingGuide({ role, form, counts }) {
       { label: 'Get your first booking', to: '/bookings', cta: 'View', done: hasBookings },
     ]
 
-  return (
-    <details className="how-it-works-guide">
-      <summary>New here? How HugaTiera works</summary>
-      <div className="how-it-works-body">
-        <p>
-          {isClient
-            ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
-            : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
-        </p>
-        <ol className="booking-stepper" aria-label="How HugaTiera works">
-          {flow.map((step) => (
-            <li className="booking-step" key={step.num}>
-              <span className="booking-step-num" aria-hidden="true">{step.num}</span>
-              <span className="booking-step-copy">
-                <strong>{step.title}</strong>
-                <small>{step.text}</small>
-              </span>
-            </li>
-          ))}
-        </ol>
-        <div>
-          <p className="field-note" style={{ margin: '0 0 8px' }}>Getting started</p>
-          <ul className="onboarding-checklist">
-            {checklist.map((item) => (
-              <li key={item.label} className={item.done ? 'is-done' : ''}>
-                <span className="check-mark" aria-hidden="true">{item.done ? '✓' : ''}</span>
-                <span className="check-label">{item.label}</span>
-                {!item.done && <Link to={item.to}>{item.cta}</Link>}
+  const completedSteps = checklist.filter((item) => item.done).length
+  const allComplete = completedSteps === checklist.length
+
+  if (allComplete) {
+    return (
+      <details className="workspace-onboarding-panel workspace-onboarding-compact">
+        <summary className="workspace-onboarding-summary">
+          <span className="workspace-onboarding-summary-copy">
+            <span className="workspace-onboarding-marker is-done-inline" aria-hidden="true">✓</span>
+            <strong>You&apos;re all set</strong>
+            <span className="field-note">All {checklist.length} onboarding steps complete — click to review workflow guide</span>
+          </span>
+          <span className="workspace-onboarding-progress">
+            {completedSteps} of {checklist.length} complete
+          </span>
+        </summary>
+        <div className="how-it-works-body" style={{ paddingTop: '14px' }}>
+          <p>
+            {isClient
+              ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
+              : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
+          </p>
+          <ol className="booking-stepper" aria-label="How HugaTiera works">
+            {flow.map((step) => (
+              <li className="booking-step" key={step.num}>
+                <span className="booking-step-num" aria-hidden="true">{step.num}</span>
+                <span className="booking-step-copy">
+                  <strong>{step.title}</strong>
+                  <small>{step.text}</small>
+                </span>
               </li>
             ))}
-          </ul>
+          </ol>
         </div>
+      </details>
+    )
+  }
+
+  return (
+    <section className="workspace-onboarding-panel" aria-labelledby="workspace-onboarding-title">
+      <div className="workspace-onboarding-heading">
+        <div>
+          <p className="eyebrow">Getting started</p>
+          <h2 id="workspace-onboarding-title">Your next steps</h2>
+        </div>
+        <span className="workspace-onboarding-progress">
+          {completedSteps} of {checklist.length} complete
+        </span>
       </div>
-    </details>
+      <ul className="onboarding-checklist workspace-onboarding-list" aria-label="Getting started checklist">
+        {checklist.map((item, index) => (
+          <li className={`workspace-onboarding-item${item.done ? ' is-done' : ''}`} key={item.label}>
+            <div className="workspace-onboarding-item-top">
+              <span className="workspace-onboarding-marker" aria-hidden="true">{item.done ? '✓' : index + 1}</span>
+              <span className="workspace-onboarding-status">{item.done ? 'Complete' : 'To do'}</span>
+            </div>
+            <strong className="workspace-onboarding-label">{item.label}</strong>
+            {!item.done && <Link className="workspace-onboarding-action" to={item.to}>{item.cta}</Link>}
+          </li>
+        ))}
+      </ul>
+      <details className="how-it-works-guide workspace-workflow-guide">
+        <summary>How the request-to-booking flow works</summary>
+        <div className="how-it-works-body">
+          <p>
+            {isClient
+              ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
+              : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
+          </p>
+          <ol className="booking-stepper" aria-label="How HugaTiera works">
+            {flow.map((step) => (
+              <li className="booking-step" key={step.num}>
+                <span className="booking-step-num" aria-hidden="true">{step.num}</span>
+                <span className="booking-step-copy">
+                  <strong>{step.title}</strong>
+                  <small>{step.text}</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </details>
+    </section>
   )
 }
 
-function UserDashboard({ user, profileData, onSaved, activeTab }) {
+function UserDashboard({ user, profileData, loading = false, onSaved, activeTab }) {
   const { switchRole, enableDualRole } = useAuth()
   const [roleBusy, setRoleBusy] = useState(false)
   const [roleNotice, setRoleNotice] = useState('')
@@ -1455,70 +2111,23 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   }
 
   return (
-    <main className="dashboard-page">
+    <main className="dashboard-page member-workspace" data-workspace={role}>
       <AppSidebar />
       <section className="container dashboard-content">
-        <div className="dashboard-topbar">
-          <p className="eyebrow" style={{ margin: 0 }}>{roleLabel} dashboard</p>
-          <div className="dashboard-tabs dashboard-tabs-top" role="tablist" aria-label="Dashboard sections">
-            <Link
-              className={`dashboard-tab${activeTab === 'overview' ? ' is-active' : ''}`}
-              role="tab"
-              aria-selected={activeTab === 'overview'}
-              to="/dashboard"
-            >
-              Overview & activity
-            </Link>
-            {role === 'gardener' && (
-              <>
-                <Link
-                  className={`dashboard-tab${activeTab === 'services' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'services'}
-                  to="/dashboard?tab=services"
-                >
-                  My services
-                </Link>
-                <Link
-                  className={`dashboard-tab${activeTab === 'portfolio' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'portfolio'}
-                  to="/dashboard?tab=portfolio"
-                >
-                  Portfolio
-                </Link>
-                <Link
-                  className={`dashboard-tab${activeTab === 'clerks' ? ' is-active' : ''}`}
-                  role="tab"
-                  aria-selected={activeTab === 'clerks'}
-                  to="/dashboard?tab=clerks"
-                >
-                  My Clerks
-                </Link>
-              </>
-            )}
-            <Link
-              className={`dashboard-tab${isProfileView ? ' is-active' : ''}`}
-              role="tab"
-              aria-selected={isProfileView}
-              to="/dashboard?tab=profile"
-            >
-              Profile & settings
-            </Link>
-          </div>
-        </div>
         <div className="dashboard-hero-row">
           <div>
-            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Clerks.' : `Welcome, ${user.firstName}.`}</h1>
+            <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'calendar' ? 'Schedule.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Staff.' : `Welcome, ${user.firstName}.`}</h1>
             <p className="dashboard-lead" style={{ marginBottom: 0 }}>
               {isProfileView
                 ? 'Review and update your contact details and public profile information.'
                 : activeTab === 'services'
-                  ? 'Create, edit, and manage the gardening services you offer.'
+                  ? 'View, add, and update the gardening services you offer.'
+                  : activeTab === 'calendar'
+                    ? 'Review upcoming jobs, manage working hours, and block days off.'
                   : activeTab === 'portfolio'
-                    ? 'Showcase your completed garden projects to build client trust.'
+                    ? 'Showcase photos of your finished garden projects to build client trust.'
                     : activeTab === 'clerks'
-                      ? 'Add or revoke trusted clerks who can manage your schedules, services, and payment verifications.'
+                      ? 'Add or remove trusted staff members who help manage your schedule, services, and payment checks.'
                       : role === 'gardener'
                         ? 'Manage open client requests, submitted offers, mutual agreements, and bookings.'
                         : 'Track your service requests, compare provider offers, review mutual agreements, and manage upcoming bookings.'}
@@ -1547,25 +2156,32 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                 <>
                   <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
                   <Link className="button button-outline" to="/dashboard?tab=services">My services</Link>
-                  <Link className="button button-outline" to="/dashboard?tab=portfolio">Portfolio</Link>
-                  <Link className="button button-outline" to="/dashboard?tab=clerks">My Clerks</Link>
                 </>
               )}
             </div>
           )}
         </div>
         {roleError && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{roleError}</div>}
-        {roleNotice && <div className="form-success" role="status" style={{ marginBottom: '12px' }}>{roleNotice}</div>}
-        {role === 'gardener' && (
-          <div className={`form-note ${form.is_approved ? 'form-success' : 'form-error'}`}>
-            {form.is_approved
-              ? 'Your gardener profile is approved and active services are visible publicly.'
-              : 'Your gardener profile is waiting for administrator approval. Your active services are not public yet.'}
-          </div>
-        )}
+        {roleNotice && <TransientSuccess key={roleNotice} message={roleNotice} onDismiss={() => setRoleNotice('')} style={{ marginBottom: '12px' }} />}
 
-        {isProfileView ? (
+        {loading && (isProfileView || activeTab === 'overview') ? (
+          <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading dashboard details">
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+          </div>
+        ) : isProfileView ? (
           <>
+            {role === 'gardener' && (
+              <div className={`gardener-approval-status${form.is_approved ? ' is-approved' : ''}`} role="status">
+                <strong>{form.is_approved ? 'Profile approved' : 'Approval pending'}</strong>
+                <span>
+                  {form.is_approved
+                    ? 'Your active services are visible publicly.'
+                    : 'Your active services stay hidden until approval.'}
+                </span>
+              </div>
+            )}
             <section className="dashboard-panel dual-role-card" style={{ marginBottom: '20px' }}>
               <div className="activity-heading">
                 <div>
@@ -1611,6 +2227,12 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
               <ProfileForm key={`${form.id || user.id}-${form.email || ''}-${form.businessName || ''}`} role={role} profile={form} userId={user.id} onSaved={onSaved} />
             </section>
           </>
+        ) : role === 'gardener' && activeTab === 'calendar' ? (
+          <GardenerScheduleCalendar
+            standalone
+            profileForm={form}
+            onUnavailableDatesChange={(nextDates) => onSaved({ profile: { ...form, unavailableDates: nextDates } })}
+          />
         ) : role === 'gardener' && activeTab === 'clerks' ? (
           <GardenerClerksPanel />
         ) : role === 'gardener' && (activeTab === 'services' || activeTab === 'portfolio') ? (
@@ -1629,40 +2251,27 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
               <ClientDiscoveryShowcase defaultLocation={[form.address, form.city].filter(Boolean).join(', ') || 'Zamboanga City'} />
             ) : (
               <GardenerOpportunityShowcase
-                userId={user.id}
                 isApproved={Boolean(form.is_approved)}
                 defaultArea={form.serviceArea || 'Zamboanga City'}
               />
             )}
             <DashboardActivity role={role} />
-            <div className="dashboard-grid dashboard-overview-grid" style={{ marginTop: '22px' }}>
-              <section className="dashboard-panel dashboard-next">
-                <p className="eyebrow">{role === 'gardener' ? 'Provider workspace' : 'Quick actions'}</p>
-                <h2>{role === 'gardener' ? 'Respond to requests and grow your profile.' : 'Start or manage a garden project.'}</h2>
-                <p>
-                  {role === 'gardener'
-                    ? 'Browse open client requests in Zamboanga City to submit offers, manage your services and portfolio in dedicated tabs, and coordinate confirmed bookings.'
-                    : 'Browse local gardening services for a direct inquiry, post an open general request with garden photos to compare offers, or chat with the AI Garden Assistant on the bottom right.'}
-                </p>
-                {role === 'client' && (
-                  <div className="inline-actions dashboard-action-wrap">
-                    <Link className="button" to="/services">Explore services</Link>
-                    <Link className="button button-outline" to="/inquiries/new?type=general">Post general request</Link>
-                    <Link className="button button-outline" to="/assistant"><Sparkles size={15} /> AI Garden Assistant</Link>
-                  </div>
-                )}
-                {role === 'gardener' && (
-                  <div className="inline-actions dashboard-action-wrap">
-                    <Link className="button" to="/inquiries?tab=open">Browse open requests</Link>
-                    <Link className="button button-outline" to="/dashboard?tab=services">Manage services</Link>
-                    <Link className="button button-outline" to="/dashboard?tab=portfolio">Manage portfolio</Link>
-                    <Link className="text-link" to={`/gardeners/${user.id}`}>View public profile</Link>
-                  </div>
-                )}
-              </section>
+            <div className="dashboard-activity dashboard-bottom-pair">
+              {role === 'client' ? (
+                <ClientReviewsPanel />
+              ) : (
+                <GardenerReviewsPanel userId={user.id} />
+              )}
               <aside className="dashboard-panel profile-summary-card">
-                <p className="eyebrow">Account & profile</p>
-                <h2>{displayName || 'Your profile'}</h2>
+                <div className="activity-heading">
+                  <div>
+                    <p className="eyebrow">Account &amp; profile</p>
+                    <h2>{displayName || 'Your profile'}</h2>
+                  </div>
+                  <Link className="button button-outline button-sm" to="/dashboard?tab=profile">
+                    <Pencil size={14} /> Edit profile
+                  </Link>
+                </div>
                 <dl className="profile-summary-list">
                   <div>
                     <dt>Email</dt>
@@ -1700,15 +2309,12 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
                         <dd>{formatWorkingDaysLabel(form.workingDays)} · {form.workStartTime || '08:00'}–{form.workEndTime || '17:00'}</dd>
                       </div>
                       <div>
-                        <dt>Simultaneous capacity</dt>
-                        <dd>{Number(form.maxConcurrentJobs) > 1 ? `Up to ${form.maxConcurrentJobs} jobs simultaneously` : 'Solo (1 job at a time)'}</dd>
+                        <dt>Jobs at once</dt>
+                        <dd>{Number(form.maxConcurrentJobs) > 1 ? `Up to ${form.maxConcurrentJobs} jobs at once` : 'Solo (1 job at a time)'}</dd>
                       </div>
                     </>
                   )}
                 </dl>
-                <Link className="button button-outline" to="/dashboard?tab=profile">
-                  <Pencil size={15} /> Edit profile & settings
-                </Link>
               </aside>
             </div>
           </>
@@ -1718,8 +2324,9 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   )
 }
 
-function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted, activeTab }) {
+function AdminDashboard({ summary, summaryLoading = false, onStatusChange, onUserUpdated, onUserDeleted, activeTab }) {
   const counts = summary.counts || {}
+  const [adminLoading, setAdminLoading] = useState(true)
   const [categories, setCategories] = useState([])
   const [pricingAddons, setPricingAddons] = useState([])
   const [addonForm, setAddonForm] = useState({
@@ -1747,6 +2354,8 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
   const [adminError, setAdminError] = useState('')
   const [adminMessage, setAdminMessage] = useState('')
   const [approvalInProgress, setApprovalInProgress] = useState(null)
+  const [approvalModal, setApprovalModal] = useState(null)
+  const [approvalReason, setApprovalReason] = useState('')
 
   async function saveAccountEdit(event) {
     event.preventDefault()
@@ -1805,7 +2414,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
     setReports(reportData.reports)
     setPendingGardeners(gardenerData.gardeners)
     setClerkAssignments(clerkData.assignments || [])
-  }).catch((error) => setAdminError(error.message)), [])
+  }).catch((error) => setAdminError(error.message)).finally(() => setAdminLoading(false)), [])
 
   async function handleAssignClerk(event) {
     event.preventDefault()
@@ -1932,13 +2541,21 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
   }
   async function toggleService(service) { try { await profileApi.updateServiceStatus(service.id, !service.is_active); loadAdminData() } catch (error) { setAdminError(error.message) } }
   async function updateReport(id, status) { try { await profileApi.updateReport(id, status); loadAdminData() } catch (error) { setAdminError(error.message) } }
-  async function updateGardenerApproval(userId, isApproved) {
+  function updateGardenerApproval(userId, isApproved) {
     const gardener = pendingGardeners.find((item) => item.id === userId)
-    if (!gardener || !window.confirm(isApproved ? 'Approve this gardener profile and publish its active services?' : 'Keep this gardener profile pending and request changes?')) return
-    const reason = isApproved ? '' : window.prompt('Optional feedback for the gardener:', '') || ''
-    setApprovalInProgress(userId); setAdminError(''); setAdminMessage('')
+    if (!gardener) return
+    setApprovalReason('')
+    setApprovalModal({ gardener, isApproved })
+  }
+  async function confirmGardenerApproval(event) {
+    event?.preventDefault()
+    if (!approvalModal) return
+    const { gardener, isApproved } = approvalModal
+    setApprovalInProgress(gardener.id); setAdminError(''); setAdminMessage('')
     try {
-      await profileApi.updateGardenerApproval(userId, isApproved, reason)
+      await profileApi.updateGardenerApproval(gardener.id, isApproved, isApproved ? '' : approvalReason.trim())
+      setApprovalModal(null)
+      setApprovalReason('')
       await loadAdminData()
       setAdminMessage(isApproved ? 'Gardener approved successfully.' : 'Feedback sent. The gardener remains pending.')
     } catch (error) { setAdminError(error.message) } finally { setApprovalInProgress(null) }
@@ -2011,7 +2628,13 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
         {adminError && <div className="form-error" role="alert">{adminError}</div>}
         {adminMessage && <div className="form-success" role="status">{adminMessage}</div>}
 
-        {activeTab === 'overview' && (
+        {activeTab === 'overview' && (summaryLoading || adminLoading ? (
+          <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading platform overview">
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+          </div>
+        ) : (
           <>
             <div className="stat-grid admin-stats">
               {[
@@ -2046,7 +2669,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                         <strong>{gardener.business_name || `${gardener.first_name} ${gardener.last_name}`}</strong>
                         <small>{gardener.first_name} {gardener.last_name} · {gardener.service_area}</small>
                       </span>
-                      <span className="status-badge status-pending">Pending</span>
+                      <span className={getStatusBadgeClass('pending')}>Pending</span>
                     </Link>
                   ))
                 )}
@@ -2080,15 +2703,21 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
               </div>
             </section>
           </>
-        )}
+        ))}
 
-        {activeTab === 'analytics' && (() => {
+        {activeTab === 'analytics' && (summaryLoading || adminLoading ? (
+          <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading analytics">
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+          </div>
+        ) : (() => {
           const totalInquiries = activity.inquiries.length
           const openInquiries = activity.inquiries.filter((i) => i.status === 'open' || i.status === 'responded').length
           const confirmedInquiries = activity.inquiries.filter((i) => i.status === 'confirmed' || i.status === 'accepted').length
           const totalBookings = activity.bookings.length
           const completedBookings = activity.bookings.filter((b) => b.status === 'completed').length
-          const activeBookings = activity.bookings.filter((b) => b.status === 'confirmed' || b.status === 'in_progress' || b.status === 'pending').length
+          const activeBookings = activity.bookings.filter((b) => ['accepted', 'confirmed', 'in_progress', 'pending'].includes(b.status)).length
           const completionRate = totalBookings > 0 ? Math.round((completedBookings / totalBookings) * 100) : 0
 
           const activeServices = services.filter((s) => s.is_active).length
@@ -2116,7 +2745,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
               metric: 'Bookings — Completed',
               count: completedBookings,
               total: totalBookings,
-              note: `${completionRate}% completion rate across all bookings`,
+              note: `${completionRate}% completion rate across ${totalBookings} recent bookings`,
             },
             {
               metric: 'Bookings — Active / Pending',
@@ -2313,7 +2942,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
               </section>
             </>
           )
-        })()}
+        })())}
 
         {activeTab === 'approvals' && (
           <section className="admin-management-grid" id="admin-approvals">
@@ -2402,9 +3031,9 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                   <button className="button" type="submit" disabled={pricingSaving}><Save size={15} /> {pricingSaving ? 'Saving...' : 'Save rates'}</button>
                 </form>
               )}
-              <div className="manage-list">
+              <div className="managed-list">
                 {categories.map((cat) => (
-                  <div className="manage-item" key={cat.id}>
+                  <div className="managed-item" key={cat.id}>
                     <div>
                       <strong>{cat.name}</strong>
                       <small>₱{Number(cat.rate_per_sqm_min).toFixed(0)}–₱{Number(cat.rate_per_sqm_max).toFixed(0)} / m² · Min base ₱{Number(cat.min_base_fee).toFixed(0)}</small>
@@ -2479,9 +3108,9 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                   <button className="button" type="submit" disabled={pricingSaving}>Add pricing item</button>
                 </form>
               )}
-              <div className="manage-list">
+              <div className="managed-list">
                 {pricingAddons.map((addon) => (
-                  <div className="manage-item" key={addon.id}>
+                  <div className="managed-item" key={addon.id}>
                     <div>
                       <strong>{addon.name}</strong>
                       <small>{addon.item_type} · ₱{Number(addon.unit_price_min).toFixed(0)}–₱{Number(addon.unit_price_max).toFixed(0)} {addon.unit} · {addon.is_active ? 'Active' : 'Inactive'}</small>
@@ -2767,17 +3396,15 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
               </div>
             </div>
 
-            {deleteAccountTarget && (
-              <div
-                className="gateway-demo-backdrop"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="delete-account-title"
-                onClick={(e) => { if (e.target === e.currentTarget && !accountSaving) setDeleteAccountTarget(null) }}
-              >
-                <div className="gateway-demo-modal">
-                  <p className="eyebrow" style={{ marginBottom: '4px' }}>Permanent action</p>
-                  <h2 id="delete-account-title">Delete user account?</h2>
+            <Modal
+              open={Boolean(deleteAccountTarget)}
+              onClose={() => { if (!accountSaving) setDeleteAccountTarget(null) }}
+              closeDisabled={accountSaving}
+              eyebrow="Permanent action"
+              title="Delete user account?"
+            >
+              {deleteAccountTarget && (
+                <>
                   <p className="field-note">
                     Delete <strong>{deleteAccountTarget.first_name} {deleteAccountTarget.last_name}</strong> ({deleteAccountTarget.email})? This cannot be undone. Accounts with existing inquiries or bookings are protected and must be deactivated instead.
                   </p>
@@ -2789,25 +3416,73 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                       Cancel
                     </button>
                   </div>
-                </div>
-              </div>
-            )}
+                </>
+              )}
+            </Modal>
           </section>
         )}
+
+        <Modal
+          open={Boolean(approvalModal)}
+          onClose={() => { if (!approvalInProgress) { setApprovalModal(null); setApprovalReason('') } }}
+          closeDisabled={Boolean(approvalInProgress)}
+          eyebrow="Gardener approval"
+          title={approvalModal?.isApproved ? 'Approve gardener profile?' : 'Request profile changes?'}
+        >
+          {approvalModal && (
+            <form className="profile-form" onSubmit={confirmGardenerApproval}>
+              <p className="field-note">
+                {approvalModal.isApproved
+                  ? <>Approve <strong>{approvalModal.gardener.business_name || `${approvalModal.gardener.first_name} ${approvalModal.gardener.last_name}`}</strong> and publish their active services to the marketplace?</>
+                  : <>Keep <strong>{approvalModal.gardener.business_name || `${approvalModal.gardener.first_name} ${approvalModal.gardener.last_name}`}</strong> pending and send optional feedback?</>}
+              </p>
+              {!approvalModal.isApproved && (
+                <label>
+                  Feedback for the gardener <span className="label-note">(Optional)</span>
+                  <textarea
+                    rows="3"
+                    maxLength="500"
+                    placeholder="e.g., Please add a clear business description and at least one service area."
+                    value={approvalReason}
+                    onChange={(e) => setApprovalReason(e.target.value)}
+                  />
+                </label>
+              )}
+              <div className="gateway-demo-actions">
+                <button type="submit" className="button" disabled={Boolean(approvalInProgress)}>
+                  {approvalInProgress
+                    ? 'Saving...'
+                    : (approvalModal.isApproved ? 'Yes, approve gardener' : 'Send feedback')}
+                </button>
+                <button
+                  type="button"
+                  className="table-action"
+                  disabled={Boolean(approvalInProgress)}
+                  onClick={() => { setApprovalModal(null); setApprovalReason('') }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </Modal>
       </section>
     </main>
   )
 }
 
 export default function DashboardPage({ profileView = false }) {
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const hashTab = location.hash?.startsWith('#admin-') ? location.hash.replace('#admin-', '') : ''
-  const activeTab = resolveDashboardTab(searchParams.get('tab') || hashTab, profileView)
+  const activeTab = resolveDashboardTab(searchParams.get('tab') || hashTab, profileView, user.role)
   const [profileData, setProfileData] = useState({ form: initialProfile, counts: {} })
   const [summary, setSummary] = useState({ counts: {}, users: [] })
+  const [loadedRole, setLoadedRole] = useState(null)
   const [error, setError] = useState('')
+  const profileLoading = user.role !== 'administrator' && user.role !== 'clerk' && loadedRole !== user.role
+  const summaryLoading = user.role === 'administrator' && loadedRole !== 'administrator'
 
   useEffect(() => {
     if (!location.hash) {
@@ -2821,16 +3496,35 @@ export default function DashboardPage({ profileView = false }) {
   }, [location.hash, summary])
 
   useEffect(() => {
+    let active = true
     if (user.role === 'administrator') {
-      profileApi.adminSummary().then(setSummary).catch((loadError) => setError(loadError.message))
-    } else if (user.role !== 'clerk') {
-      profileApi.get().then((result) => {
-        setProfileData({
-          form: buildProfileForm(result, initialProfile),
-          counts: result.counts || {},
+      profileApi.adminSummary()
+        .then((result) => {
+          if (active) setSummary(result)
         })
-      }).catch((loadError) => setError(loadError.message))
+        .catch((loadError) => {
+          if (active) setError(loadError.message)
+        })
+        .finally(() => {
+          if (active) setLoadedRole('administrator')
+        })
+    } else if (user.role !== 'clerk') {
+      profileApi.get()
+        .then((result) => {
+          if (!active) return
+          setProfileData({
+            form: buildProfileForm(result, initialProfile),
+            counts: result.counts || {},
+          })
+        })
+        .catch((loadError) => {
+          if (active) setError(loadError.message)
+        })
+        .finally(() => {
+          if (active) setLoadedRole(user.role)
+        })
     }
+    return () => { active = false }
   }, [user.role])
 
   async function changeStatus(userId, isActive) {
@@ -2855,7 +3549,25 @@ export default function DashboardPage({ profileView = false }) {
   }
 
   if (error) return <main className="dashboard-page"><AppSidebar /><section className="container dashboard-content"><div className="form-error" role="alert">{error}</div></section></main>
-  if (user.role === 'administrator') return <AdminDashboard summary={summary} onStatusChange={changeStatus} onUserUpdated={handleUserUpdated} onUserDeleted={handleUserDeleted} activeTab={activeTab} />
+  if (user.role === 'administrator') return <AdminDashboard summary={summary} summaryLoading={summaryLoading} onStatusChange={changeStatus} onUserUpdated={handleUserUpdated} onUserDeleted={handleUserDeleted} activeTab={activeTab} />
   if (user.role === 'clerk') return <ClerkDashboard activeTab={activeTab} />
-  return <UserDashboard user={user} profileData={profileData} activeTab={activeTab} onSaved={(result) => setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))} />
+  return (
+    <UserDashboard
+      user={user}
+      profileData={profileData}
+      loading={profileLoading}
+      activeTab={activeTab}
+      onSaved={(result) => {
+        setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))
+        if (result?.user) {
+          updateUser({
+            firstName: result.user.firstName ?? result.user.first_name ?? user.firstName,
+            middleName: result.user.middleName ?? result.user.middle_name ?? user.middleName,
+            lastName: result.user.lastName ?? result.user.last_name ?? user.lastName,
+            avatarPath: result.user.avatarPath ?? result.user.avatar_path ?? user.avatarPath,
+          })
+        }
+      }}
+    />
+  )
 }

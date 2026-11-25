@@ -10,6 +10,7 @@ const {
   listServices,
   sendServiceImage,
   updateService,
+  updateServiceStatus,
   uploadServiceImage,
 } = require('../controllers/service.controller')
 const { requireAuth, requireRole } = require('../middleware/auth.middleware')
@@ -25,6 +26,7 @@ router.get('/:serviceId/image', sendServiceImage)
 router.get('/:serviceId', getService)
 router.post('/', requireAuth, requireRole('gardener'), createService)
 router.put('/:serviceId', requireAuth, requireRole('gardener'), updateService)
+router.patch('/:serviceId/status', requireAuth, requireRole('gardener'), updateServiceStatus)
 router.post('/:serviceId/image', requireAuth, requireRole('gardener'), requestImageUpload.single('image'), uploadServiceImage)
 router.delete('/:serviceId/image', requireAuth, requireRole('gardener'), deleteServiceImage)
 router.delete('/:serviceId', requireAuth, requireRole('gardener'), deactivateService)

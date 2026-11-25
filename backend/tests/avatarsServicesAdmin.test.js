@@ -23,6 +23,7 @@ let gardenerId
 let serviceId
 let unusedUserId
 let adminId
+let inquiryId
 
 async function api(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, options)
@@ -42,6 +43,9 @@ function cookieFrom(res) {
 
 describe('Profile Avatars, Service Cover Photos & Admin Account Management', () => {
   before(async () => {
+    const [[dbRow]] = await pool.query('SELECT DATABASE() AS db')
+    assert.equal(dbRow.db, 'hugatiera_db_migration_test', 'Must run against hugatiera_db_migration_test')
+
     server = http.createServer(app)
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
     baseUrl = `http://127.0.0.1:${server.address().port}/api`
@@ -105,8 +109,18 @@ describe('Profile Avatars, Service Cover Photos & Admin Account Management', () 
   })
 
   after(async () => {
-    if (server) await new Promise((resolve) => server.close(resolve))
-    await pool.end()
+    try {
+      if (inquiryId) await pool.execute('DELETE FROM inquiries WHERE id = ?', [inquiryId])
+      if (serviceId) await pool.execute('DELETE FROM services WHERE id = ?', [serviceId])
+      const userIds = [adminId, clientId, gardenerId, unusedUserId].filter(Boolean)
+      if (userIds.length > 0) {
+        const placeholders = userIds.map(() => '?').join(', ')
+        await pool.execute(`DELETE FROM users WHERE id IN (${placeholders})`, userIds)
+      }
+    } finally {
+      if (server) await new Promise((resolve) => server.close(resolve))
+      await pool.end()
+    }
   })
 
   it('uploads, serves, validates, and removes a client profile picture (users.avatar_path)', async () => {
@@ -178,10 +192,11 @@ describe('Profile Avatars, Service Cover Photos & Admin Account Management', () 
     assert.equal(updateRes.data.user.first_name, 'Updated')
 
     // Create an inquiry referencing clientId so ON DELETE RESTRICT triggers 409
-    await pool.execute(
+    const [inquiryRes] = await pool.execute(
       'INSERT INTO inquiries (client_id, gardener_id, service_id, request_type, subject, description) VALUES (?, ?, ?, "direct", "Test", "Details")',
       [clientId, gardenerId, serviceId],
     )
+    inquiryId = inquiryRes.insertId
     const restrictedDel = await api(`/admin/users/${clientId}`, {
       method: 'DELETE',
       headers: { Cookie: adminCookie },

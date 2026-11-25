@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, CalendarDays, Clock, Leaf, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
+import TransientSuccess from '../components/TransientSuccess'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
 import { formatWorkingDaysLabel, profileApi } from '../services/profiles'
@@ -15,6 +16,8 @@ export default function GardenerPage() {
   const [reporting, setReporting] = useState(false)
   const [reportForm, setReportForm] = useState({ reason: '', details: '' })
   const [reportStatus, setReportStatus] = useState({ error: '', message: '', submitting: false })
+  const workspace = user?.role || 'public'
+  const memberWorkspace = ['client', 'gardener'].includes(user?.role)
 
   useEffect(() => {
     let active = true
@@ -41,7 +44,7 @@ export default function GardenerPage() {
   }
 
   return (
-    <main className={`marketplace-page${user ? ' protected-page' : ''}`}>
+    <main className={`marketplace-page${user ? ' protected-page' : ''}${memberWorkspace ? ' member-workspace' : ''}`} data-workspace={workspace}>
       {user ? (
         <AppSidebar />
       ) : (
@@ -90,7 +93,7 @@ export default function GardenerPage() {
                   </button>
                 </div>
               )}
-              {reportStatus.message && <div className="form-success" role="status" style={{ marginTop: '12px' }}>{reportStatus.message}</div>}
+              {reportStatus.message && <TransientSuccess key={reportStatus.message} message={reportStatus.message} onDismiss={() => setReportStatus((prev) => ({ ...prev, message: '' }))} style={{ marginTop: '12px' }} />}
               {reportStatus.error && <div className="form-error" role="alert" style={{ marginTop: '12px' }}>{reportStatus.error}</div>}
               {reporting && (
                 <form className="profile-form" onSubmit={submitReport} style={{ marginTop: '14px', maxWidth: '520px' }}>
@@ -147,16 +150,33 @@ export default function GardenerPage() {
 
             <h2 className="profile-section-title">Services offered</h2>
             {data.services?.length ? (
-              <div className="marketplace-grid">
+              <div className="marketplace-grid marketplace-card-grid">
                 {data.services.map((service) => (
-                  <article className="marketplace-card" key={service.id}>
-                    <h2>{service.title}</h2>
-                    <p>{service.description}</p>
-                    <div className="service-meta">
-                      <span>{service.service_area}</span>
-                      <span>{service.indicative_price ? `From ₱${service.indicative_price}` : 'Quotation available'}</span>
+                  <article className="marketplace-card visual-market-card" key={service.id}>
+                    <Link className="marketplace-card-media card-media-link" to={`/services/${service.id}`} aria-label={`View ${service.title}`}>
+                      {service.image_path ? (
+                        <img src={servicesApi.serviceImageUrl(service.id)} alt={service.title} loading="lazy" />
+                      ) : (
+                        <div className="marketplace-card-placeholder" aria-hidden="true">
+                          <Leaf size={24} />
+                        </div>
+                      )}
+                      {service.category_name && <span className="category-pill media-badge">{service.category_name}</span>}
+                    </Link>
+                    <div className="marketplace-card-body">
+                      <h2><Link className="card-title-link" to={`/services/${service.id}`}>{service.title}</Link></h2>
+                      <p>{service.description}</p>
+                      <div className="service-meta">
+                        <span>{service.service_area}</span>
+                        <strong className="card-price">
+                          {service.indicative_price ? `From ₱${Number(service.indicative_price).toLocaleString()}` : 'Quote on request'}
+                        </strong>
+                      </div>
+                      <div className="marketplace-card-footer">
+                        <span className="card-area">{service.workers_required || 1} worker{(service.workers_required || 1) === 1 ? '' : 's'}</span>
+                        <Link className="card-cta" to={`/services/${service.id}`}>View service <ArrowRight size={15} /></Link>
+                      </div>
                     </div>
-                    <Link to={`/services/${service.id}`}>View service <ArrowRight size={15} /></Link>
                   </article>
                 ))}
               </div>
