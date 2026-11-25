@@ -292,6 +292,28 @@ async function deactivateService(req, res, next) {
   }
 }
 
+async function updateServiceStatus(req, res, next) {
+  const serviceId = Number(req.params.serviceId)
+  if (!Number.isInteger(serviceId) || serviceId < 1) {
+    return res.status(400).json({ message: 'A valid service is required.' })
+  }
+  if (typeof req.body?.isActive !== 'boolean') {
+    return res.status(400).json({ message: 'A boolean isActive value is required.' })
+  }
+  try {
+    const [result] = await pool.execute(
+      'UPDATE services SET is_active = ? WHERE id = ? AND gardener_id = ?',
+      [req.body.isActive ? 1 : 0, serviceId, req.user.id],
+    )
+    if (!result.affectedRows) {
+      return res.status(404).json({ message: 'Service was not found or is not owned by you.' })
+    }
+    return res.json({ status: 'ok', isActive: req.body.isActive })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 async function uploadServiceImage(req, res, next) {
   const serviceId = Number(req.params.serviceId)
   if (!Number.isInteger(serviceId) || serviceId < 1) {
@@ -538,5 +560,6 @@ module.exports = {
   listServices,
   sendServiceImage,
   updateService,
+  updateServiceStatus,
   uploadServiceImage,
 }

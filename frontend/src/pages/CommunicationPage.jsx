@@ -21,6 +21,16 @@ function Conversation({ conversation, onSelect, selected }) {
 }
 
 function notificationPath(notification, user) {
+  if (user?.role === 'clerk') {
+    if (notification.related_entity_type === 'booking' || notification.related_entity_type === 'payment') {
+      return '/dashboard?tab=payments'
+    }
+    if (notification.related_entity_type === 'conversation') return null
+    if (['inquiry', 'review', 'gardener_profile'].includes(notification.related_entity_type)) {
+      return '/dashboard'
+    }
+    return null
+  }
   if (notification.related_entity_type === 'inquiry') return `/inquiries/${notification.related_entity_id}`
   if (notification.related_entity_type === 'booking') return `/bookings/${notification.related_entity_id}`
   if (notification.related_entity_type === 'conversation') return `/messages?conversationId=${notification.related_entity_id}`
@@ -138,7 +148,11 @@ export default function CommunicationPage({ mode = 'messages' }) {
           {isNotificationsView ? (
             <div className="inline-actions">
               <button className="table-action" type="button" onClick={markAllRead}>Mark all notifications read</button>
-              <Link className="button button-outline" to="/messages">Open messages</Link>
+              {user?.role === 'clerk' ? (
+                <Link className="button button-outline" to="/dashboard?tab=payments">Open payment desk</Link>
+              ) : (
+                <Link className="button button-outline" to="/messages">Open messages</Link>
+              )}
             </div>
           ) : (
             <Link className="button button-outline" to="/notifications">View notifications</Link>

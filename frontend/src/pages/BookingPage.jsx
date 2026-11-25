@@ -1704,6 +1704,7 @@ function BookingList() {
   const [bookings, setBookings] = useState([])
   const [covers, setCovers] = useState({})
   const [filter, setFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
@@ -1711,6 +1712,7 @@ function BookingList() {
       .then(async (result) => {
         if (!active) return
         setBookings(result.bookings)
+        setLoading(false)
         const inquiryIds = [...new Set(result.bookings.map((b) => b.inquiry_id).filter(Boolean))]
         if (inquiryIds.length === 0) return
         const settled = await Promise.allSettled(
@@ -1726,7 +1728,12 @@ function BookingList() {
         }
         setCovers(nextCovers)
       })
-      .catch((loadError) => { if (active) setError(loadError.message) })
+      .catch((loadError) => {
+        if (active) {
+          setError(loadError.message)
+          setLoading(false)
+        }
+      })
     return () => { active = false }
   }, [])
 
@@ -1783,9 +1790,16 @@ function BookingList() {
           })}
         </div>
       )}
-      {error && <div className="form-error">{error}</div>}
-      {!error && bookings.length === 0 && <div className="empty-state">You do not have any reservations or bookings yet.</div>}
-      {!error && bookings.length > 0 && filteredBookings.length === 0 && (
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {loading && (
+        <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading reservations and bookings">
+          <div className="skeleton-line" />
+          <div className="skeleton-line short" />
+          <div className="skeleton-line" />
+        </div>
+      )}
+      {!loading && !error && bookings.length === 0 && <div className="empty-state">You do not have any reservations or bookings yet.</div>}
+      {!loading && !error && bookings.length > 0 && filteredBookings.length === 0 && (
         <div className="empty-state">No bookings match "{activeFilterDef.label}". Select another tab above to view your other records.</div>
       )}
       <div className="marketplace-grid marketplace-card-grid">

@@ -11,6 +11,7 @@ import {
   Leaf,
   MapPin,
   Pencil,
+  RotateCcw,
   Save,
   ShieldCheck,
   Sparkles,
@@ -455,7 +456,24 @@ function GardenerTools({ isApproved, section = 'services' }) {
     } catch (removeError) { setError(removeError.message) }
   }
   async function removeService(id) {
-    try { await servicesApi.remove(id); setServices((current) => current.map((service) => service.id === id ? { ...service, is_active: 0 } : service)); setMessage('Service listing deactivated.') } catch (removeError) { setError(removeError.message) }
+    setMessage(''); setError('')
+    try {
+      await servicesApi.remove(id)
+      setServices((current) => current.map((service) => service.id === id ? { ...service, is_active: 0 } : service))
+      setMessage('Service listing deactivated.')
+    } catch (removeError) {
+      setError(removeError.message)
+    }
+  }
+  async function reactivateService(id) {
+    setMessage(''); setError('')
+    try {
+      await servicesApi.updateStatus(id, true)
+      setServices((current) => current.map((service) => service.id === id ? { ...service, is_active: 1 } : service))
+      setMessage('Service listing reactivated.')
+    } catch (reactivateError) {
+      setError(reactivateError.message)
+    }
   }
   async function savePortfolio(event) {
     event.preventDefault(); setMessage(''); setError('')
@@ -581,13 +599,24 @@ function GardenerTools({ isApproved, section = 'services' }) {
                   <span>{service.category_name} · {service.workers_required || 1} worker{(service.workers_required || 1) === 1 ? '' : 's'} · {service.is_active ? 'Active' : 'Inactive'}{service.is_active && !isApproved ? ' · Pending approval' : ''}</span>
                 </div>
               </div>
-              {service.is_active && (
+              {service.is_active ? (
                 <div className="item-actions">
                   {service.image_path && (
                     <button type="button" className="table-action" onClick={() => removeServiceImage(service.id)}>Remove photo</button>
                   )}
                   <button type="button" aria-label={`Edit ${service.title}`} onClick={() => { setEditId(service.id); setServiceImageFile(null); setServiceForm({ title: service.title, description: service.description, categoryId: service.category_id, indicativePrice: service.indicative_price || '', priceUnit: service.price_unit || '', serviceArea: service.service_area, workersRequired: service.workers_required || 1 }) }}><Pencil size={15} /></button>
                   <button type="button" aria-label={`Deactivate ${service.title}`} onClick={() => removeService(service.id)}><Trash2 size={15} /></button>
+                </div>
+              ) : (
+                <div className="item-actions">
+                  <button
+                    type="button"
+                    className="service-reactivate-btn"
+                    aria-label={`Reactivate ${service.title}`}
+                    onClick={() => reactivateService(service.id)}
+                  >
+                    <RotateCcw size={14} /> Reactivate
+                  </button>
                 </div>
               )}
             </div>
@@ -1324,7 +1353,7 @@ function DashboardActivity({ role }) {
   )
 }
 
-function UserDashboard({ user, profileData, onSaved, activeTab }) {
+function UserDashboard({ user, profileData, loading = false, onSaved, activeTab }) {
   const { switchRole, enableDualRole } = useAuth()
   const [roleBusy, setRoleBusy] = useState(false)
   const [roleNotice, setRoleNotice] = useState('')
@@ -1476,7 +1505,7 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
         </div>
         {roleError && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{roleError}</div>}
         {roleNotice && <div className="form-success" role="status" style={{ marginBottom: '12px' }}>{roleNotice}</div>}
-        {role === 'gardener' && (
+        {role === 'gardener' && !loading && (
           <div className={`form-note ${form.is_approved ? 'form-success' : 'form-error'}`}>
             {form.is_approved
               ? 'Your gardener profile is approved and active services are visible publicly.'
@@ -1484,7 +1513,13 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
           </div>
         )}
 
-        {isProfileView ? (
+        {loading && (isProfileView || activeTab === 'overview') ? (
+          <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading dashboard details">
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+          </div>
+        ) : isProfileView ? (
           <>
             <section className="dashboard-panel dual-role-card" style={{ marginBottom: '20px' }}>
               <div className="activity-heading">
@@ -1637,8 +1672,9 @@ function UserDashboard({ user, profileData, onSaved, activeTab }) {
   )
 }
 
-function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted, activeTab }) {
+function AdminDashboard({ summary, summaryLoading = false, onStatusChange, onUserUpdated, onUserDeleted, activeTab }) {
   const counts = summary.counts || {}
+  const [adminLoading, setAdminLoading] = useState(true)
   const [categories, setCategories] = useState([])
   const [pricingAddons, setPricingAddons] = useState([])
   const [addonForm, setAddonForm] = useState({
@@ -1724,7 +1760,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
     setReports(reportData.reports)
     setPendingGardeners(gardenerData.gardeners)
     setClerkAssignments(clerkData.assignments || [])
-  }).catch((error) => setAdminError(error.message)), [])
+  }).catch((error) => setAdminError(error.message)).finally(() => setAdminLoading(false)), [])
 
   async function handleAssignClerk(event) {
     event.preventDefault()
@@ -1930,7 +1966,13 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
         {adminError && <div className="form-error" role="alert">{adminError}</div>}
         {adminMessage && <div className="form-success" role="status">{adminMessage}</div>}
 
-        {activeTab === 'overview' && (
+        {activeTab === 'overview' && (summaryLoading || adminLoading ? (
+          <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading platform overview">
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+          </div>
+        ) : (
           <>
             <div className="stat-grid admin-stats">
               {[
@@ -1965,7 +2007,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                         <strong>{gardener.business_name || `${gardener.first_name} ${gardener.last_name}`}</strong>
                         <small>{gardener.first_name} {gardener.last_name} · {gardener.service_area}</small>
                       </span>
-                      <span className="status-badge status-pending">Pending</span>
+                      <span className={getStatusBadgeClass('pending')}>Pending</span>
                     </Link>
                   ))
                 )}
@@ -1999,15 +2041,21 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
               </div>
             </section>
           </>
-        )}
+        ))}
 
-        {activeTab === 'analytics' && (() => {
+        {activeTab === 'analytics' && (summaryLoading || adminLoading ? (
+          <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading analytics">
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+          </div>
+        ) : (() => {
           const totalInquiries = activity.inquiries.length
           const openInquiries = activity.inquiries.filter((i) => i.status === 'open' || i.status === 'responded').length
           const confirmedInquiries = activity.inquiries.filter((i) => i.status === 'confirmed' || i.status === 'accepted').length
           const totalBookings = activity.bookings.length
           const completedBookings = activity.bookings.filter((b) => b.status === 'completed').length
-          const activeBookings = activity.bookings.filter((b) => b.status === 'confirmed' || b.status === 'in_progress' || b.status === 'pending').length
+          const activeBookings = activity.bookings.filter((b) => ['accepted', 'confirmed', 'in_progress', 'pending'].includes(b.status)).length
           const completionRate = totalBookings > 0 ? Math.round((completedBookings / totalBookings) * 100) : 0
 
           const activeServices = services.filter((s) => s.is_active).length
@@ -2035,7 +2083,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
               metric: 'Bookings — Completed',
               count: completedBookings,
               total: totalBookings,
-              note: `${completionRate}% completion rate across all bookings`,
+              note: `${completionRate}% completion rate across ${totalBookings} recent bookings`,
             },
             {
               metric: 'Bookings — Active / Pending',
@@ -2232,7 +2280,7 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
               </section>
             </>
           )
-        })()}
+        })())}
 
         {activeTab === 'approvals' && (
           <section className="admin-management-grid" id="admin-approvals">
@@ -2321,9 +2369,9 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                   <button className="button" type="submit" disabled={pricingSaving}><Save size={15} /> {pricingSaving ? 'Saving...' : 'Save rates'}</button>
                 </form>
               )}
-              <div className="manage-list">
+              <div className="managed-list">
                 {categories.map((cat) => (
-                  <div className="manage-item" key={cat.id}>
+                  <div className="managed-item" key={cat.id}>
                     <div>
                       <strong>{cat.name}</strong>
                       <small>₱{Number(cat.rate_per_sqm_min).toFixed(0)}–₱{Number(cat.rate_per_sqm_max).toFixed(0)} / m² · Min base ₱{Number(cat.min_base_fee).toFixed(0)}</small>
@@ -2398,9 +2446,9 @@ function AdminDashboard({ summary, onStatusChange, onUserUpdated, onUserDeleted,
                   <button className="button" type="submit" disabled={pricingSaving}>Add pricing item</button>
                 </form>
               )}
-              <div className="manage-list">
+              <div className="managed-list">
                 {pricingAddons.map((addon) => (
-                  <div className="manage-item" key={addon.id}>
+                  <div className="managed-item" key={addon.id}>
                     <div>
                       <strong>{addon.name}</strong>
                       <small>{addon.item_type} · ₱{Number(addon.unit_price_min).toFixed(0)}–₱{Number(addon.unit_price_max).toFixed(0)} {addon.unit} · {addon.is_active ? 'Active' : 'Inactive'}</small>
@@ -2726,7 +2774,10 @@ export default function DashboardPage({ profileView = false }) {
   const activeTab = resolveDashboardTab(searchParams.get('tab') || hashTab, profileView)
   const [profileData, setProfileData] = useState({ form: initialProfile, counts: {} })
   const [summary, setSummary] = useState({ counts: {}, users: [] })
+  const [loadedRole, setLoadedRole] = useState(null)
   const [error, setError] = useState('')
+  const profileLoading = user.role !== 'administrator' && user.role !== 'clerk' && loadedRole !== user.role
+  const summaryLoading = user.role === 'administrator' && loadedRole !== 'administrator'
 
   useEffect(() => {
     if (!location.hash) {
@@ -2740,16 +2791,35 @@ export default function DashboardPage({ profileView = false }) {
   }, [location.hash, summary])
 
   useEffect(() => {
+    let active = true
     if (user.role === 'administrator') {
-      profileApi.adminSummary().then(setSummary).catch((loadError) => setError(loadError.message))
-    } else if (user.role !== 'clerk') {
-      profileApi.get().then((result) => {
-        setProfileData({
-          form: buildProfileForm(result, initialProfile),
-          counts: result.counts || {},
+      profileApi.adminSummary()
+        .then((result) => {
+          if (active) setSummary(result)
         })
-      }).catch((loadError) => setError(loadError.message))
+        .catch((loadError) => {
+          if (active) setError(loadError.message)
+        })
+        .finally(() => {
+          if (active) setLoadedRole('administrator')
+        })
+    } else if (user.role !== 'clerk') {
+      profileApi.get()
+        .then((result) => {
+          if (!active) return
+          setProfileData({
+            form: buildProfileForm(result, initialProfile),
+            counts: result.counts || {},
+          })
+        })
+        .catch((loadError) => {
+          if (active) setError(loadError.message)
+        })
+        .finally(() => {
+          if (active) setLoadedRole(user.role)
+        })
     }
+    return () => { active = false }
   }, [user.role])
 
   async function changeStatus(userId, isActive) {
@@ -2774,7 +2844,7 @@ export default function DashboardPage({ profileView = false }) {
   }
 
   if (error) return <main className="dashboard-page"><AppSidebar /><section className="container dashboard-content"><div className="form-error" role="alert">{error}</div></section></main>
-  if (user.role === 'administrator') return <AdminDashboard summary={summary} onStatusChange={changeStatus} onUserUpdated={handleUserUpdated} onUserDeleted={handleUserDeleted} activeTab={activeTab} />
+  if (user.role === 'administrator') return <AdminDashboard summary={summary} summaryLoading={summaryLoading} onStatusChange={changeStatus} onUserUpdated={handleUserUpdated} onUserDeleted={handleUserDeleted} activeTab={activeTab} />
   if (user.role === 'clerk') return <ClerkDashboard activeTab={activeTab} />
-  return <UserDashboard user={user} profileData={profileData} activeTab={activeTab} onSaved={(result) => setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))} />
+  return <UserDashboard user={user} profileData={profileData} loading={profileLoading} activeTab={activeTab} onSaved={(result) => setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))} />
 }

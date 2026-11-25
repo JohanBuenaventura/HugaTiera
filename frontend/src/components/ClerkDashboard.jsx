@@ -330,27 +330,27 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
         {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
         {notice && <div className="form-success" role="status" style={{ marginBottom: '16px' }}>{notice}</div>}
 
-        <section className="dashboard-stats" aria-label="Clerk summary metrics">
-          <article>
+        <div className="stat-grid clerk-stats" role="region" aria-label="Clerk summary metrics">
+          <div className="stat-card stat-card-primary">
+            <strong>{loading ? '—' : workspace.gardeners.length}</strong>
             <span>Assigned gardeners</span>
-            <strong>{workspace.gardeners.length}</strong>
-          </article>
-          <article>
+          </div>
+          <div className="stat-card">
+            <strong>{loading ? '—' : pendingVerifyCount}</strong>
             <span>Pending payment proofs</span>
-            <strong>{pendingVerifyCount}</strong>
-          </article>
-          <article>
+          </div>
+          <div className="stat-card">
+            <strong>{loading ? '—' : workspace.bookings.length}</strong>
             <span>Managed bookings</span>
-            <strong>{workspace.bookings.length}</strong>
-          </article>
-          <article>
+          </div>
+          <div className="stat-card">
+            <strong>{loading ? '—' : workspace.services.length}</strong>
             <span>Managed services</span>
-            <strong>{workspace.services.length}</strong>
-          </article>
-        </section>
+          </div>
+        </div>
 
         {loading ? (
-          <div className="dashboard-panel skeleton-stack" aria-busy="true">
+          <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading clerk workspace">
             <div className="skeleton-line" />
             <div className="skeleton-line short" />
             <div className="skeleton-line" />
@@ -360,7 +360,7 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
             <p className="eyebrow">No gardeners assigned yet</p>
             <h2>Waiting for a gardener or administrator assignment</h2>
             <p className="form-note">
-              Your Clerk account (<strong>{user?.email}</strong>) is ready! Share this email with a Gardener so they can link you during sign-up or under <strong>Gardener Dashboard → My Clerks → Link Existing Clerk</strong>, or ask an Administrator to assign you under <strong>Admin → Accounts</strong>. Once linked, their schedules, payments, and services will appear here automatically.
+              Your Clerk account (<strong>{user?.email}</strong>) is ready! Share this email with a Gardener so they can link you under <strong>Gardener Dashboard → My Clerks → Link Existing Clerk</strong>, or ask an Administrator to assign you under <strong>Admin → Accounts</strong>. Once linked, their schedules, payments, and services will appear here automatically.
             </p>
           </div>
         ) : (
@@ -490,14 +490,14 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                   <p className="eyebrow">Working hours &amp; crew capacity</p>
                   <h2>Schedule for {selectedGardener.display_name}</h2>
                   <form className="profile-form" onSubmit={handleSaveSchedule}>
-                    <div className="weekday-picker" role="group" aria-label="Working days">
+                    <div className="weekday-toggle-grid" role="group" aria-label="Working days">
                       {WEEKDAY_OPTIONS.map((day) => {
                         const checked = parseWorkingDaysArray(scheduleForm.workingDays).includes(day.code)
                         return (
                           <button
                             key={day.code}
                             type="button"
-                            className={`weekday-chip${checked ? ' is-selected' : ''}`}
+                            className={`weekday-pill${checked ? ' is-selected' : ''}`}
                             onClick={() => toggleWorkingDay(day.code)}
                             aria-pressed={checked}
                           >
