@@ -132,6 +132,7 @@ HugaTiera/
 │   │   ├── 08-workflow-case1-case2-agreement-payment.png
 │   │   ├── 09-workflow-unified-overview.png
 │   │   ├── 10-user-hierarchy-diagram.png
+│   │   ├── 11-user-hierarchy-only.png
 │   │   └── README.md
 │   ├── implementation/
 │   │   └── implementation-plan.md
