@@ -49,8 +49,10 @@ const INQUIRY_STEPS = [
 ]
 
 function InquiryForm() {
+  const { user, switchRole } = useAuth()
   const [barangayChoice, setBarangayChoice] = useState('')
   const [customBarangay, setCustomBarangay] = useState('')
+  const [switchingToClient, setSwitchingToClient] = useState(false)
   const [params] = useSearchParams()
   const serviceId = params.get('serviceId')
   const gardenerId = params.get('gardenerId')
@@ -382,12 +384,52 @@ function InquiryForm() {
     }
   }
 
+  if (user?.role === 'gardener') {
+    return (
+      <section className="container inquiry-content">
+        <Link className="back-link" to="/inquiries">
+          <ArrowLeft size={15} /> Back to inquiries
+        </Link>
+        <div className="dashboard-panel">
+          <p className="eyebrow">Client action required</p>
+          <h1>Switch to Client Mode to submit a request.</h1>
+          <p className="field-note">
+            You are currently signed in under Gardener Mode. Submitting a general service request or direct inquiry is available in Client Mode.
+          </p>
+          {error && <div className="form-error" role="alert" style={{ marginTop: '12px' }}>{error}</div>}
+          <div className="inline-actions" style={{ marginTop: '16px' }}>
+            {user.isDualRole && (
+              <button
+                type="button"
+                className="button"
+                disabled={switchingToClient}
+                onClick={async () => {
+                  setSwitchingToClient(true)
+                  setError('')
+                  try {
+                    await switchRole('client')
+                  } catch (switchErr) {
+                    setError(switchErr.message || 'Unable to switch to Client Mode right now.')
+                  } finally {
+                    setSwitchingToClient(false)
+                  }
+                }}
+              >
+                {switchingToClient ? 'Switching...' : 'Switch to Client Mode'}
+              </button>
+            )}
+            <Link className="button button-outline" to="/dashboard">Back to dashboard</Link>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="container inquiry-content">
       <Link className="back-link" to={isGeneralRequest ? '/inquiries' : (validGardenerId ? `/gardeners/${gardenerId}` : '/services')}>
         <ArrowLeft size={15} /> Back
       </Link>
-      <p className="eyebrow">{isGeneralRequest ? 'General service request (open to approved providers)' : 'Direct service provider inquiry'}</p>
       <h1>{isGeneralRequest ? 'Post an open gardening request.' : 'Tell the gardener what you need.'}</h1>
       {service && (
         <div className="inquiry-service">
@@ -1368,9 +1410,9 @@ function InquiryDetails({ id }) {
   return (
     <section className="container inquiry-content">
       <Link className="back-link" to="/inquiries"><ArrowLeft size={15} /> Back to inquiries</Link>
-      <p className="eyebrow">Inquiry #{inquiry.id} · {inquiry.request_type === 'general' ? 'General service request' : 'Direct provider inquiry'}</p>
       <h1>{inquiry.subject}</h1>
       <div className="inquiry-status-row">
+        <span className="category-pill">Inquiry #{inquiry.id} · {inquiry.request_type === 'general' ? 'General request' : 'Direct inquiry'}</span>
         <span className={getStatusBadgeClass(inquiry.status)}>{formatStatusLabel(inquiry.status)}</span>
         <span>{inquiry.service_title || inquiry.category_name || (inquiry.request_type === 'general' ? 'Open gardening request' : 'Direct gardener inquiry')}</span>
         {inquiry.gardener_name && <span>Provider: {inquiry.gardener_name}</span>}
@@ -2152,7 +2194,6 @@ function InquiryList() {
     <section className="container inquiry-content">
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
         <div>
-          <p className="eyebrow">{activeTab === 'open' ? 'Open service requests board' : 'Requests, offers & agreements'}</p>
           <h1>{activeTab === 'open' ? 'Browse open client requests.' : 'Inquiries and offers.'}</h1>
         </div>
         {user?.role === 'client' && (
@@ -2218,7 +2259,7 @@ function InquiryList() {
               : inquiry.gardener_name || (inquiry.offer_count > 0 ? `${inquiry.offer_count} provider ${Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}` : 'Open to providers')
             return (
               <article className="marketplace-card visual-market-card" key={inquiry.id}>
-                <div className="marketplace-card-media">
+                <Link className="marketplace-card-media card-media-link" to={`/inquiries/${inquiry.id}`} aria-label={`View ${inquiry.subject}`}>
                   {coverUrl ? (
                     <img
                       src={coverUrl}
@@ -2235,9 +2276,9 @@ function InquiryList() {
                   <span className={`${getStatusBadgeClass(inquiry.status)} media-status-badge`}>
                     {formatStatusLabel(inquiry.status)}
                   </span>
-                </div>
+                </Link>
                 <div className="marketplace-card-body">
-                  <h2>{inquiry.subject}</h2>
+                  <h2><Link className="card-title-link" to={`/inquiries/${inquiry.id}`}>{inquiry.subject}</Link></h2>
                   <p>{inquiry.ai_summary || inquiry.description || 'Gardening service inquiry.'}</p>
                   <div className="service-meta">
                     <span>
@@ -2278,7 +2319,7 @@ function InquiryList() {
             const coverUrl = firstImageId ? getRequestImageUrl(firstImageId) : null
             return (
               <article className="marketplace-card visual-market-card" key={reqItem.id}>
-                <div className="marketplace-card-media">
+                <Link className="marketplace-card-media card-media-link" to={`/inquiries/${reqItem.id}`} aria-label={`View ${reqItem.subject}`}>
                   {coverUrl ? (
                     <img
                       src={coverUrl}
@@ -2295,9 +2336,9 @@ function InquiryList() {
                   <span className={`${getStatusBadgeClass(reqItem.status)} media-status-badge`}>
                     {formatStatusLabel(reqItem.status)}
                   </span>
-                </div>
+                </Link>
                 <div className="marketplace-card-body">
-                  <h2>{reqItem.subject}</h2>
+                  <h2><Link className="card-title-link" to={`/inquiries/${reqItem.id}`}>{reqItem.subject}</Link></h2>
                   <p>{reqItem.ai_summary || reqItem.description || 'Open client gardening request.'}</p>
                   <div className="service-meta">
                     <span>

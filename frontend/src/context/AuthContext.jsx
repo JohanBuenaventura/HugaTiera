@@ -37,6 +37,10 @@ export function AuthProvider({ children }) {
     loading,
     authError,
     retryAuth,
+    updateUser: (partialUser) => {
+      if (!partialUser) return
+      setUser((current) => (current ? { ...current, ...partialUser } : current))
+    },
     login: async (credentials) => {
       const result = await authApi.login(credentials)
       setUser(result.user)

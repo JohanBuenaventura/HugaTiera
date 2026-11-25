@@ -241,7 +241,7 @@ This document provides the complete technical reference for all **16 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/conversations` | Required | `client`, `gardener`, `administrator` | Lists conversation threads for the authenticated user with `last_message`, `last_message_at`, and `unread_count`. |
+| `GET` | `/api/conversations` | Required | `client`, `gardener`, `administrator` | Lists conversation threads for the authenticated user with `other_party_id`, `other_party_role`, `other_party_name`, inquiry/service context (`inquiry_subject`, `inquiry_status`, `inquiry_location`, `service_title`), latest linked booking context (`booking_id`, `booking_status`, `booking_stage`, `booking_scheduled_start`), `latest_message`, `latest_message_at`, `latest_sender_id`, and `unread_count`. |
 | `POST` | `/api/conversations` | Required | `client`, `gardener` | Opens or retrieves an existing conversation thread from `{ inquiryId, gardenerId }` or `{ bookingId }`. On Case 1 general requests, a gardener must hold an active (`sent` or `accepted`) offer (`403` otherwise). |
 | `GET` | `/api/conversations/:conversationId/messages` | Required | `client`, `gardener`, `administrator` | Returns chronological messages in a thread and marks incoming unread messages as read (`read_at = CURRENT_TIMESTAMP`). |
 | `POST` | `/api/conversations/:conversationId/messages` | Required | `client`, `gardener` | Sends a message (`messageText`, 1–2000 chars) and creates an in-app notification for the recipient. |

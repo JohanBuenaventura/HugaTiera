@@ -1,6 +1,6 @@
 # HugaTiera – Folder Structure
 
-This document reflects the **actual current repository structure** of HugaTiera (verified November 24, 2026 on `main`).
+This document reflects the **actual current repository structure** of HugaTiera (verified November 25, 2026 on `mobile-res`).
 
 ```text
 HugaTiera/
@@ -150,6 +150,11 @@ HugaTiera/
 │   │   ├── web/             (38 desktop web module PNGs)
 │   │   └── README.md
 │   ├── ui-ux/
+│   │   ├── implementation-roadmap.md
+│   │   ├── mobbin-research.md
+│   │   ├── project-inventory.md
+│   │   ├── recommended-changes.md
+│   │   └── ui-ux-audit.md
 │   ├── api-reference.md
 │   ├── architecture-and-workflows.md
 │   ├── erd-and-dfd.md
@@ -165,10 +170,14 @@ HugaTiera/
 │   │   │   ├── AiAssistantWidget.jsx
 │   │   │   ├── AppSidebar.jsx
 │   │   │   ├── ClerkDashboard.jsx
+│   │   │   ├── ErrorBoundary.jsx
 │   │   │   ├── GardenerClerksPanel.jsx
 │   │   │   ├── GardenerScheduleCalendar.jsx
+│   │   │   ├── Modal.jsx
 │   │   │   ├── ProtectedRoute.jsx
-│   │   │   └── StructuredAddressFields.jsx
+│   │   │   ├── StarRating.jsx
+│   │   │   ├── StructuredAddressFields.jsx
+│   │   │   └── TransientSuccess.jsx
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx
 │   │   │   └── auth-context.js
@@ -199,9 +208,11 @@ HugaTiera/
 │   │   │   ├── reviews.js
 │   │   │   └── services.js
 │   │   ├── utils/
+│   │   │   ├── currency.js
 │   │   │   └── zamboangaAddress.js
 │   │   ├── App.css
 │   │   ├── App.jsx
+│   │   ├── ClientGardener.css
 │   │   ├── index.css
 │   │   └── main.jsx
 │   ├── .env.example

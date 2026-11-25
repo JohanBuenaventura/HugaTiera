@@ -150,16 +150,33 @@ export default function GardenerPage() {
 
             <h2 className="profile-section-title">Services offered</h2>
             {data.services?.length ? (
-              <div className="marketplace-grid">
+              <div className="marketplace-grid marketplace-card-grid">
                 {data.services.map((service) => (
-                  <article className="marketplace-card" key={service.id}>
-                    <h2>{service.title}</h2>
-                    <p>{service.description}</p>
-                    <div className="service-meta">
-                      <span>{service.service_area}</span>
-                      <span>{service.indicative_price ? `From ₱${service.indicative_price}` : 'Quotation available'}</span>
+                  <article className="marketplace-card visual-market-card" key={service.id}>
+                    <Link className="marketplace-card-media card-media-link" to={`/services/${service.id}`} aria-label={`View ${service.title}`}>
+                      {service.image_path ? (
+                        <img src={servicesApi.serviceImageUrl(service.id)} alt={service.title} loading="lazy" />
+                      ) : (
+                        <div className="marketplace-card-placeholder" aria-hidden="true">
+                          <Leaf size={24} />
+                        </div>
+                      )}
+                      {service.category_name && <span className="category-pill media-badge">{service.category_name}</span>}
+                    </Link>
+                    <div className="marketplace-card-body">
+                      <h2><Link className="card-title-link" to={`/services/${service.id}`}>{service.title}</Link></h2>
+                      <p>{service.description}</p>
+                      <div className="service-meta">
+                        <span>{service.service_area}</span>
+                        <strong className="card-price">
+                          {service.indicative_price ? `From ₱${Number(service.indicative_price).toLocaleString()}` : 'Quote on request'}
+                        </strong>
+                      </div>
+                      <div className="marketplace-card-footer">
+                        <span className="card-area">{service.workers_required || 1} worker{(service.workers_required || 1) === 1 ? '' : 's'}</span>
+                        <Link className="card-cta" to={`/services/${service.id}`}>View service <ArrowRight size={15} /></Link>
+                      </div>
                     </div>
-                    <Link to={`/services/${service.id}`}>View service <ArrowRight size={15} /></Link>
                   </article>
                 ))}
               </div>

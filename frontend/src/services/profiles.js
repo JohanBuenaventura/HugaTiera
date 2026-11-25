@@ -180,6 +180,7 @@ export function getDashboardNavLinks(role, unreadCounts = {}) {
       { to: '/dashboard?tab=activity', href: '#admin-activity', label: 'Activity', type: 'route' },
       { to: '/dashboard?tab=reports', href: '#admin-reports', label: 'Reports', type: 'route' },
       { to: '/dashboard?tab=accounts', href: '#admin-accounts', label: 'Accounts', type: 'route' },
+      { to: '/notifications', label: 'Notifications', badge: unreadCounts.notifications || 0, type: 'route' },
       { to: '/services', label: 'Marketplace', type: 'route' },
     ]
   }
@@ -193,20 +194,30 @@ export function getDashboardNavLinks(role, unreadCounts = {}) {
       { to: '/services', label: 'Marketplace', type: 'route' },
     ]
   }
+  if (role === 'gardener') {
+    return [
+      { to: '/dashboard', label: 'Overview', group: 'Work', type: 'route' },
+      { to: '/inquiries', label: 'Inquiries', badge: unreadCounts.inquiries || 0, group: 'Work', type: 'route' },
+      { to: '/bookings', label: 'Bookings', badge: unreadCounts.bookings || 0, group: 'Work', type: 'route' },
+      { to: '/dashboard?tab=calendar', label: 'Schedule', group: 'Work', type: 'route' },
+      { to: '/messages', label: 'Messages', badge: unreadCounts.messages || 0, group: 'Work', type: 'route' },
+      { to: '/notifications', label: 'Notifications', badge: unreadCounts.notifications || 0, group: 'Work', type: 'route' },
+      { to: '/dashboard?tab=services', label: 'My services', group: 'My Business', type: 'route' },
+      { to: '/dashboard?tab=portfolio', label: 'Portfolio', group: 'My Business', type: 'route' },
+      { to: '/dashboard?tab=clerks', label: 'My Staff', group: 'My Business', type: 'route' },
+      { to: '/assistant', label: 'AI Assistant', group: 'My Business', type: 'route' },
+      { to: '/dashboard?tab=profile', label: 'Profile', group: 'My Business', type: 'route' },
+    ]
+  }
   return [
-    { to: '/dashboard', label: 'Overview', type: 'route' },
-    ...(role === 'gardener' ? [{ to: '/dashboard?tab=calendar', label: 'Calendar', type: 'route' }] : []),
-    ...(role === 'gardener' ? [
-      { to: '/dashboard?tab=services', label: 'My services', type: 'route' },
-      { to: '/dashboard?tab=portfolio', label: 'Portfolio', type: 'route' },
-      { to: '/dashboard?tab=clerks', label: 'My Clerks', type: 'route' },
-    ] : []),
-    ...(role === 'client' ? [{ to: '/services', label: 'Marketplace', type: 'route' }] : []),
-    { to: '/inquiries', label: 'Inquiries', badge: unreadCounts.inquiries || 0, type: 'route' },
-    { to: '/messages', label: 'Messages', badge: unreadCounts.messages || 0, type: 'route' },
-    { to: '/notifications', label: 'Notifications', badge: unreadCounts.notifications || 0, type: 'route' },
-    { to: '/bookings', label: 'Bookings', badge: unreadCounts.bookings || 0, type: 'route' },
-    { to: '/dashboard?tab=profile', label: 'Profile', type: 'route' },
+    { to: '/dashboard', label: 'Overview', group: 'My Garden', type: 'route' },
+    ...(role === 'client' ? [{ to: '/services', label: 'Marketplace', group: 'My Garden', type: 'route' }] : []),
+    { to: '/inquiries', label: 'Inquiries', badge: unreadCounts.inquiries || 0, group: 'My Garden', type: 'route' },
+    { to: '/bookings', label: 'Bookings', badge: unreadCounts.bookings || 0, group: 'My Garden', type: 'route' },
+    { to: '/assistant', label: 'AI Assistant', group: 'My Garden', type: 'route' },
+    { to: '/messages', label: 'Messages', badge: unreadCounts.messages || 0, group: 'Account', type: 'route' },
+    { to: '/notifications', label: 'Notifications', badge: unreadCounts.notifications || 0, group: 'Account', type: 'route' },
+    { to: '/dashboard?tab=profile', label: 'Profile', group: 'Account', type: 'route' },
   ]
 }
 

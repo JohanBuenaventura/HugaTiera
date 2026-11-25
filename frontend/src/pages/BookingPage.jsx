@@ -20,8 +20,10 @@ import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
+import Modal from '../components/Modal'
 import StarRating from '../components/StarRating'
 import TransientSuccess from '../components/TransientSuccess'
+import { formatPHP } from '../utils/currency'
 
 const AGREEMENT_STEPS = [
   { id: 1, label: 'Scope & price' },
@@ -190,7 +192,6 @@ function BookingForm() {
       <Link className="back-link" to={direct ? `/services/${serviceId}` : (resolvedInquiryId ? `/inquiries/${resolvedInquiryId}` : '/inquiries')}>
         <ArrowLeft size={15} /> Back
       </Link>
-      <p className="eyebrow">{direct ? 'Direct service agreement proposal' : 'Mutual service agreement'}</p>
       <h1>Propose scope, price, and schedule.</h1>
       <p className="booking-note">
         Approving the same agreement version creates a <strong>Reservation</strong> holding the schedule slot. Submitting and verifying at least the required deposit (or full payment) upgrades it into a <strong>Confirmed Booking</strong>.
@@ -964,13 +965,9 @@ function BookingDetails({ id }) {
   return (
     <section className="container booking-content">
       <Link className="back-link" to="/bookings"><ArrowLeft size={15} /> Back to bookings</Link>
-      <p className="eyebrow">
-        {isTransactionClosed
-          ? `Closed Transaction #${booking.id}`
-          : (isBookedPaid ? `Confirmed Booking #${booking.id}` : `Reservation #${booking.id} (Payment Required)`)}
-      </p>
       <h1>{booking.service_title || 'Gardening service'}</h1>
       <div className="booking-status-row">
+        <span className="category-pill">Booking #{booking.id}</span>
         <span className={getStatusBadgeClass(booking.booking_stage)}>{formatStatusLabel(booking.booking_stage)}</span>
         <span className={getStatusBadgeClass(booking.payment_status)}>{formatStatusLabel(booking.payment_status)}</span>
         <span className={getStatusBadgeClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
@@ -1243,17 +1240,15 @@ function BookingDetails({ id }) {
             </div>
           )}
 
-          {activeCheckoutModal && (
-            <div
-              className="gateway-demo-backdrop"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="demo-checkout-title"
-              onClick={(e) => { if (e.target === e.currentTarget && !processingGateway) setActiveCheckoutModal(null) }}
-            >
-              <div className="gateway-demo-modal">
-                <p className="eyebrow" style={{ marginBottom: '4px' }}>HugaTiera Third-Party Checkout Simulator</p>
-                <h2 id="demo-checkout-title">Authorize Online Payment</h2>
+          <Modal
+            open={Boolean(activeCheckoutModal)}
+            onClose={() => { if (!processingGateway) setActiveCheckoutModal(null) }}
+            closeDisabled={processingGateway}
+            eyebrow="HugaTiera Third-Party Checkout Simulator"
+            title="Authorize Online Payment"
+          >
+            {activeCheckoutModal && (
+              <>
                 <p className="field-note">
                   Simulated PayMongo Checkout session (Sandbox / Demo Mode — no real funds are debited). Completing this step verifies your payment immediately and upgrades your booking.
                 </p>
@@ -1261,7 +1256,7 @@ function BookingDetails({ id }) {
                   <div><dt>Transaction code</dt><dd><strong>{activeCheckoutModal.transactionCode}</strong></dd></div>
                   <div><dt>Session ID</dt><dd><code>{activeCheckoutModal.sessionId}</code></dd></div>
                   <div><dt>Payment method</dt><dd>{PAYMENT_METHOD_LABELS[activeCheckoutModal.paymentMethod] || activeCheckoutModal.paymentMethod}</dd></div>
-                  <div><dt>Amount due</dt><dd><strong>₱{Number(activeCheckoutModal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></dd></div>
+                  <div><dt>Amount due</dt><dd><strong>{formatPHP(activeCheckoutModal.amount || 0, { decimals: 2 })}</strong></dd></div>
                 </dl>
                 <div className="gateway-demo-actions">
                   <button
@@ -1289,9 +1284,9 @@ function BookingDetails({ id }) {
                     Close
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </Modal>
 
           {payments.length > 0 && (
             <div className="payment-history-list">
@@ -1400,22 +1395,20 @@ function BookingDetails({ id }) {
             </div>
           )}
 
-          {rejectPaymentTarget && (
-            <div
-              className="gateway-demo-backdrop no-print"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="reject-payment-title"
-              onClick={(e) => {
-                if (e.target === e.currentTarget && !verifyingPaymentId) {
-                  setRejectPaymentTarget(null)
-                  setRejectPaymentReason('')
-                }
-              }}
-            >
-              <div className="gateway-demo-modal">
-                <p className="eyebrow" style={{ marginBottom: '4px' }}>Payment verification</p>
-                <h2 id="reject-payment-title">Reject payment proof?</h2>
+          <Modal
+            open={Boolean(rejectPaymentTarget)}
+            onClose={() => {
+              if (!verifyingPaymentId) {
+                setRejectPaymentTarget(null)
+                setRejectPaymentReason('')
+              }
+            }}
+            closeDisabled={Boolean(verifyingPaymentId)}
+            eyebrow="Payment verification"
+            title="Reject payment proof?"
+          >
+            {rejectPaymentTarget && (
+              <>
                 <p className="field-note">
                   Provide a clear reason for rejecting {rejectPaymentTarget.transaction_code || `Payment #${rejectPaymentTarget.id}`}. The client will be notified so they can re-submit valid proof.
                 </p>
@@ -1456,9 +1449,9 @@ function BookingDetails({ id }) {
                     </button>
                   </div>
                 </form>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </Modal>
         </div>
 
         <div className="detail-facts">
@@ -1990,7 +1983,6 @@ function BookingList() {
 
   return (
     <section className="container booking-content">
-      <p className="eyebrow">Reservations, payments &amp; confirmed bookings</p>
       <h1>Reservations and bookings.</h1>
       <p className="booking-note">
         Approved agreements start as <strong>Reservations</strong>. Once a partial deposit or full payment is verified, they become <strong>Confirmed Bookings</strong>. After work completion and full payment, both parties sign the closing agreement to unlock rating.
@@ -2050,7 +2042,7 @@ function BookingList() {
                 : 'View booking'))
           return (
             <article className="marketplace-card visual-market-card" key={booking.id}>
-              <div className="marketplace-card-media">
+              <Link className="marketplace-card-media card-media-link" to={`/bookings/${booking.id}`} aria-label={`Open ${booking.service_title || 'booking'}`}>
                 {coverUrl ? (
                   <img src={coverUrl} alt={booking.service_title || 'Gardening service'} loading="lazy" />
                 ) : (
@@ -2062,9 +2054,13 @@ function BookingList() {
                 <span className={`${getStatusBadgeClass(stageBadgeKey)} media-status-badge`}>
                   {stageBadgeLabel}
                 </span>
-              </div>
+              </Link>
               <div className="marketplace-card-body">
-                <h2>{booking.service_title || 'Gardening service'}</h2>
+                <h2>
+                  <Link className="card-title-link" to={`/bookings/${booking.id}`}>
+                    {booking.service_title || 'Gardening service'}
+                  </Link>
+                </h2>
                 <p>
                   {booking.agreed_scope || booking.notes || 'Gardening service arrangement.'}
                 </p>

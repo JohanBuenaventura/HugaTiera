@@ -2468,8 +2468,8 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   .protected-page > .container,
   .dashboard-page > .dashboard-content {
     width: calc(100% - 210px);
-    max-width: 1400px;
-    padding: 36px 40px 88px;
+    max-width: none;
+    padding: 22px 28px 80px;
   }
   .app-sidebar.is-collapsed + .container,
   .app-sidebar.is-collapsed + .dashboard-content {
@@ -3743,13 +3743,14 @@ body {
   text-transform: uppercase;
 }
 
-/* More breathing room on booking & review cards */
+/* Full-width booking & review cards */
 .booking-detail-card,
 .booking-form,
 .review-form,
 .review-card,
 .review-locked-notice {
-  max-width: 960px;
+  width: 100%;
+  max-width: none;
 }
 .booking-detail-card {
   padding: 28px 30px;
@@ -3805,7 +3806,8 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  max-width: 960px;
+  width: 100%;
+  max-width: none;
   margin: 18px 0 14px;
   padding: 0;
 }
@@ -3865,7 +3867,8 @@ tbody tr:hover {
 
 /* Role-Aware Next-Step Callout Banner */
 .booking-next-banner {
-  max-width: 960px;
+  width: 100%;
+  max-width: none;
   margin: 0 0 18px;
   padding: 14px 18px;
   border-radius: 12px;
@@ -6256,7 +6259,8 @@ tbody tr:hover {
   font-size: 12.5px;
 }
 .booking-stepper-caption {
-  max-width: 960px;
+  width: 100%;
+  max-width: none;
   margin: 6px 0 0;
 }
 
@@ -6568,14 +6572,15 @@ tbody tr:hover {
 }
 
 .dashboard-page > .dashboard-content {
-  width: min(1240px, calc(100% - 210px));
+  width: calc(100% - 210px);
   max-width: none;
   margin-left: 210px;
-  padding-top: 48px;
-  padding-bottom: 96px;
+  padding-top: 22px;
+  padding-bottom: 84px;
 }
 .dashboard-page > .app-sidebar.is-collapsed + .dashboard-content {
-  width: min(1320px, calc(100% - 64px));
+  width: calc(100% - 64px);
+  max-width: none;
   margin-left: 64px;
 }
 @media (max-width: 1100px) {
@@ -6774,5 +6779,140 @@ tbody tr:hover {
   .payment-record-facts {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+}
+
+
+/* ==========================================================================
+   Wave 2: Skip Link, Native <dialog> Modal & Error Boundary Primitives
+   ========================================================================== */
+
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  position: fixed;
+  z-index: 2000;
+  top: 12px;
+  left: 12px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--forest);
+  color: var(--ivory);
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow-md);
+}
+
+dialog.app-dialog {
+  width: min(500px, calc(100vw - 24px));
+  max-width: 100%;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 54px rgba(16, 30, 22, .28);
+  overflow: hidden;
+}
+dialog.app-dialog::backdrop {
+  background: rgba(16, 30, 22, .62);
+  backdrop-filter: blur(3px);
+}
+.app-dialog-surface {
+  display: grid;
+  gap: 14px;
+  max-height: calc(100dvh - 32px);
+  padding: 22px 24px;
+  overflow-y: auto;
+}
+.app-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.app-dialog-eyebrow {
+  margin: 0 0 4px;
+}
+.app-dialog-title {
+  margin: 0;
+  color: var(--forest);
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 24px;
+  line-height: 1.2;
+}
+.app-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.app-dialog-close:hover:not(:disabled) {
+  background: var(--forest-soft);
+  border-color: var(--forest);
+  color: var(--forest);
+}
+.app-dialog-close:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.app-dialog-body {
+  display: grid;
+  gap: 12px;
+}
+@media (max-width: 560px) {
+  .app-dialog-surface {
+    padding: 18px 16px;
+  }
+  .app-dialog-title {
+    font-size: 21px;
+  }
+}
+
+.error-boundary-page {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 24px 16px;
+  background: var(--ivory);
+}
+.error-boundary-card {
+  width: min(520px, 100%);
+  padding: 32px 28px;
+}
+.error-boundary-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: var(--amber-soft);
+  color: var(--amber-text);
+}
+
+@media print {
+  .app-dialog {
+    display: none !important;
   }
 }
