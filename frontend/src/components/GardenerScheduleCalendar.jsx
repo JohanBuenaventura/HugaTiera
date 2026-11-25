@@ -326,7 +326,7 @@ export default function GardenerScheduleCalendar({ profileForm, onUnavailableDat
 
       {isOpen && (
         <div className="calendar-dropdown-body" id="gardener-calendar-body">
-          {notice && <TransientSuccess key={notice} message={notice} />}
+          {notice && <TransientSuccess key={notice} message={notice} onDismiss={() => setNotice('')} />}
           {error && <div className="form-error" role="alert">{error}</div>}
 
           {urgencySummary.priorityQueue.length > 0 && (

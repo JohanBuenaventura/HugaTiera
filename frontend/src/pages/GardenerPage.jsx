@@ -93,7 +93,7 @@ export default function GardenerPage() {
                   </button>
                 </div>
               )}
-              {reportStatus.message && <TransientSuccess key={reportStatus.message} message={reportStatus.message} style={{ marginTop: '12px' }} />}
+              {reportStatus.message && <TransientSuccess key={reportStatus.message} message={reportStatus.message} onDismiss={() => setReportStatus((prev) => ({ ...prev, message: '' }))} style={{ marginTop: '12px' }} />}
               {reportStatus.error && <div className="form-error" role="alert" style={{ marginTop: '12px' }}>{reportStatus.error}</div>}
               {reporting && (
                 <form className="profile-form" onSubmit={submitReport} style={{ marginTop: '14px', maxWidth: '520px' }}>

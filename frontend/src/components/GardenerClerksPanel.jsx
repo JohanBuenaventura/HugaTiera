@@ -110,7 +110,7 @@ export default function GardenerClerksPanel() {
       </p>
 
       {error && <div className="form-error" role="alert" style={{ marginBottom: '14px' }}>{error}</div>}
-      {notice && <TransientSuccess key={notice} message={notice} style={{ marginBottom: '14px' }} />}
+      {notice && <TransientSuccess key={notice} message={notice} onDismiss={() => setNotice('')} style={{ marginBottom: '14px' }} />}
 
       <div className="dashboard-grid">
         <div>

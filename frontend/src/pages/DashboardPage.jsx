@@ -200,7 +200,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   const isUnderage = computedAge !== null && computedAge < MIN_REGISTRATION_AGE
 
   return <form className="profile-form" onSubmit={submit}>
-    {message && <TransientSuccess key={message} message={message} />}
+    {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} />}
     {error && <div className="form-error" role="alert">{error}</div>}
     <div className="avatar-upload-row">
       <div className="avatar-preview">
@@ -511,7 +511,7 @@ function GardenerTools({ isApproved, section = 'services' }) {
             </div>
             <Link className="text-link" to="/dashboard">Back to overview</Link>
           </div>
-          {message && <TransientSuccess key={message} message={message} />}
+          {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} />}
           {error && <div className="form-error" role="alert">{error}</div>}
           <form className="profile-form" onSubmit={savePortfolio}>
             <label>Title<input required placeholder="e.g. Tropical patio makeover" value={imageForm.title} onChange={(event) => setImageForm({ ...imageForm, title: event.target.value })} /></label>
@@ -553,7 +553,7 @@ function GardenerTools({ isApproved, section = 'services' }) {
         <p className="field-note" style={{ marginBottom: '16px' }}>
           {isApproved ? 'Your active services are visible in the public marketplace.' : 'Your services are saved, but they will remain hidden until an administrator approves your gardener profile.'}
         </p>
-        {message && <TransientSuccess key={message} message={message} />}
+        {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} />}
         {error && <div className="form-error" role="alert">{error}</div>}
         <form className="profile-form" onSubmit={saveService}>
           <div className="form-row">
@@ -1398,13 +1398,49 @@ function OnboardingGuide({ role, form, counts }) {
     ]
 
   const completedSteps = checklist.filter((item) => item.done).length
+  const allComplete = completedSteps === checklist.length
+
+  if (allComplete) {
+    return (
+      <details className="workspace-onboarding-panel workspace-onboarding-compact">
+        <summary className="workspace-onboarding-summary">
+          <span className="workspace-onboarding-summary-copy">
+            <span className="workspace-onboarding-marker is-done-inline" aria-hidden="true">✓</span>
+            <strong>You&apos;re all set</strong>
+            <span className="field-note">All {checklist.length} onboarding steps complete — click to review workflow guide</span>
+          </span>
+          <span className="workspace-onboarding-progress">
+            {completedSteps} of {checklist.length} complete
+          </span>
+        </summary>
+        <div className="how-it-works-body" style={{ paddingTop: '14px' }}>
+          <p>
+            {isClient
+              ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
+              : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
+          </p>
+          <ol className="booking-stepper" aria-label="How HugaTiera works">
+            {flow.map((step) => (
+              <li className="booking-step" key={step.num}>
+                <span className="booking-step-num" aria-hidden="true">{step.num}</span>
+                <span className="booking-step-copy">
+                  <strong>{step.title}</strong>
+                  <small>{step.text}</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </details>
+    )
+  }
 
   return (
     <section className="workspace-onboarding-panel" aria-labelledby="workspace-onboarding-title">
       <div className="workspace-onboarding-heading">
         <div>
           <p className="eyebrow">Getting started</p>
-          <h2 id="workspace-onboarding-title">{completedSteps === checklist.length ? "You're all set" : 'Your next steps'}</h2>
+          <h2 id="workspace-onboarding-title">Your next steps</h2>
         </div>
         <span className="workspace-onboarding-progress">
           {completedSteps} of {checklist.length} complete
@@ -1550,7 +1586,7 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
           )}
         </div>
         {roleError && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{roleError}</div>}
-        {roleNotice && <TransientSuccess message={roleNotice} style={{ marginBottom: '12px' }} />}
+        {roleNotice && <TransientSuccess key={roleNotice} message={roleNotice} onDismiss={() => setRoleNotice('')} style={{ marginBottom: '12px' }} />}
 
         {loading && (isProfileView || activeTab === 'overview') ? (
           <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading dashboard details">

@@ -343,7 +343,7 @@ function BookingForm() {
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
-              <button className="button" type="submit">
+              <button className="button" type="submit" disabled={checkingSchedule || (activeScheduleCheck && !activeScheduleCheck.available)}>
                 <span>Review agreement</span>
                 <ArrowRight size={16} />
               </button>
@@ -353,6 +353,12 @@ function BookingForm() {
         {agreementStep === 3 && (
           <div className="agreement-step-panel">
             <p className="auth-section-title">Step 3 of 3 · Review &amp; propose</p>
+            {!checkingSchedule && activeScheduleCheck && !activeScheduleCheck.available && (
+              <div className="availability-banner is-conflict" role="alert">
+                <ShieldAlert size={16} />
+                <span>{activeScheduleCheck.message}</span>
+              </div>
+            )}
             <dl className="inquiry-review-summary">
               <div><dt>Scope of work</dt><dd>{form.scopeOfWork || 'Not provided'}</dd></div>
               <div><dt>Agreed price</dt><dd>{form.amount ? `₱${Number(form.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Not provided'}</dd></div>
@@ -413,7 +419,6 @@ function BookingDetails({ id }) {
     receiptFile: null,
   })
   const [paymentChannel, setPaymentChannel] = useState('online')
-  const [paymentStep, setPaymentStep] = useState(1)
   const [gatewayConfig, setGatewayConfig] = useState(null)
   const [activeCheckoutModal, setActiveCheckoutModal] = useState(null)
   const [rejectPaymentTarget, setRejectPaymentTarget] = useState(null)
@@ -919,7 +924,11 @@ function BookingDetails({ id }) {
       >
         <form className="dashboard-panel profile-form review-form" onSubmit={submitReview} style={{ width: '100%', maxWidth: '520px', margin: '0 auto' }}>
           <p className="eyebrow" style={{ textAlign: 'center' }}>Final step</p>
-          <h2 style={{ textAlign: 'center' }}>Review this service</h2>
+          <h2 style={{ textAlign: 'center', marginBottom: '4px' }}>Review this service</h2>
+          <p className="field-note" style={{ textAlign: 'center', marginTop: 0 }}>
+            <strong>{booking.service_title || 'Gardening service'}</strong>
+            {booking.gardener_name ? ` · ${booking.gardener_name}` : ''}
+          </p>
           <div className="review-rating-field" style={{ justifyItems: 'center', textAlign: 'center' }}>
             <span className="review-rating-label">Rating</span>
             <StarRating
@@ -1028,7 +1037,7 @@ function BookingDetails({ id }) {
           </button>
         </div>
       )}
-      {statusMessage && <TransientSuccess key={statusMessage} message={statusMessage} style={{ marginBottom: '16px' }} />}
+      {statusMessage && <TransientSuccess key={statusMessage} message={statusMessage} onDismiss={() => setStatusMessage('')} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <article className="dashboard-panel booking-detail-card">
         <div className="payment-status-panel">
@@ -1087,31 +1096,7 @@ function BookingDetails({ id }) {
                 </button>
               </div>
 
-              {paymentStep === 1 ? (
-                <div className="register-step-actions payment-step-actions">
-                  <button
-                    className="button"
-                    type="button"
-                    onClick={() => setPaymentStep(2)}
-                  >
-                    <span>Continue to payment details</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <p className="auth-section-title">Step 2 of 2 · Payment details</p>
-                  <div className="register-step-actions payment-step-actions">
-                    <button
-                      type="button"
-                      className="register-back-btn"
-                      onClick={() => setPaymentStep(1)}
-                    >
-                      <ArrowLeft size={16} />
-                      <span>Back to payment options</span>
-                    </button>
-                  </div>
-                  {paymentChannel === 'online' ? (
+              {paymentChannel === 'online' ? (
                 <form className="profile-form payment-submit-form" onSubmit={handleOnlineCheckoutStart}>
                   <div className="gateway-info-strip">
                     <ShieldCheck size={16} />
@@ -1217,13 +1202,13 @@ function BookingDetails({ id }) {
                         onClick={() => setPaymentForm({
                           ...paymentForm,
                           paymentType: 'partial',
-                          amount: String(Math.max(20, Number((Number(booking.required_deposit_amount) - Number(booking.amount_paid || 0)).toFixed(2)))),
+                          amount: String(Math.max(1, Number((Number(booking.required_deposit_amount) - Number(booking.amount_paid || 0)).toFixed(2)))),
                         })}
                       >
                         Fill Required Deposit (₱{Math.max(0, Number(booking.required_deposit_amount) - Number(booking.amount_paid || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })})
                       </button>
                     )}
-                    {Number(booking.remaining_balance || 0) >= 20 && (
+                    {Number(booking.remaining_balance || 0) >= 1 && (
                       <button
                         type="button"
                         className="table-action"
@@ -1254,8 +1239,6 @@ function BookingDetails({ id }) {
                     </button>
                   </div>
                 </form>
-              )}
-                </>
               )}
             </div>
           )}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, CalendarDays, Clock, Leaf, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, Clock, Leaf, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
 import TransientSuccess from '../components/TransientSuccess'
@@ -100,7 +100,7 @@ export default function ServiceDetailPage() {
             <p className="eyebrow">Service provider</p>
             <h2>{service.business_name || `${service.first_name} ${service.last_name}`}</h2>
             <p>{service.gardener_description || 'A local gardening service provider on HugaTiera.'}</p>
-            <Link className="text-link" to={`/gardeners/${service.gardener_id}`}>View gardener profile <ArrowLeft size={15} /></Link>
+            <Link className="text-link" to={`/gardeners/${service.gardener_id}`}>View gardener profile <ArrowRight size={15} /></Link>
             {availability?.schedule && (
               <div className="availability-preview-box">
                 <p className="eyebrow" style={{ marginBottom: '6px' }}>Availability &amp; crew capacity</p>
@@ -126,7 +126,7 @@ export default function ServiceDetailPage() {
                 </button>
               </div>
             )}
-            {reportStatus.message && <TransientSuccess key={reportStatus.message} message={reportStatus.message} style={{ marginTop: '12px' }} />}
+            {reportStatus.message && <TransientSuccess key={reportStatus.message} message={reportStatus.message} onDismiss={() => setReportStatus((prev) => ({ ...prev, message: '' }))} style={{ marginTop: '12px' }} />}
             {reportStatus.error && <div className="form-error" role="alert" style={{ marginTop: '12px' }}>{reportStatus.error}</div>}
             {reporting && (
               <form className="profile-form" onSubmit={submitReport} style={{ marginTop: '14px' }}>

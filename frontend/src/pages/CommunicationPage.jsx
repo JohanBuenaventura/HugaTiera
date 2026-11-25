@@ -107,6 +107,7 @@ export default function CommunicationPage({ mode = 'messages' }) {
   const initialParamHandled = useRef(false)
   const isNotificationsView = mode === 'notifications'
   const isMemberWorkspace = ['client', 'gardener'].includes(user?.role)
+  const showNotificationBadges = ['client', 'gardener', 'clerk'].includes(user?.role)
 
   const loadConversations = useCallback(() => {
     if (isNotificationsView) return Promise.resolve()
@@ -252,7 +253,7 @@ export default function CommunicationPage({ mode = 'messages' }) {
                   )}
                   <div className="notification-list notification-feed-compact">
                     {shown.map((notification) => {
-                      const presentation = isMemberWorkspace ? getNotificationPresentation(notification) : null
+                      const presentation = showNotificationBadges ? getNotificationPresentation(notification) : null
                       const Icon = presentation?.Icon
                       return (
                         <button

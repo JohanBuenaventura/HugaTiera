@@ -1431,7 +1431,7 @@ function InquiryDetails({ id }) {
           <p>{nextStepGuidance.text}</p>
         </div>
       )}
-      {message && <TransientSuccess key={message} message={message} style={{ marginBottom: '16px' }} />}
+      {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <div className="inquiry-detail-grid">
         <article className="dashboard-panel">
@@ -1906,8 +1906,17 @@ function InquiryDetails({ id }) {
         </article>
         {canGardenerRespond && (
           <form className="dashboard-panel profile-form" onSubmit={sendQuote}>
-            <p className="eyebrow">{editingQuoteId ? 'Revise active offer' : 'Respond to client'}</p>
-            <h2>{editingQuoteId ? 'Update your offer before acceptance.' : 'Evaluate feasibility and send an offer.'}</h2>
+            <div className="activity-heading">
+              <div>
+                <p className="eyebrow">{editingQuoteId ? 'Revise active offer' : 'Respond to client'}</p>
+                <h2>{editingQuoteId ? 'Update your offer before acceptance.' : 'Evaluate feasibility and send an offer.'}</h2>
+              </div>
+              {editingQuoteId && (
+                <button className="table-action" type="button" onClick={cancelReviseQuote}>
+                  Cancel edit
+                </button>
+              )}
+            </div>
             {inquiry.estimated_min_amount && inquiry.estimated_max_amount && (
               <div className="gardener-estimate-ref">
                 <strong>System predicted range: {formatEstimateRange(inquiry.estimated_min_amount, inquiry.estimated_max_amount)}</strong>
@@ -2064,11 +2073,6 @@ function InquiryDetails({ id }) {
                     {submittingQuote ? 'Saving...' : editingQuoteId ? 'Save revised offer' : 'Send response'}
                   </button>
                 </div>
-                {editingQuoteId && (
-                  <button className="table-action" type="button" onClick={cancelReviseQuote}>
-                    Cancel edit
-                  </button>
-                )}
               </div>
             )}
           </form>
