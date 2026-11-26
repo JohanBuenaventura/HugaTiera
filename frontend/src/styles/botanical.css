@@ -980,22 +980,9 @@ textarea {
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease !important;
 }
 
-.landing-category-card:nth-child(4n+1) { background: #DCE8D5 !important; color: #1E3326; }
-.landing-category-card:nth-child(4n+2) { background: #C8DABF !important; color: #1B2E22; }
-.landing-category-card:nth-child(4n+3) { background: #EAF2E5 !important; color: #263D2E; }
-.landing-category-card:nth-child(4n+4) {
-  background: #304936 !important;
-  border-color: #263D2E !important;
-  color: #F7F5EC !important;
-}
-.landing-category-card:nth-child(4n+4) h3,
-.landing-category-card:nth-child(4n+4) p,
-.landing-category-card:nth-child(4n+4) .landing-category-arrow {
-  color: #F7F5EC !important;
-}
-.landing-category-card:nth-child(4n+4) .landing-category-icon {
-  background: rgba(165, 185, 148, 0.24) !important;
-  color: #DCE8D5 !important;
+.landing-category-card {
+  background: #DCE8D5 !important;
+  color: #1D2C22;
 }
 
 .landing-step-num {

@@ -71,12 +71,17 @@ function validateMobileNumber(rawValue, { required = false } = {}) {
   if (phone.length > 30) {
     return { error: 'Mobile number must be 30 characters or fewer.' }
   }
-  if (!/^[+\d\s().-]+$/.test(phone)) {
+  if (!/^\+?[\d\s().-]+$/.test(phone)) {
     return { error: 'Mobile number contains invalid characters.' }
   }
   const digits = phone.replace(/\D/g, '')
-  if (digits.length < 10 || digits.length > 15) {
-    return { error: 'Please enter a valid mobile number (10 to 15 digits).' }
+  const isLocalMobile = /^09\d{9}$/.test(digits)
+  const isInternationalMobile = /^639\d{9}$/.test(digits)
+  const isPhilippineMobile = phone.startsWith('+')
+    ? isInternationalMobile
+    : isLocalMobile || isInternationalMobile
+  if (!isPhilippineMobile) {
+    return { error: 'Please enter a valid Philippine mobile number (e.g., 0917 123 4567 or +63 917 123 4567).' }
   }
   return { phone }
 }

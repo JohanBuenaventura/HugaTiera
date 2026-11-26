@@ -1573,6 +1573,10 @@
   line-height: 1.12;
 }
 
+.marketplace-page[data-workspace='public'] .botanical-hero-banner h1 {
+  color: #F7F5EC !important;
+}
+
 .marketplace-page[data-workspace='public'] .marketplace-lead {
   max-width: 650px;
   margin-bottom: 24px;
@@ -1633,6 +1637,12 @@
 
 .marketplace-page[data-workspace='public'] .brand > span:last-child span {
   color: #7a4f15;
+}
+
+.marketplace-page[data-workspace='public'] .public-header .brand-mark {
+  color: #193b2b;
+  background: #f1c66c;
+  box-shadow: none;
 }
 
 .marketplace-page[data-workspace='public'] .public-header {

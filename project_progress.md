@@ -196,3 +196,16 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 - **Wave 2 Accessibility & Resilience Integration:**
   - Integrated `ErrorBoundary.jsx` (wrapping `<Routes>`), native `<dialog>` `Modal.jsx` (replacing `window.confirm`/`window.prompt` in Admin gardener approvals and standardizing dialogs across `DashboardPage`, `ClerkDashboard`, `GardenerClerksPanel`, and `BookingPage`), `currency.js` (`formatPHP`), `RouteTitleUpdater`, `Skip to main content` links, `AuthContext.updateUser` live sidebar sync, and the Gardener-mode guard with 1-click `Switch to Client Mode` on `/inquiries/new`.
 - **UI/UX Audit Docs:** Added `docs/ui-ux/` audit, inventory, research, recommendations, and implementation roadmap notes.
+
+## Small-Changes QA Branch — `small-changes` (2026-11-26)
+- Kept the requested QA fixes isolated on `small-changes`; no changes were made to `main`.
+- Updated public homepage/workspace logo navigation, resetting scroll to the top when users return to the homepage.
+- Corrected registration City / Province / ZIP label alignment; normalized landing category-card backgrounds and improved the public marketplace hero-heading contrast.
+- Added Philippine mobile-number format validation to registration and profile updates. Accepted formats are `09XXXXXXXXX`, `+639XXXXXXXXX`, and digits-only `639XXXXXXXXX`; validation checks format, not whether a number is assigned or reachable.
+- Profile completeness and Getting Started panels now disappear when complete; invalid phone numbers do not count toward profile completion.
+- Matched the public Services header leaf-mark colors to the homepage leaf mark while preserving dark text contrast on the white header.
+- Removed a duplicate `App.css` import found during the final pre-PR review; no styling behavior was changed by this cleanup.
+- Updated the corresponding API, architecture/workflow, and functionality documentation, plus focused registration validation tests.
+- Verified: frontend ESLint and production build pass; `backend/tests/registrationBasicInfo.test.js` passes (`3/3`); `git diff --check` passes. Browser QA verified homepage-logo navigation/scroll reset, uniform landing category cards, Philippine local and international valid phone formats, rejection of a foreign number, aligned desktop address fields, responsive stacked fields without horizontal overflow, and readable marketplace hero text.
+- Browser preview uses the process-only `DB_NAME=hugatiera_main_preview_20261125` override. The local `.env` still selects `hugatiera_db`, whose observed 19-table schema does not match this branch's 25-table preview schema. No database or `.env` changes/migrations were made; use a verified backup and explicit approval before migrating the local database.
+- Additional QA notes: the two signed-out `401` responses come from `/api/auth/me` and do not prevent public service data from loading; they appear to be expected authentication checks. Service-card illustrations remain placeholders rather than being replaced with potentially misleading, unapproved photos. Further authenticated Client/Gardener profile and onboarding checks remain pending; Phase 15 is not being marked complete.

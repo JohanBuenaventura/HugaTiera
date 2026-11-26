@@ -18,7 +18,6 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
-import './App.css'
 import './ClientGardener.css'
 import './styles/botanical.css'
 import editorialAbout from './assets/editorial-about.jpg'
@@ -140,9 +139,9 @@ const trustHighlights = [
   },
 ]
 
-function Logo({ to = '/' }) {
+function Logo() {
   return (
-    <Link className="brand" to={to} aria-label="HugaTiera home">
+    <Link className="brand" to="/" aria-label="HugaTiera home" onClick={() => window.scrollTo(0, 0)}>
       <span className="brand-mark" aria-hidden="true">
         <Leaf size={18} strokeWidth={2.4} />
       </span>
@@ -196,7 +195,7 @@ function HomePage() {
       <a className="skip-link visually-hidden" href="#main-content">Skip to main content</a>
       <header className="landing-header botanical-landing-header">
         <div className="landing-container landing-nav">
-          <Logo to={user ? '/dashboard' : '/'} />
+          <Logo />
           <button
             className="landing-menu-toggle"
             type="button"
@@ -589,7 +588,7 @@ function HomePage() {
       <footer className="landing-footer">
         <div className="landing-container landing-footer-grid">
           <div>
-            <Logo to={user ? '/dashboard' : '/'} />
+            <Logo />
             <p className="landing-footer-desc">
               Connecting homeowners and local gardening professionals across Zamboanga City with clear agreements and verified work.
             </p>
@@ -629,6 +628,10 @@ function HomePage() {
 
 function RouteTitleUpdater() {
   const { pathname, search } = useLocation()
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
 
   useEffect(() => {
     const params = new URLSearchParams(search)

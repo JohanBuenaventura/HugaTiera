@@ -61,7 +61,7 @@ This document provides the complete technical reference for all **16 REST API ro
     "role": "client"
   }
   ```
-  - **Validation & Security:** Rejects `role: "administrator"` and `role: "clerk"` with `400` (Clerk accounts are created by a service provider under `POST /api/profiles/me/clerks` or by an Administrator). Rejects underage registrants (`< 18` years old) and invalid mobile numbers (`< 10` or `> 15` digits) with `400`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs`. Registering as `'gardener'` (or `'both'`) enables `can_act_as_client = TRUE` and `can_act_as_gardener = TRUE` and creates both `client_profiles` and `gardener_profiles` rows.
+  - **Validation & Security:** Rejects `role: "administrator"` and `role: "clerk"` with `400` (Clerk accounts are created by a service provider under `POST /api/profiles/me/clerks` or by an Administrator). Rejects underage registrants (`< 18` years old) and malformed Philippine mobile numbers (local `09XXXXXXXXX` or international `+639XXXXXXXXX` format) with `400`. Rejects duplicate emails with `409`. Hashes password with `bcryptjs`. Registering as `'gardener'` (or `'both'`) enables `can_act_as_client = TRUE` and `can_act_as_gardener = TRUE` and creates both `client_profiles` and `gardener_profiles` rows.
 
 ---
 

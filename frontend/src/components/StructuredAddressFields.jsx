@@ -90,7 +90,7 @@ export default function StructuredAddressFields({
 
       <div className="form-row form-row-3">
         <label>
-          City / Municipality
+          <span className="structured-address-field-label">City / Municipality</span>
           <input
             name="city"
             aria-label="City"
@@ -105,7 +105,9 @@ export default function StructuredAddressFields({
         </label>
 
         <label>
-          Province <span className="label-note">(Optional)</span>
+          <span className="structured-address-field-label">
+            Province <span className="label-note">(Optional)</span>
+          </span>
           <input
             name="addressProvince"
             disabled={disabled}
@@ -118,7 +120,9 @@ export default function StructuredAddressFields({
         </label>
 
         <label>
-          ZIP / Postal code <span className="label-note">(Optional)</span>
+          <span className="structured-address-field-label">
+            ZIP / Postal code <span className="label-note">(Optional)</span>
+          </span>
           <input
             name="addressPostalCode"
             disabled={disabled}

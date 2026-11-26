@@ -67,6 +67,10 @@ import {
   parseStructuredAddress,
   validateStructuredAddress,
 } from '../utils/zamboangaAddress'
+import {
+  isValidPhilippineMobileNumber,
+  validatePhilippineMobileNumber,
+} from '../utils/philippineMobileNumber'
 
 function ProfileForm({ role, profile, userId, onSaved }) {
   const [form, setForm] = useState(profile)
@@ -145,6 +149,12 @@ function ProfileForm({ role, profile, userId, onSaved }) {
     event.preventDefault()
     setMessage(''); setError('')
 
+    const phoneError = validatePhilippineMobileNumber(form.phone)
+    if (phoneError) {
+      setError(phoneError)
+      return
+    }
+
     let payload = form
     if (role === 'client') {
       const hasAnyAddressInput = Boolean(
@@ -217,7 +227,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
     ? [
       { label: 'photo', done: Boolean(form.avatarPath) },
       { label: 'name', done: Boolean(form.firstName?.trim() && form.lastName?.trim()) },
-      { label: 'mobile number', done: Boolean(form.phone?.trim()) },
+      { label: 'mobile number', done: isValidPhilippineMobileNumber(form.phone) },
       { label: 'business name', done: Boolean(form.businessName?.trim()) },
       { label: 'service area', done: Boolean(form.serviceArea?.trim()) },
       { label: 'bio', done: Boolean(form.description?.trim()) },
@@ -225,7 +235,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
     : [
       { label: 'photo', done: Boolean(form.avatarPath) },
       { label: 'name', done: Boolean(form.firstName?.trim() && form.lastName?.trim()) },
-      { label: 'mobile number', done: Boolean(form.phone?.trim()) },
+      { label: 'mobile number', done: isValidPhilippineMobileNumber(form.phone) },
       { label: 'address', done: Boolean(form.address?.trim() || addressParts.barangay?.trim()) },
       { label: 'garden bio', done: Boolean(form.bio?.trim()) },
     ]
@@ -250,22 +260,24 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   }
 
   return <form className="profile-form" onSubmit={submit}>
-    <div className="profile-completeness-card">
-      <div className="profile-completeness-top">
-        <div>
-          <strong>Profile completeness: {completenessPct}%</strong>
-          <small>
-            {nextMissing
-              ? `Tip: Add your ${nextMissing.label} to make your profile easier to trust.`
-              : 'Great job! Your profile is complete and ready.'}
-          </small>
+    {completenessPct < 100 && (
+      <div className="profile-completeness-card">
+        <div className="profile-completeness-top">
+          <div>
+            <strong>Profile completeness: {completenessPct}%</strong>
+            <small>
+              {nextMissing
+                ? `Tip: Add your ${nextMissing.label} to make your profile easier to trust.`
+                : 'Great job! Your profile is complete and ready.'}
+            </small>
+          </div>
+          <span className="inquiry-status status-accepted">{doneCount}/{completenessChecks.length} done</span>
         </div>
-        <span className="inquiry-status status-accepted">{doneCount}/{completenessChecks.length} done</span>
+        <div className="analytics-bar-track" aria-hidden="true">
+          <div className="analytics-bar-fill" style={{ width: `${completenessPct}%` }} />
+        </div>
       </div>
-      <div className="analytics-bar-track" aria-hidden="true">
-        <div className="analytics-bar-fill" style={{ width: `${completenessPct}%` }} />
-      </div>
-    </div>
+    )}
 
     {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} />}
     {error && <div className="form-error" role="alert">{error}</div>}
@@ -335,7 +347,7 @@ function ProfileForm({ role, profile, userId, onSaved }) {
             </div>
           </label>
         </div>
-        <div className="form-row"><label>Mobile number<input type="tel" maxLength="30" placeholder="0917 123 4567" value={form.phone || ''} onChange={change('phone')} /></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
+        <div className="form-row"><label>Mobile number<input type="tel" maxLength="30" placeholder="0917 123 4567 or +63 917 123 4567" value={form.phone || ''} onChange={change('phone')} /></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
       </div>
     )}
     {role === 'client' && profileSection === 'address' && (
@@ -2023,9 +2035,8 @@ function DashboardActivity({ role }) {
 
 function OnboardingGuide({ role, form, counts }) {
   const isClient = role === 'client'
-  const profileReady = Boolean(
-    form.phone && (isClient ? (form.address || form.city) : (form.serviceArea || form.city))
-  )
+  const profileReady = isValidPhilippineMobileNumber(form.phone)
+    && Boolean(isClient ? (form.address || form.city) : (form.serviceArea || form.city))
   const hasRequests = Number(counts.inquiries || 0) > 0
   const hasBookings = Number(counts.bookings || 0) > 0
   const hasServices = Number(counts.services || 0) > 0
@@ -2061,38 +2072,7 @@ function OnboardingGuide({ role, form, counts }) {
   const allComplete = completedSteps === checklist.length
 
   if (allComplete) {
-    return (
-      <details className="workspace-onboarding-panel workspace-onboarding-compact">
-        <summary className="workspace-onboarding-summary">
-          <span className="workspace-onboarding-summary-copy">
-            <span className="workspace-onboarding-marker is-done-inline" aria-hidden="true">✓</span>
-            <strong>You&apos;re all set</strong>
-            <span className="field-note">All {checklist.length} onboarding steps complete — click to review workflow guide</span>
-          </span>
-          <span className="workspace-onboarding-progress">
-            {completedSteps} of {checklist.length} complete
-          </span>
-        </summary>
-        <div className="how-it-works-body" style={{ paddingTop: '14px' }}>
-          <p>
-            {isClient
-              ? 'HugaTiera connects you with gardeners in Zamboanga City. Here is the whole journey — an inquiry or offer is never a booking on its own.'
-              : 'Here is how work reaches you on HugaTiera — a client request or offer is never a booking on its own.'}
-          </p>
-          <ol className="booking-stepper" aria-label="How HugaTiera works">
-            {flow.map((step) => (
-              <li className="booking-step" key={step.num}>
-                <span className="booking-step-num" aria-hidden="true">{step.num}</span>
-                <span className="booking-step-copy">
-                  <strong>{step.title}</strong>
-                  <small>{step.text}</small>
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </details>
-    )
+    return null
   }
 
   return (
