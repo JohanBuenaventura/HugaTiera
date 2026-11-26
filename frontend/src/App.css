@@ -5137,6 +5137,10 @@ tbody tr:hover {
   display: grid;
   gap: 14px;
 }
+.structured-address-grid .form-row-3 > label > .structured-address-field-label {
+  display: block;
+  min-height: 3em;
+}
 .structured-address-grid select {
   display: block;
   width: 100%;
@@ -5173,6 +5177,9 @@ tbody tr:hover {
 @media (max-width: 640px) {
   .role-options-3 {
     grid-template-columns: 1fr;
+  }
+  .structured-address-grid .form-row-3 > label > .structured-address-field-label {
+    min-height: 0;
   }
 }
 

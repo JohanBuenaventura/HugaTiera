@@ -209,10 +209,10 @@ export default function AppSidebar() {
         <div className="app-sidebar-topline">
           <Link
             className="brand app-sidebar-brand"
-            to="/dashboard"
+            to="/"
             onClick={closeMobile}
-            aria-label="HugaTiera dashboard"
-            title={collapsed ? 'HugaTiera dashboard' : undefined}
+            aria-label="HugaTiera home"
+            title={collapsed ? 'HugaTiera home' : undefined}
           >
             <span className="brand-mark" aria-hidden="true"><Leaf size={18} /></span>
             <span className="app-sidebar-brand-label">Huga<span>Tiera</span></span>

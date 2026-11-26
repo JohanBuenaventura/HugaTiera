@@ -14,6 +14,7 @@ import {
   formatAddressPreview,
   validateStructuredAddress,
 } from '../utils/zamboangaAddress'
+import { validatePhilippineMobileNumber } from '../utils/philippineMobileNumber'
 import { LoginBotanicalScene, RegisterBotanicalScene } from '../components/BotanicalIllustrations'
 
 function AuthLayout({ title, children, footer, wide = false, mode = 'login' }) {
@@ -266,10 +267,8 @@ export function RegisterPage() {
   }
 
   function validateStepTwo() {
-    const phoneDigits = form.phone.replace(/\D/g, '')
-    if (phoneDigits.length < 10 || phoneDigits.length > 15) {
-      return 'Please enter a valid mobile number (10 to 15 digits).'
-    }
+    const phoneError = validatePhilippineMobileNumber(form.phone, { required: true })
+    if (phoneError) return phoneError
     if (form.role === 'client') {
       const addrError = validateStructuredAddress(form.addressParts, { requireFields: true })
       if (addrError) return addrError
@@ -531,7 +530,7 @@ export function RegisterPage() {
                   required
                   maxLength="30"
                   autoComplete="tel"
-                  placeholder="e.g., 0917 123 4567"
+                  placeholder="0917 123 4567 or +63 917 123 4567"
                   value={form.phone}
                   onChange={updateField('phone')}
                 />

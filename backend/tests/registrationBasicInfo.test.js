@@ -66,7 +66,7 @@ describe('Registration Basic Info, Optional Middle Name & 18+ Birthday Validatio
     await pool.end()
   })
 
-  it('rejects underage, future, invalid birthday, bad mobile number, password mismatch, and missing client address', async () => {
+  it('rejects underage, future, invalid birthday, non-Philippine mobile numbers, password mismatch, and missing client address', async () => {
     const basePayload = {
       firstName: 'Ana',
       middleName: 'Reyes',
@@ -116,6 +116,19 @@ describe('Registration Basic Info, Optional Middle Name & 18+ Birthday Validatio
       body: { ...basePayload, phone: '12345' },
     })
     assert.equal(shortPhone.status, 400)
+
+    const foreignPhone = await api('/auth/register', {
+      method: 'POST',
+      body: { ...basePayload, phone: '+1 202 555 0117' },
+    })
+    assert.equal(foreignPhone.status, 400)
+    assert.match(foreignPhone.data.message, /Philippine mobile number/i)
+
+    const invalidPhilippinePrefix = await api('/auth/register', {
+      method: 'POST',
+      body: { ...basePayload, phone: '+63 217 555 0199' },
+    })
+    assert.equal(invalidPhilippinePrefix.status, 400)
 
     // Password mismatch -> 400
     const mismatch = await api('/auth/register', {
