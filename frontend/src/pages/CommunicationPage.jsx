@@ -186,6 +186,34 @@ const NOTIFICATION_TABS = [
   { key: 'messages', label: 'Messages & Other' },
 ]
 
+function getNotificationTone(notification, presentation) {
+  const type = notification.notification_type || ''
+  const title = notification.title || ''
+  if (
+    presentation.priority === 'urgent'
+    || type === 'agreement_cancelled'
+    || /rejected|declined|cancelled/i.test(title)
+  ) {
+    return 'red'
+  }
+  if (presentation.category === 'offer' || (presentation.category === 'agreement' && type !== 'agreement_approved')) {
+    return 'orange'
+  }
+  if (presentation.category === 'booking' || type === 'agreement_approved') {
+    return 'green'
+  }
+  if (presentation.category === 'payment') {
+    return 'teal'
+  }
+  if (presentation.category === 'request') {
+    return 'blue'
+  }
+  if (presentation.category === 'review') {
+    return 'gold'
+  }
+  return 'olive'
+}
+
 function getNotificationPresentation(notification) {
   const type = notification.notification_type
   const presentation = notificationPresentationByType[type] || {
@@ -505,14 +533,15 @@ export default function CommunicationPage({ mode = 'messages' }) {
                         const { presentation } = notification
                         const Icon = presentation.Icon
                         const hasLink = Boolean(notificationPath(notification, user))
+                        const tone = getNotificationTone(notification, presentation)
                         return (
                           <button
-                            className={`notification-item notif-row-clean${notification.read_at ? '' : ' is-unread'}`}
+                            className={`notification-item notif-row-clean notif-tone--${tone}${notification.read_at ? '' : ' is-unread'}`}
                             type="button"
                             onClick={() => openNotification(notification)}
                             key={notification.id}
                           >
-                            <span className={`notif-icon-tile notif-icon-tile--${presentation.category}`} aria-hidden="true">
+                            <span className={`notif-icon-tile notif-icon-tile--${presentation.category} notif-tile-tone--${tone}`} aria-hidden="true">
                               <Icon size={16} strokeWidth={2} />
                             </span>
                             <div className="notification-body">

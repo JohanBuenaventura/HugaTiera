@@ -1185,3 +1185,64 @@ textarea {
 .ai-chat-window {
   border-radius: var(--radius-lg);
 }
+
+/* 13. Semantic Color Coding for Notifications */
+.notif-row-clean {
+  border-left: 4px solid transparent !important;
+  border-radius: 16px !important;
+  margin-bottom: 8px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease !important;
+}
+
+.notif-row-clean:hover {
+  transform: translateX(3px);
+}
+
+.notif-row-clean.notif-tone--red {
+  border-left-color: #C94A3D !important;
+  background: #FDF3F2 !important;
+}
+.notif-row-clean.notif-tone--red:hover { background: #FBE9E7 !important; }
+.notif-tile-tone--red { background: #FADAD6 !important; color: #9E2A1F !important; }
+
+.notif-row-clean.notif-tone--orange {
+  border-left-color: #D88A3B !important;
+  background: #FDF6EC !important;
+}
+.notif-row-clean.notif-tone--orange:hover { background: #FAECD9 !important; }
+.notif-tile-tone--orange { background: #F6DFC2 !important; color: #8F5214 !important; }
+
+.notif-row-clean.notif-tone--green {
+  border-left-color: #2E6F40 !important;
+  background: #EFF7F1 !important;
+}
+.notif-row-clean.notif-tone--green:hover { background: #E3F1E7 !important; }
+.notif-tile-tone--green { background: #D2EBD9 !important; color: #1E502C !important; }
+
+.notif-row-clean.notif-tone--teal {
+  border-left-color: #1F7A6E !important;
+  background: #EEF8F6 !important;
+}
+.notif-row-clean.notif-tone--teal:hover { background: #E0F2EF !important; }
+.notif-tile-tone--teal { background: #C9EAE4 !important; color: #14564D !important; }
+
+.notif-row-clean.notif-tone--blue {
+  border-left-color: #3B6E8C !important;
+  background: #EFF5F9 !important;
+}
+.notif-row-clean.notif-tone--blue:hover { background: #E2EEF6 !important; }
+.notif-tile-tone--blue { background: #D0E4F0 !important; color: #244C64 !important; }
+
+.notif-row-clean.notif-tone--gold {
+  border-left-color: #C48A22 !important;
+  background: #FEF9EC !important;
+}
+.notif-row-clean.notif-tone--gold:hover { background: #FCF2D9 !important; }
+.notif-tile-tone--gold { background: #F8E5B3 !important; color: #7C530A !important; }
+
+.notif-row-clean.notif-tone--olive {
+  border-left-color: #6B8556 !important;
+  background: #F4F7EF !important;
+}
+.notif-row-clean.notif-tone--olive:hover { background: #EAF0E2 !important; }
+.notif-tile-tone--olive { background: #DCE6D0 !important; color: #3D522D !important; }
