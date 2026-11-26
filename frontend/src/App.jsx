@@ -21,11 +21,14 @@ import './App.css'
 import './App.css'
 import './ClientGardener.css'
 import './styles/botanical.css'
+import editorialAbout from './assets/editorial-about.jpg'
+import editorialFeature from './assets/editorial-feature.jpg'
+import editorialProcess1 from './assets/editorial-process-1.jpg'
+import editorialProcess2 from './assets/editorial-process-2.jpg'
+import editorialProcess4 from './assets/editorial-process-4.jpg'
 import {
-  EmptyGardenIllustration,
   GardenPlanningIllustration,
   GardenerCareIllustration,
-  PottedPlantIllustration,
   WelcomeBotanicalScene,
 } from './components/BotanicalIllustrations'
 import { AuthProvider } from './context/AuthContext'
@@ -88,26 +91,29 @@ const workflowSteps = [
     num: '01',
     title: 'Share your space',
     description: 'Browse approved local services or post an open request with garden photos and AI-assisted scope notes.',
-    Illustration: PottedPlantIllustration,
-    variant: 'monstera',
+    image: editorialFeature,
+    alt: 'Raised wooden garden bed filled with fresh green herbs and leafy plants',
   },
   {
     num: '02',
     title: 'Compare clear offers',
     description: 'Approved Zamboanga City gardeners review site feasibility and send itemized offers.',
-    Illustration: GardenPlanningIllustration,
+    image: editorialProcess2,
+    alt: 'Collection of healthy potted indoor and terrace plants in bright natural light',
   },
   {
     num: '03',
     title: 'Agree together',
     description: 'Review and approve the exact scope, agreed price, schedule, and deposit on the same agreement version.',
-    Illustration: GardenerCareIllustration,
+    image: editorialProcess1,
+    alt: 'Garden trowel with fresh potting soil prepared for planting',
   },
   {
     num: '04',
     title: 'Confirm & enjoy',
     description: 'Bookings are created only after mutual approval—with verified payment tracking and post-job reviews.',
-    Illustration: EmptyGardenIllustration,
+    image: editorialProcess4,
+    alt: 'Gardener carefully planting young green seedlings into prepared garden beds',
   },
 ]
 
@@ -372,23 +378,76 @@ function HomePage() {
             </div>
 
             <div className="landing-process-grid">
-              {workflowSteps.map((step) => {
-                const StepArt = step.Illustration
-                return (
-                  <article className="landing-process-card" key={step.num}>
-                    <div className="landing-process-media" style={{ display: 'grid', placeItems: 'center', background: 'var(--cream)', padding: '16px' }}>
-                      <div style={{ width: '130px', height: '110px', display: 'grid', placeItems: 'center' }}>
-                        <StepArt variant={step.variant} />
-                      </div>
-                      <span className="landing-step-num">{step.num}</span>
-                    </div>
-                    <div className="landing-process-body">
-                      <h3>{step.title}</h3>
-                      <p>{step.description}</p>
-                    </div>
-                  </article>
-                )
-              })}
+              {workflowSteps.map((step) => (
+                <article className="landing-process-card" key={step.num}>
+                  <div className="landing-process-media">
+                    <img src={step.image} alt={step.alt} loading="lazy" />
+                    <span className="landing-step-num">{step.num}</span>
+                  </div>
+                  <div className="landing-process-body">
+                    <h3>{step.title}</h3>
+                    <p>{step.description}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-section landing-section-alt" id="real-example">
+          <div className="landing-container">
+            <div className="landing-section-head">
+              <div>
+                <p className="eyebrow" style={{ marginBottom: '6px' }}>Real-life Zamboanga City walkthrough</p>
+                <h2>See how a real backyard refresh works.</h2>
+                <p>Example scenario: A homeowner in Barangay Tetuan wants to turn an overgrown 20 m² front yard into a low-maintenance tropical garden.</p>
+              </div>
+            </div>
+            <div className="botanical-real-example-card">
+              <div className="botanical-real-photo-wrap">
+                <img
+                  src={editorialAbout}
+                  alt="Real landscaped home garden pathway with lush tropical plants and trimmed greenery"
+                  loading="lazy"
+                />
+                <span className="botanical-photo-chip botanical-float">
+                  <Sparkles size={13} aria-hidden="true" /> Live Care Preview
+                </span>
+                <svg className="botanical-photo-butterfly botanical-butterfly" viewBox="0 0 36 28" fill="none" aria-hidden="true">
+                  <ellipse cx="11" cy="14" rx="8" ry="5" transform="rotate(-22 11 14)" fill="#D8A16F" />
+                  <ellipse cx="25" cy="14" rx="8" ry="5" transform="rotate(22 25 14)" fill="#F7F5EC" stroke="#263D2E" strokeWidth="1.5" />
+                  <line x1="18" y1="8" x2="18" y2="21" stroke="#263D2E" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div>
+                <span className="landing-pill" style={{ marginBottom: '10px', display: 'inline-block' }}>Sample Project · Tetuan, Zamboanga City</span>
+                <h3 style={{ fontSize: '26px', margin: '0 0 10px', color: 'var(--forest)' }}>Tropical Front Yard &amp; Potted Border</h3>
+                <p style={{ color: 'var(--muted)', lineHeight: 1.6, margin: '0 0 16px' }}>
+                  The client snaps 2 yard photos, asks the AI Assistant for sun-tolerant plants (Snake Plant, Areca Palm, Bougainvillea), and receives itemized offers from nearby approved gardeners before locking in a mutual agreement.
+                </p>
+                <div className="botanical-info-badges">
+                  <div className="botanical-info-badge">
+                    <small>Sunlight</small>
+                    <strong>Bright / Partial</strong>
+                  </div>
+                  <div className="botanical-info-badge">
+                    <small>Timeline</small>
+                    <strong>1-Day Visit</strong>
+                  </div>
+                  <div className="botanical-info-badge">
+                    <small>Typical Budget</small>
+                    <strong>₱2,500 – ₱3,500</strong>
+                  </div>
+                </div>
+                <div className="landing-hero-actions" style={{ marginTop: '14px' }}>
+                  <Link className="landing-btn landing-btn-amber" to={user ? '/inquiries/new?type=general' : '/services'}>
+                    Try this for your yard <ArrowRight size={15} />
+                  </Link>
+                  <Link className="landing-btn landing-btn-ghost" to="/assistant">
+                    Ask AI Garden Plan
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </section>

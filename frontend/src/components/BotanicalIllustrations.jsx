@@ -13,37 +13,39 @@ export function WelcomeBotanicalScene({ className = '' }) {
     >
       {/* Soft backdrop trapezoid / garden frame */}
       <path d="M52 74L322 44V222H52V74Z" fill="#FAF9F5" opacity="0.92" />
-      <circle cx="96" cy="52" r="5" stroke="#303A30" strokeWidth="1.5" opacity="0.55" />
-      <circle cx="294" cy="40" r="6" stroke="#303A30" strokeWidth="1.5" opacity="0.5" />
-      <circle cx="268" cy="112" r="3" fill="#263D2E" opacity="0.65" />
-      <circle cx="384" cy="96" r="4" fill="#D8A16F" opacity="0.85" />
-      <circle cx="222" cy="56" r="3.5" fill="#A5B994" />
+      <circle className="botanical-drift-1" cx="96" cy="52" r="5" stroke="#303A30" strokeWidth="1.5" opacity="0.55" />
+      <circle className="botanical-drift-2" cx="294" cy="40" r="6" stroke="#303A30" strokeWidth="1.5" opacity="0.5" />
+      <circle className="botanical-pulse" cx="268" cy="112" r="3" fill="#263D2E" opacity="0.65" />
+      <circle className="botanical-drift-1" cx="384" cy="96" r="4" fill="#D8A16F" opacity="0.85" />
+      <circle className="botanical-drift-2" cx="222" cy="56" r="3.5" fill="#A5B994" />
 
       {/* Left semicircle planter */}
       <path d="M48 222C48 271.706 88.2944 312 138 312C187.706 312 228 271.706 228 222H48Z" fill="#2B3040" />
       <path d="M90 222C90 248.51 111.49 270 138 270C164.51 270 186 248.51 186 222H90Z" fill="#A5B994" />
 
-      {/* Botanical stems & circular leaves */}
-      <path d="M138 222V88" stroke="#263D2E" strokeWidth="2.5" strokeLinecap="round" />
-      <circle cx="138" cy="78" r="24" fill="#A5B994" />
-      <circle cx="138" cy="78" r="10" fill="#B5BE9A" />
+      {/* Botanical stems & circular leaves (gently swaying in the breeze) */}
+      <g className="botanical-sway">
+        <path d="M138 222V88" stroke="#263D2E" strokeWidth="2.5" strokeLinecap="round" />
+        <circle cx="138" cy="78" r="24" fill="#A5B994" />
+        <circle cx="138" cy="78" r="10" fill="#B5BE9A" />
 
-      <path d="M138 158C138 158 104 148 92 128" stroke="#263D2E" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="88" cy="122" r="17" fill="#A5B994" />
-      <path d="M138 186C138 186 112 178 102 162" stroke="#263D2E" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="100" cy="160" r="10" fill="#B5BE9A" />
+        <path d="M138 158C138 158 104 148 92 128" stroke="#263D2E" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="88" cy="122" r="17" fill="#A5B994" />
+        <path d="M138 186C138 186 112 178 102 162" stroke="#263D2E" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="100" cy="160" r="10" fill="#B5BE9A" />
 
-      <path d="M138 140C138 140 174 132 190 112" stroke="#263D2E" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="196" cy="108" r="16" fill="#A5B994" />
-      <path d="M138 192C138 192 168 186 180 170" stroke="#263D2E" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="184" cy="166" r="11" fill="#D8A16F" opacity="0.75" />
+        <path d="M138 140C138 140 174 132 190 112" stroke="#263D2E" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="196" cy="108" r="16" fill="#A5B994" />
+        <path d="M138 192C138 192 168 186 180 170" stroke="#263D2E" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="184" cy="166" r="11" fill="#D8A16F" opacity="0.75" />
+      </g>
 
       {/* Right semicircle & friendly sitting character */}
       <path d="M232 222C232 268.392 269.608 306 316 306C362.392 306 400 268.392 400 222H232Z" fill="#304936" />
       <path d="M236 222C264 206 304 202 332 222H236Z" fill="#E9E2CE" opacity="0.22" />
 
-      {/* Sitting person holding a young plant */}
-      <g transform="translate(278, 92)">
+      {/* Sitting person holding a young plant (gently bobbing) */}
+      <g className="botanical-bob" transform="translate(278, 92)">
         {/* Hair & head */}
         <circle cx="44" cy="24" r="15" fill="#263D2E" />
         <circle cx="44" cy="8" r="7" fill="#263D2E" />
@@ -57,9 +59,18 @@ export function WelcomeBotanicalScene({ className = '' }) {
         <ellipse cx="62" cy="128" rx="8" ry="4.5" fill="#FAF9F5" />
         {/* Arm & small sprout */}
         <path d="M32 48L14 66L28 72" stroke="#F2D2B6" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M14 64V44" stroke="#263D2E" strokeWidth="2" strokeLinecap="round" />
-        <ellipse cx="9" cy="46" rx="7" ry="4" transform="rotate(-25 9 46)" fill="#A5B994" />
-        <ellipse cx="19" cy="46" rx="7" ry="4" transform="rotate(25 19 46)" fill="#B5BE9A" />
+        <g className="botanical-sprout-wave">
+          <path d="M14 64V44" stroke="#263D2E" strokeWidth="2" strokeLinecap="round" />
+          <ellipse cx="9" cy="46" rx="7" ry="4" transform="rotate(-25 9 46)" fill="#A5B994" />
+          <ellipse cx="19" cy="46" rx="7" ry="4" transform="rotate(25 19 46)" fill="#B5BE9A" />
+        </g>
+      </g>
+
+      {/* Cartoony fluttering butterfly */}
+      <g className="botanical-butterfly" transform="translate(226, 74)">
+        <ellipse cx="-6" cy="0" rx="6" ry="4" transform="rotate(-20 -6 0)" fill="#D8A16F" />
+        <ellipse cx="6" cy="0" rx="6" ry="4" transform="rotate(20 6 0)" fill="#E9E2CE" stroke="#263D2E" strokeWidth="1" />
+        <line x1="0" y1="-4" x2="0" y2="5" stroke="#263D2E" strokeWidth="1.6" strokeLinecap="round" />
       </g>
     </svg>
   )
@@ -115,8 +126,8 @@ export function GardenPlanningIllustration({ className = '' }) {
     >
       <path d="M36 96C36 58 74 28 118 32C162 36 190 66 184 102C178 134 138 144 96 142C56 140 36 122 36 96Z" fill="#E9E2CE" opacity="0.7" />
       {/* Sun / spark orb */}
-      <circle cx="156" cy="48" r="16" fill="#D8A16F" opacity="0.85" />
-      <circle cx="156" cy="48" r="24" stroke="#D8A16F" strokeWidth="1.5" strokeDasharray="4 4" />
+      <circle className="botanical-pulse" cx="156" cy="48" r="16" fill="#D8A16F" opacity="0.85" />
+      <circle className="botanical-spin-slow" cx="156" cy="48" r="24" stroke="#D8A16F" strokeWidth="1.5" strokeDasharray="4 4" />
       {/* Stylized botanical hills */}
       <path d="M46 122C66 94 98 92 122 122H46Z" fill="#A5B994" />
       <path d="M98 122C122 86 158 86 180 122H98Z" fill="#263D2E" />
@@ -194,6 +205,48 @@ export function BotanicalCornerAccent({ className = '' }) {
       <circle cx="96" cy="24" r="48" fill="currentColor" opacity="0.12" />
       <path d="M110 10C88 18 76 34 74 56C94 52 108 36 110 10Z" fill="currentColor" opacity="0.2" />
       <path d="M84 4C66 16 58 30 60 48C74 42 84 26 84 4Z" fill="currentColor" opacity="0.14" />
+    </svg>
+  )
+}
+
+export function WateringGardenScene({ className = '' }) {
+  return (
+    <svg
+      className={`botanical-svg ${className}`}
+      viewBox="0 0 280 220"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* Warm cream organic backdrop */}
+      <circle cx="142" cy="116" r="88" fill="#E9E2CE" opacity="0.7" />
+      <circle className="botanical-pulse" cx="222" cy="48" r="18" fill="#D8A16F" opacity="0.85" />
+
+      {/* Ground hill */}
+      <path d="M44 176C64 146 112 142 150 176H44Z" fill="#A5B994" />
+      <path d="M112 176C144 144 198 144 234 176H112Z" fill="#304936" />
+
+      {/* Potted tropical plant */}
+      <path d="M138 148H188L182 184C181 188 178 190 174 190H152C148 190 145 188 144 184L138 148Z" fill="#FAF9F5" stroke="#263D2E" strokeWidth="2.2" />
+      <rect x="134" y="140" width="58" height="10" rx="5" fill="#D8A16F" />
+      <g className="botanical-sway-plant">
+        <path d="M163 140V84" stroke="#263D2E" strokeWidth="2.8" strokeLinecap="round" />
+        <path d="M163 114C142 108 130 94 134 78C150 82 160 96 163 114Z" fill="#263D2E" />
+        <path d="M163 106C186 98 196 84 192 68C176 72 166 86 163 106Z" fill="#304936" />
+        <ellipse cx="163" cy="74" rx="12" ry="18" fill="#A5B994" />
+      </g>
+
+      {/* Tilted cartoony watering can */}
+      <g className="botanical-can-tilt">
+        <rect x="44" y="54" width="46" height="36" rx="10" fill="#D8A16F" stroke="#263D2E" strokeWidth="2" />
+        <path d="M44 64C30 64 30 84 44 84" stroke="#263D2E" strokeWidth="3.5" strokeLinecap="round" />
+        <path d="M90 74L116 86L112 94L88 84Z" fill="#D8A16F" stroke="#263D2E" strokeWidth="2" />
+      </g>
+
+      {/* Animated falling water droplets */}
+      <circle className="botanical-drop-1" cx="122" cy="96" r="3.5" fill="#5B9669" />
+      <circle className="botanical-drop-2" cx="132" cy="104" r="3" fill="#A5B994" />
+      <circle className="botanical-drop-3" cx="126" cy="112" r="3.5" fill="#5B9669" />
     </svg>
   )
 }
