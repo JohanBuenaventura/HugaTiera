@@ -18,7 +18,6 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
-import './App.css'
 import './ClientGardener.css'
 import './styles/botanical.css'
 import editorialAbout from './assets/editorial-about.jpg'
