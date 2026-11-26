@@ -7,6 +7,7 @@ import {
   Briefcase,
   CalendarCheck,
   CalendarDays,
+  ChevronDown,
   ClipboardList,
   CreditCard,
   Images,
@@ -43,6 +44,27 @@ export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('hugatiera.sidebar.collapsed') === 'true')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState(() => {
+    try {
+      const raw = localStorage.getItem('hugatiera.sidebar.collapsedGroups')
+      const parsed = raw ? JSON.parse(raw) : {}
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  })
+
+  const toggleGroup = (groupKey) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [groupKey]: !prev[groupKey] }
+      try {
+        localStorage.setItem('hugatiera.sidebar.collapsedGroups', JSON.stringify(next))
+      } catch {
+        // Ignore storage errors
+      }
+      return next
+    })
+  }
 
   const refreshUnreadCounts = useCallback(() => {
     if (!user || !['client', 'gardener', 'clerk', 'administrator'].includes(user.role)) return
@@ -217,23 +239,53 @@ export default function AppSidebar() {
         </div>
         <div className="app-sidebar-drawer">
           <nav className="app-sidebar-nav" aria-label="Application navigation">
-            {links.map((item, idx) => {
+            {(() => {
               const hasGroups = links.some((entry) => Boolean(entry.group))
-              const showGroupHeader = hasGroups
-                ? item.group !== links[idx - 1]?.group
-                : idx === 0
-              const groupLabel = hasGroups ? item.group : 'Navigation'
-              return (
-                <div key={item.label} className="app-sidebar-nav-item-wrap">
-                  {showGroupHeader && (
-                    <div className={`app-sidebar-section-label${idx > 0 ? ' is-secondary' : ''}`}>
-                      {groupLabel}
+              const grouped = []
+              for (const item of links) {
+                const label = hasGroups ? (item.group || 'Navigation') : 'Navigation'
+                const last = grouped[grouped.length - 1]
+                if (last && last.label === label) {
+                  last.items.push(item)
+                } else {
+                  grouped.push({ label, items: [item] })
+                }
+              }
+              return grouped.map((section, sectionIdx) => {
+                const groupKey = `${user.role}:${section.label}`
+                const isGroupCollapsed = !collapsed && Boolean(collapsedGroups[groupKey])
+                const groupUnread = section.items.reduce((sum, entry) => sum + Number(entry.badge || 0), 0)
+                return (
+                  <div key={groupKey} className={`app-sidebar-group${isGroupCollapsed ? ' is-group-collapsed' : ''}`}>
+                    <button
+                      type="button"
+                      className={`app-sidebar-section-btn${sectionIdx > 0 ? ' is-secondary' : ''}`}
+                      onClick={() => toggleGroup(groupKey)}
+                      aria-expanded={!isGroupCollapsed}
+                    >
+                      <span className="app-sidebar-section-label-text">{section.label}</span>
+                      <span className="app-sidebar-section-meta">
+                        {isGroupCollapsed && groupUnread > 0 && (
+                          <b className="notification-badge">{groupUnread > 99 ? '99+' : groupUnread}</b>
+                        )}
+                        <span className="app-sidebar-section-chevron-wrap" aria-hidden="true">
+                          <ChevronDown size={15} className="app-sidebar-section-chevron" />
+                        </span>
+                      </span>
+                    </button>
+                    <div
+                      className="app-sidebar-group-collapse"
+                      aria-hidden={isGroupCollapsed}
+                      inert={isGroupCollapsed ? '' : undefined}
+                    >
+                      <div className="app-sidebar-group-items">
+                        {section.items.map(renderLink)}
+                      </div>
                     </div>
-                  )}
-                  {renderLink(item)}
-                </div>
-              )
-            })}
+                  </div>
+                )
+              })
+            })()}
           </nav>
           <div className="app-sidebar-role">
             <span className="app-sidebar-avatar" aria-hidden="true">{user.firstName?.slice(0, 1) || 'H'}</span>

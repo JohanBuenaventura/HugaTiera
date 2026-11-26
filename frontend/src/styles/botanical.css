@@ -1462,3 +1462,166 @@ textarea {
     animation: none !important;
   }
 }
+
+/* 15. User-Friendly Profile Completeness & Section Cards */
+.profile-completeness-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  background: #F1F5EC;
+  border: 1px solid #C8D9C1;
+}
+
+.profile-completeness-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profile-completeness-top strong {
+  display: block;
+  color: var(--forest);
+  font-size: 15px;
+}
+
+.profile-completeness-top small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.profile-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-section-card {
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-white);
+  border: 1px solid var(--line);
+}
+
+.profile-save-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+/* 16. Collapsible Sidebar Section Dividers (Noticeable & Smooth Delayed) */
+.app-sidebar-group {
+  display: grid;
+  gap: 4px;
+}
+
+.app-sidebar-section-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin: 6px 0 2px;
+  padding: 8px 12px;
+  border: 1px solid #C8D9C1;
+  border-radius: 12px;
+  background: #E8F0E3;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.16s ease;
+}
+
+.app-sidebar-section-btn.is-secondary {
+  margin-top: 12px;
+}
+
+.app-sidebar-section-btn:hover {
+  background: #DCE8D5;
+  border-color: var(--forest);
+}
+
+.app-sidebar[data-user-role='client'] .app-sidebar-section-btn,
+.app-sidebar[data-user-role='gardener'] .app-sidebar-section-btn {
+  background: rgba(165, 185, 148, 0.18);
+  border-color: rgba(165, 185, 148, 0.36);
+  color: #FAF9F5;
+}
+
+.app-sidebar[data-user-role='client'] .app-sidebar-section-btn:hover,
+.app-sidebar[data-user-role='gardener'] .app-sidebar-section-btn:hover {
+  background: rgba(165, 185, 148, 0.3);
+  border-color: rgba(216, 161, 111, 0.75);
+}
+
+.app-sidebar-section-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-sidebar-section-chevron-wrap {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: rgba(38, 61, 46, 0.12);
+}
+
+.app-sidebar[data-user-role='client'] .app-sidebar-section-chevron-wrap,
+.app-sidebar[data-user-role='gardener'] .app-sidebar-section-chevron-wrap {
+  background: rgba(250, 249, 245, 0.16);
+  color: #F3C56D;
+}
+
+.app-sidebar-section-chevron {
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.06s;
+}
+
+.app-sidebar-group.is-group-collapsed .app-sidebar-section-chevron {
+  transform: rotate(-90deg);
+}
+
+.app-sidebar-group-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 0.38s cubic-bezier(0.22, 1, 0.36, 1) 0.07s, opacity 0.28s ease 0.07s;
+}
+
+.app-sidebar-group.is-group-collapsed .app-sidebar-group-collapse {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-sidebar-group-items {
+  display: grid;
+  gap: 4px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.app-sidebar.is-collapsed .app-sidebar-section-btn {
+  display: none;
+}
+
+.app-sidebar.is-collapsed .app-sidebar-group-collapse {
+  grid-template-rows: 1fr !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}

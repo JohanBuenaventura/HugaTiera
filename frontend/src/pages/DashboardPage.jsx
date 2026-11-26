@@ -213,33 +213,80 @@ function ProfileForm({ role, profile, userId, onSaved }) {
   const computedAge = calculateAgeFromDob(form.dateOfBirth)
   const isUnderage = computedAge !== null && computedAge < MIN_REGISTRATION_AGE
 
+  const completenessChecks = role === 'gardener'
+    ? [
+      { label: 'photo', done: Boolean(form.avatarPath) },
+      { label: 'name', done: Boolean(form.firstName?.trim() && form.lastName?.trim()) },
+      { label: 'mobile number', done: Boolean(form.phone?.trim()) },
+      { label: 'business name', done: Boolean(form.businessName?.trim()) },
+      { label: 'service area', done: Boolean(form.serviceArea?.trim()) },
+      { label: 'bio', done: Boolean(form.description?.trim()) },
+    ]
+    : [
+      { label: 'photo', done: Boolean(form.avatarPath) },
+      { label: 'name', done: Boolean(form.firstName?.trim() && form.lastName?.trim()) },
+      { label: 'mobile number', done: Boolean(form.phone?.trim()) },
+      { label: 'address', done: Boolean(form.address?.trim() || addressParts.barangay?.trim()) },
+      { label: 'garden bio', done: Boolean(form.bio?.trim()) },
+    ]
+  const doneCount = completenessChecks.filter((c) => c.done).length
+  const completenessPct = Math.round((doneCount / completenessChecks.length) * 100)
+  const nextMissing = completenessChecks.find((c) => !c.done)
+
+  const profileTabs = role === 'gardener'
+    ? [
+      { id: 'basic', label: '1. Personal & Contact' },
+      { id: 'business', label: '2. Business & Bio' },
+      { id: 'schedule', label: '3. Work Schedule' },
+    ]
+    : [
+      { id: 'basic', label: '1. Personal & Contact' },
+      { id: 'address', label: '2. Address & Garden Notes' },
+    ]
+
+  function applyDayPreset(codes) {
+    setError('')
+    setForm({ ...form, workingDays: codes })
+  }
+
   return <form className="profile-form" onSubmit={submit}>
+    <div className="profile-completeness-card">
+      <div className="profile-completeness-top">
+        <div>
+          <strong>Profile completeness: {completenessPct}%</strong>
+          <small>
+            {nextMissing
+              ? `Tip: Add your ${nextMissing.label} to make your profile easier to trust.`
+              : 'Great job! Your profile is complete and ready.'}
+          </small>
+        </div>
+        <span className="inquiry-status status-accepted">{doneCount}/{completenessChecks.length} done</span>
+      </div>
+      <div className="analytics-bar-track" aria-hidden="true">
+        <div className="analytics-bar-fill" style={{ width: `${completenessPct}%` }} />
+      </div>
+    </div>
+
     {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} />}
     {error && <div className="form-error" role="alert">{error}</div>}
-    {role === 'gardener' && (
-      <div className="profile-subtabs" role="tablist" aria-label="Profile sections">
+
+    <div className="profile-subtabs" role="tablist" aria-label="Profile sections">
+      {profileTabs.map((tab) => (
         <button
+          key={tab.id}
           type="button"
           role="tab"
-          aria-selected={profileSection === 'basic'}
-          className={`booking-filter-pill${profileSection === 'basic' ? ' is-active' : ''}`}
-          onClick={() => setProfileSection('basic')}
+          aria-selected={profileSection === tab.id}
+          className={`booking-filter-pill${profileSection === tab.id ? ' is-active' : ''}`}
+          onClick={() => setProfileSection(tab.id)}
         >
-          1. Personal info
+          {tab.label}
         </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={profileSection === 'business'}
-          className={`booking-filter-pill${profileSection === 'business' ? ' is-active' : ''}`}
-          onClick={() => setProfileSection('business')}
-        >
-          2. Business &amp; work schedule
-        </button>
-      </div>
-    )}
-    {(role !== 'gardener' || profileSection === 'basic') && (
-      <>
+      ))}
+    </div>
+
+    {profileSection === 'basic' && (
+      <div className="profile-section-card">
         <div className="avatar-upload-row">
           <div className="avatar-preview">
             {form.avatarPath ? (
@@ -289,28 +336,46 @@ function ProfileForm({ role, profile, userId, onSaved }) {
           </label>
         </div>
         <div className="form-row"><label>Mobile number<input type="tel" maxLength="30" placeholder="0917 123 4567" value={form.phone || ''} onChange={change('phone')} /></label><label>Email<input value={form.email || ''} disabled /><span className="field-note">Email cannot be changed here</span></label></div>
-      </>
+      </div>
     )}
-    {role === 'client' ? (
-      <>
-        <div className="auth-form-section">
-          <p className="auth-section-title">Address details</p>
+    {role === 'client' && profileSection === 'address' && (
+      <div className="profile-section-card">
+        <div className="auth-form-section" style={{ borderTop: 0, paddingTop: 0 }}>
+          <p className="auth-section-title">Home address in Zamboanga City</p>
           <StructuredAddressFields
             value={addressParts}
             onChange={handleAddressPartsChange}
             required={false}
           />
         </div>
-        <label>About you<textarea value={form.bio || ''} onChange={change('bio')} rows="4" /></label>
-      </>
-    ) : profileSection === 'business' ? (
-      <>
+        <label>
+          About your garden or yard <span className="label-note">(Optional)</span>
+          <textarea
+            value={form.bio || ''}
+            onChange={change('bio')}
+            rows="4"
+            placeholder="Share your yard size, favorite plants, or what kind of gardening help you usually need..."
+          />
+        </label>
+      </div>
+    )}
+    {role === 'gardener' && profileSection === 'business' && (
+      <div className="profile-section-card">
         <div className="form-row"><label>Business or display name<input placeholder="e.g. BuenHardino Lawn Care" value={form.businessName || ''} onChange={change('businessName')} /></label><label>Years of experience<input type="number" min="0" max="100" value={form.yearsOfExperience ?? ''} onChange={change('yearsOfExperience')} /></label></div>
-        <label>Service area <span className="label-note">(Where you work)</span><input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label>
+        <label>Service area <span className="label-note">(Barangays or areas you cover)</span><input required value={form.serviceArea || ''} onChange={change('serviceArea')} /></label>
         <label>About your gardening work<textarea placeholder="Tell homeowners what you specialize in..." value={form.description || ''} onChange={change('description')} rows="4" /></label>
-
-        <div className="schedule-settings-box">
-          <p className="auth-section-title">Days &amp; hours you accept work</p>
+      </div>
+    )}
+    {role === 'gardener' && profileSection === 'schedule' && (
+      <div className="schedule-settings-box">
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+          <p className="auth-section-title" style={{ margin: 0 }}>Days &amp; hours you accept work</p>
+          <div className="inline-actions" style={{ gap: '6px' }}>
+            <button type="button" className="table-action" onClick={() => applyDayPreset(['mon', 'tue', 'wed', 'thu', 'fri'])}>Mon–Fri</button>
+            <button type="button" className="table-action" onClick={() => applyDayPreset(['mon', 'tue', 'wed', 'thu', 'fri', 'sat'])}>Mon–Sat</button>
+            <button type="button" className="table-action" onClick={() => applyDayPreset(WEEKDAY_OPTIONS.map((d) => d.code))}>Every day</button>
+          </div>
+        </div>
           <div className="weekday-toggle-grid" role="group" aria-label="Working days">
             {WEEKDAY_OPTIONS.map((day) => {
               const checked = parseWorkingDaysArray(form.workingDays).includes(day.code)
@@ -434,13 +499,22 @@ function ProfileForm({ role, profile, userId, onSaved }) {
             </div>
           </details>
         </div>
-      </>
-    ) : null}
-    <div className="inline-actions">
-      <button className="button" type="submit" disabled={saving || isUnderage}><Save size={16} />{saving ? 'Saving...' : 'Save profile'}</button>
+    )}
+    <div className="profile-save-bar">
+      <button className="button" type="submit" disabled={saving || isUnderage}><Save size={16} />{saving ? 'Saving...' : 'Save profile changes'}</button>
+      {role === 'client' && profileSection === 'basic' && (
+        <button className="button button-outline" type="button" onClick={() => setProfileSection('address')}>
+          Next: Address &amp; Garden Notes <ArrowRight size={15} />
+        </button>
+      )}
       {role === 'gardener' && profileSection === 'basic' && (
         <button className="button button-outline" type="button" onClick={() => setProfileSection('business')}>
-          Next: Business &amp; schedule <ArrowRight size={15} />
+          Next: Business &amp; Bio <ArrowRight size={15} />
+        </button>
+      )}
+      {role === 'gardener' && profileSection === 'business' && (
+        <button className="button button-outline" type="button" onClick={() => setProfileSection('schedule')}>
+          Next: Work Schedule <ArrowRight size={15} />
         </button>
       )}
     </div>
