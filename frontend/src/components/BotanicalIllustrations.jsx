@@ -361,3 +361,45 @@ export function RegisterBotanicalScene({ className = '' }) {
     </svg>
   )
 }
+
+export function LogoutBotanicalScene({ className = '' }) {
+  return (
+    <svg
+      className={`botanical-svg ${className}`}
+      viewBox="0 0 320 200"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* Warm twilight garden backdrop */}
+      <circle cx="160" cy="102" r="84" fill="#F9EFE4" />
+      <circle className="botanical-pulse" cx="236" cy="54" r="16" fill="#D8A16F" opacity="0.88" />
+      <circle className="botanical-drift-1" cx="84" cy="52" r="4" fill="#A5B994" />
+      <circle className="botanical-drift-2" cx="256" cy="96" r="3.5" fill="#5B9669" />
+
+      {/* Resting potted plant */}
+      <path d="M188 134H232L226 168C225.5 171 223 173 220 173H200C197 173 194.5 171 194 168L188 134Z" fill="#FAF9F5" stroke="#263D2E" strokeWidth="2" />
+      <rect x="184" y="128" width="52" height="9" rx="4.5" fill="#D8A16F" stroke="#263D2E" strokeWidth="1.6" />
+      <g className="botanical-sway-plant" style={{ transformOrigin: '210px 128px' }}>
+        <path d="M210 128V84" stroke="#263D2E" strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M210 108C194 104 186 92 188 80C200 84 208 94 210 108Z" fill="#304936" />
+        <path d="M210 102C226 96 234 84 232 72C220 76 212 86 210 102Z" fill="#A5B994" />
+      </g>
+
+      {/* Friendly gardener waving goodbye */}
+      <g transform="translate(76, 76)">
+        <g className="botanical-welcome-wave">
+          <circle cx="32" cy="20" r="13" fill="#263D2E" />
+          <circle cx="34" cy="22" r="9" fill="#F2D2B6" />
+          <path d="M18 36C18 30 46 30 48 38L50 74H16L18 36Z" fill="#304936" />
+          <path d="M20 74V96M42 74V96" stroke="#2B3040" strokeWidth="8" strokeLinecap="round" />
+          {/* Waving goodbye arm */}
+          <path className="botanical-arm-wave" d="M46 42L66 22" stroke="#F2D2B6" strokeWidth="6" strokeLinecap="round" />
+        </g>
+      </g>
+
+      {/* Ground */}
+      <path d="M48 173H272" stroke="#263D2E" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  )
+}

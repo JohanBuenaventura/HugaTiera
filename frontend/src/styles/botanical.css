@@ -1414,3 +1414,51 @@ textarea {
 }
 .notif-row-clean.notif-tone--olive:hover { background: #EAF0E2 !important; }
 .notif-tile-tone--olive { background: #DCE6D0 !important; color: #3D522D !important; }
+
+/* 14. Animated Botanical Logout Confirmation Modal */
+@keyframes botanicalModalPop {
+  from { opacity: 0; transform: scale(0.92) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.botanical-logout-modal[open] .app-dialog-surface {
+  border-radius: var(--radius-xl);
+  border: 1px solid #C8D9C1;
+  background: var(--soft-offwhite);
+  box-shadow: var(--shadow-lg);
+  animation: botanicalModalPop 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.botanical-logout-body {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.botanical-logout-scene {
+  width: 100%;
+  max-width: 260px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: #F1F5EC;
+  border: 1px solid #D5E2CE;
+}
+
+.botanical-logout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.botanical-logout-actions .button {
+  flex: 1 1 140px;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .botanical-logout-modal[open] .app-dialog-surface {
+    animation: none !important;
+  }
+}

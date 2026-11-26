@@ -30,6 +30,8 @@ import { useAuth } from '../hooks/useAuth'
 import { communicationApi } from '../services/communication'
 import { getDashboardNavLinks } from '../services/profiles'
 import AiAssistantWidget from './AiAssistantWidget'
+import { LogoutBotanicalScene } from './BotanicalIllustrations'
+import Modal from './Modal'
 
 export default function AppSidebar() {
   const { user, logout, switchRole } = useAuth()
@@ -40,6 +42,7 @@ export default function AppSidebar() {
   const [roleSwitchError, setRoleSwitchError] = useState('')
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('hugatiera.sidebar.collapsed') === 'true')
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
 
   const refreshUnreadCounts = useCallback(() => {
     if (!user || !['client', 'gardener', 'clerk', 'administrator'].includes(user.role)) return
@@ -265,7 +268,7 @@ export default function AppSidebar() {
           <button
             className="app-sidebar-logout"
             type="button"
-            onClick={() => { closeMobile(); logout() }}
+            onClick={() => setLogoutConfirmOpen(true)}
             title={collapsed ? 'Log out' : undefined}
           >
             <LogOut size={16} />
@@ -273,6 +276,42 @@ export default function AppSidebar() {
           </button>
         </div>
       </aside>
+      <Modal
+        open={logoutConfirmOpen}
+        onClose={() => setLogoutConfirmOpen(false)}
+        eyebrow="Leaving your garden?"
+        title="Do you want to log out?"
+        className="botanical-logout-modal"
+      >
+        <div className="botanical-logout-body">
+          <div className="botanical-logout-scene">
+            <LogoutBotanicalScene />
+          </div>
+          <p className="field-note" style={{ margin: '0 0 18px', textAlign: 'center' }}>
+            Your inquiries, offers, and bookings will be waiting right here when you return.
+          </p>
+          <div className="botanical-logout-actions">
+            <button
+              className="button button-outline"
+              type="button"
+              onClick={() => setLogoutConfirmOpen(false)}
+            >
+              Stay signed in
+            </button>
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                setLogoutConfirmOpen(false)
+                closeMobile()
+                logout()
+              }}
+            >
+              <LogOut size={15} /> Yes, log out
+            </button>
+          </div>
+        </div>
+      </Modal>
       <nav className="mobile-bottom-nav" aria-label="Mobile quick navigation">
         {mobileNavLinks.map((item) => {
           const Icon = iconFor(item.label)
