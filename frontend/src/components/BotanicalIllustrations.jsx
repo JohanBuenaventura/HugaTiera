@@ -250,3 +250,114 @@ export function WateringGardenScene({ className = '' }) {
     </svg>
   )
 }
+
+export function LoginBotanicalScene({ className = '' }) {
+  return (
+    <svg
+      className={`botanical-svg ${className}`}
+      viewBox="0 0 360 250"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* Warm cream garden arch backdrop */}
+      <circle cx="180" cy="128" r="100" fill="#E4EDE0" />
+      <path d="M98 206V116C98 70.7127 134.713 34 180 34C225.287 34 262 70.7127 262 116V206H98Z" fill="#FAF9F5" stroke="#263D2E" strokeWidth="2.5" />
+
+      {/* Swaying vines on the garden archway */}
+      <g className="botanical-sway-arch">
+        <path d="M104 94C116 84 128 88 134 100" stroke="#304936" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="116" cy="84" r="9" fill="#A5B994" />
+        <circle cx="132" cy="96" r="7" fill="#5B9669" />
+        <path d="M256 94C244 84 232 88 226 100" stroke="#304936" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="244" cy="84" r="9" fill="#A5B994" />
+        <circle cx="228" cy="96" r="7" fill="#D8A16F" />
+      </g>
+
+      {/* Swinging open garden door / welcome portal */}
+      <g className="botanical-gate-swing">
+        <rect x="136" y="88" width="88" height="118" rx="44" fill="#304936" />
+        <circle cx="206" cy="148" r="5" fill="#D8A16F" />
+        <path d="M158 148H188" stroke="#A5B994" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="4 4" />
+      </g>
+
+      {/* Floating welcome key badge */}
+      <g className="botanical-key-float">
+        <rect x="234" y="54" width="64" height="34" rx="17" fill="#D8A16F" stroke="#263D2E" strokeWidth="2" />
+        <circle cx="252" cy="71" r="6" stroke="#263D2E" strokeWidth="2.2" fill="#FAF9F5" />
+        <path d="M258 71H282M276 71V77M282 71V76" stroke="#263D2E" strokeWidth="2.2" strokeLinecap="round" />
+      </g>
+
+      {/* Friendly waving character welcoming you back */}
+      <g transform="translate(56, 108)">
+        <g className="botanical-welcome-wave">
+          <circle cx="32" cy="20" r="13" fill="#263D2E" />
+          <circle cx="34" cy="22" r="9" fill="#F2D2B6" />
+          <path d="M18 36C18 30 46 30 48 38L50 74H16L18 36Z" fill="#5B9669" />
+          <path d="M20 74V98M42 74V98" stroke="#2B3040" strokeWidth="8" strokeLinecap="round" />
+          {/* Waving arm */}
+          <path className="botanical-arm-wave" d="M46 42L66 24" stroke="#F2D2B6" strokeWidth="6" strokeLinecap="round" />
+        </g>
+      </g>
+
+      {/* Ground */}
+      <path d="M40 206H320" stroke="#263D2E" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function RegisterBotanicalScene({ className = '' }) {
+  return (
+    <svg
+      className={`botanical-svg ${className}`}
+      viewBox="0 0 360 250"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <circle cx="180" cy="126" r="102" fill="#E4EDE0" />
+
+      {/* Floating account-creation checklist card */}
+      <g className="botanical-card-float">
+        <rect x="190" y="42" width="124" height="86" rx="16" fill="#FAF9F5" stroke="#263D2E" strokeWidth="2" />
+        <rect x="206" y="58" width="52" height="7" rx="3.5" fill="#A5B994" />
+        <rect x="206" y="72" width="84" height="6" rx="3" fill="#D2DEC8" />
+        <rect x="206" y="88" width="70" height="6" rx="3" fill="#D2DEC8" />
+        <rect x="206" y="104" width="60" height="6" rx="3" fill="#D2DEC8" />
+        {/* Animated green checkmark */}
+        <circle className="botanical-check-pop" cx="294" cy="64" r="11" fill="#304936" />
+        <path className="botanical-check-pop" d="M289 64L293 68L300 60" stroke="#FAF9F5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      </g>
+
+      {/* Terracotta / beige pot where a new garden account sprouts */}
+      <path d="M126 154H186L179 202C178 206 175 208 171 208H141C137 208 134 206 133 202L126 154Z" fill="#FAF9F5" stroke="#263D2E" strokeWidth="2.2" />
+      <rect x="120" y="146" width="72" height="11" rx="5.5" fill="#D8A16F" stroke="#263D2E" strokeWidth="1.8" />
+
+      {/* Growing sprout animation */}
+      <g className="botanical-sprout-grow">
+        <path d="M156 146V82" stroke="#263D2E" strokeWidth="3" strokeLinecap="round" />
+        <path d="M156 116C134 110 124 94 128 78C144 82 154 96 156 116Z" fill="#304936" />
+        <path d="M156 106C178 100 188 84 184 68C168 72 158 86 156 106Z" fill="#A5B994" />
+        <circle cx="156" cy="72" r="10" fill="#5B9669" />
+      </g>
+
+      {/* Gardener planting & nurturing the new sprout */}
+      <g transform="translate(46, 104)">
+        <g className="botanical-bob-register">
+          <circle cx="34" cy="20" r="13" fill="#F2D2B6" />
+          <path d="M18 18H50C46 6 22 6 18 18Z" fill="#D8A16F" />
+          <ellipse cx="34" cy="18" rx="22" ry="4" fill="#D8A16F" />
+          <path d="M18 36C18 30 48 30 50 38L52 80H16L18 36Z" fill="#263D2E" />
+          <path d="M20 80V104M44 80V104" stroke="#2B3040" strokeWidth="8" strokeLinecap="round" />
+          <path d="M48 46L74 58" stroke="#F2D2B6" strokeWidth="6" strokeLinecap="round" />
+        </g>
+      </g>
+
+      {/* Celebratory sparkles */}
+      <circle className="botanical-drift-1" cx="98" cy="64" r="4.5" fill="#D8A16F" />
+      <circle className="botanical-drift-2" cx="154" cy="46" r="4" fill="#5B9669" />
+      <circle className="botanical-pulse" cx="292" cy="154" r="5" fill="#A5B994" />
+      <path d="M36 208H324" stroke="#263D2E" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}

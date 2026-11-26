@@ -14,26 +14,38 @@ import {
   formatAddressPreview,
   validateStructuredAddress,
 } from '../utils/zamboangaAddress'
-import { WelcomeBotanicalScene } from '../components/BotanicalIllustrations'
+import { LoginBotanicalScene, RegisterBotanicalScene } from '../components/BotanicalIllustrations'
 
-function AuthLayout({ title, children, footer, wide = false }) {
+function AuthLayout({ title, children, footer, wide = false, mode = 'login' }) {
+  const isRegister = mode === 'register'
   return (
     <main className="auth-page editorial-auth-page">
       <div className={wide ? 'auth-layout auth-layout-register' : 'auth-layout'}>
         <aside className="auth-visual">
           <Link className="brand auth-visual-brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
-          <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
-            <WelcomeBotanicalScene />
+          <div className="auth-visual-scene-card">
+            {isRegister ? <RegisterBotanicalScene /> : <LoginBotanicalScene />}
           </div>
           <div className="auth-visual-copy">
-            <p className="editorial-kicker">Growing together, one leaf at a time</p>
-            <h2>Make room for<br /><em>something green.</em></h2>
-            <p>Your local companion for discovering Zamboanga City gardeners, planning ideas, and booking with confidence.</p>
+            <p className="editorial-kicker editorial-kicker-light">
+              {isRegister ? 'Plant your first seed' : 'Welcome back to your garden'}
+            </p>
+            <h2>
+              {isRegister ? <>Start growing<br /><em>with HugaTiera.</em></> : <>Step back into<br /><em>something green.</em></>}
+            </h2>
+            <p>
+              {isRegister
+                ? 'Create your free account in 3 quick steps to connect with local Zamboanga City gardeners or offer your services.'
+                : 'Sign in to check your garden inquiries, compare offers, and manage upcoming bookings.'}
+            </p>
           </div>
           <span className="auth-visual-caption">Local gardens · thoughtful conversations</span>
         </aside>
         <div className={wide ? 'auth-panel auth-panel-register' : 'auth-panel'}>
           <Link className="auth-mobile-brand brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
+          <Link className="back-link" to="/" style={{ marginBottom: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <ArrowLeft size={14} /> Back to home
+          </Link>
           <p className="eyebrow">Welcome to HugaTiera</p>
           <h1>{title}</h1>
           {children}
@@ -102,7 +114,7 @@ export function LoginPage() {
     }
   }
 
-  return <AuthLayout title="Welcome back." footer={<>New to HugaTiera? <Link to="/register">Create an account</Link></>}>
+  return <AuthLayout mode="login" title="Welcome back." footer={<>New to HugaTiera? <Link to="/register">Create an account</Link></>}>
     <form className="auth-form" onSubmit={handleSubmit} autoComplete="on">
       {error && <div className="form-error" role="alert">{error}</div>}
       <label>
@@ -354,6 +366,7 @@ export function RegisterPage() {
   return (
     <AuthLayout
       wide
+      mode="register"
       title="Create your account."
       footer={<>Already have an account? <Link to="/login">Sign in</Link></>}
     >

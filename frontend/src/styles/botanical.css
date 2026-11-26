@@ -190,6 +190,85 @@ body {
 .botanical-drop-2 { animation: botanicalWaterDrop 1.8s ease-in 0.45s infinite; }
 .botanical-drop-3 { animation: botanicalWaterDrop 1.8s ease-in 0.9s infinite; }
 
+/* Login & Register Scene Animations */
+@keyframes botanicalGateSwing {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(0.84); }
+}
+
+@keyframes botanicalKeyFloat {
+  0%, 100% { transform: translate(0px, 0px) rotate(-4deg); }
+  50% { transform: translate(-8px, -10px) rotate(6deg); }
+}
+
+@keyframes botanicalArmWave {
+  0%, 100% { transform: rotate(0deg); }
+  35% { transform: rotate(-22deg); }
+  70% { transform: rotate(10deg); }
+}
+
+@keyframes botanicalSproutGrow {
+  0%, 100% { transform: scaleY(0.92) translateY(6px); }
+  50% { transform: scaleY(1.06) translateY(-4px); }
+}
+
+@keyframes botanicalCardFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-9px); }
+}
+
+@keyframes botanicalCheckPop {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(1.22); }
+}
+
+@keyframes botanicalBobRegister {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-7px); }
+}
+
+.botanical-gate-swing {
+  transform-origin: 136px 147px;
+  animation: botanicalGateSwing 3.4s ease-in-out infinite;
+}
+
+.botanical-key-float {
+  animation: botanicalKeyFloat 2.8s ease-in-out infinite;
+}
+
+.botanical-welcome-wave {
+  animation: botanicalFloat 3s ease-in-out infinite;
+}
+
+.botanical-arm-wave {
+  transform-origin: 46px 42px;
+  animation: botanicalArmWave 1.6s ease-in-out infinite;
+}
+
+.botanical-sway-arch {
+  transform-origin: 180px 94px;
+  animation: botanicalSway 3.6s ease-in-out infinite;
+}
+
+.botanical-sprout-grow {
+  transform-origin: 156px 146px;
+  animation: botanicalSproutGrow 2.6s ease-in-out infinite;
+}
+
+.botanical-card-float {
+  animation: botanicalCardFloat 3.2s ease-in-out infinite;
+}
+
+.botanical-check-pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: botanicalCheckPop 2.2s ease-in-out infinite;
+}
+
+.botanical-bob-register {
+  animation: botanicalBobRegister 2.6s ease-in-out infinite;
+}
+
 .botanical-real-example-card {
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
@@ -281,6 +360,15 @@ body {
   .botanical-drop-3,
   .botanical-hero-leaf,
   .botanical-photo-butterfly,
+  .botanical-gate-swing,
+  .botanical-key-float,
+  .botanical-welcome-wave,
+  .botanical-arm-wave,
+  .botanical-sway-arch,
+  .botanical-sprout-grow,
+  .botanical-card-float,
+  .botanical-check-pop,
+  .botanical-bob-register,
   .botanical-landing-hero::before,
   .botanical-landing-hero::after,
   .dashboard-panel,
@@ -1078,44 +1166,124 @@ textarea {
   }
 }
 
-/* 9. Auth Pages (GreenScape Welcome Screen + Soft Card Form) */
+/* 9. Auth Pages (GreenScape Garden-Green Welcome Screen + Soft Card Form) */
 .editorial-auth-page {
-  background: var(--beige) !important;
+  background: linear-gradient(155deg, #E4EDE0 0%, #F1F5EC 55%, #DCE8D5 100%) !important;
 }
 
 .auth-layout {
   border-radius: var(--radius-xl);
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid #C8D9C1;
   box-shadow: var(--shadow-lg);
   background: var(--soft-offwhite);
 }
 
 .auth-visual {
-  background: linear-gradient(165deg, var(--beige) 0%, #DFD6BE 100%) !important;
-  color: var(--forest) !important;
+  background: linear-gradient(160deg, #304936 0%, #3E5B45 100%) !important;
+  color: var(--cream) !important;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 38px 32px;
+  gap: 20px;
+  padding: 32px 28px;
+}
+
+.auth-visual::after {
+  display: none !important;
+  content: none !important;
+}
+
+.auth-visual-scene-card {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 18px 14px;
+  border-radius: var(--radius-lg);
+  background: #FAF9F5;
+  border: 1px solid rgba(165, 185, 148, 0.45);
+  box-shadow: var(--shadow-md);
+}
+
+.auth-visual-scene-card .botanical-svg {
+  width: 100%;
+  max-width: 310px;
+  height: auto;
+}
+
+.auth-visual-copy {
+  position: static !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: 2;
 }
 
 .auth-visual-brand,
 .auth-visual-copy,
 .auth-visual-copy h2 {
-  color: var(--forest) !important;
+  color: #FAF9F5 !important;
+}
+
+.auth-visual-copy h2 {
+  font-size: clamp(28px, 3vw, 38px) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.6px !important;
+}
+
+.auth-visual-copy h2 em {
+  color: #C5D6B8;
 }
 
 .auth-visual-copy > p:last-child {
-  color: var(--muted) !important;
+  max-width: none !important;
+  margin: 10px 0 0 !important;
+  color: #DCE6D8 !important;
 }
 
 .auth-visual-caption {
-  color: var(--muted) !important;
+  position: static !important;
+  right: auto !important;
+  bottom: auto !important;
+  z-index: 2;
+  color: #C4D4BD !important;
 }
 
 .auth-panel {
   background: var(--soft-offwhite) !important;
+}
+
+.register-step-pill {
+  border-radius: var(--radius-pill) !important;
+  background: #F1F5EC;
+  border-color: #C9D8C2;
+}
+
+.register-step-pill.is-active {
+  background: #DCE8D5;
+  border-color: var(--forest);
+  color: var(--forest);
+}
+
+.register-step-pill.is-done {
+  background: #EAF2E5;
+  border-color: #9BB894;
+}
+
+.auth-form .role-options label {
+  border-radius: 16px;
+  border-color: #C9D8C2;
+  background: var(--surface-white);
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.auth-form .role-options label:has(input:checked) {
+  border-color: var(--forest);
+  background: #EAF2E5;
 }
 
 /* 10. Plant-Care Style Info Badges on Service Detail & Profile Pages */
