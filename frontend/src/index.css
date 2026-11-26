@@ -1,44 +1,71 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,600&display=swap');
 
 :root {
   font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
-  color: #1E2A22;
+  color: #303A30;
   background: #F7F5EC;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
-  /* Three-Color Design System */
-  --forest: #244B36;
-  --forest-deep: #1B3A29;
-  --forest-soft: #E9EFEA;
+  /* GreenScape Botanical Design Tokens */
+  --forest: #263D2E;
+  --forest-deep: #304936;
+  --forest-darker: #1C2E22;
+  --forest-soft: #E8EFE5;
+  --sage: #A5B994;
+  --sage-soft: #EDF2E8;
+  --olive: #B5BE9A;
+  --beige: #E9E2CE;
+  --cream: #F7F5EC;
   --ivory: #F7F5EC;
-  --ivory-deep: #EEEBDF;
-  --amber: #D99A36;
-  --amber-hover: #C88B28;
-  --amber-text: #8A5B10;
-  --amber-soft: #FBF1DF;
+  --ivory-deep: #E9E2CE;
+  --soft-offwhite: #FAF9F5;
+  --earthy-orange: #D8A16F;
+  --earthy-orange-hover: #C88E5B;
+  --earthy-orange-soft: #F9EFE4;
+
+  /* Mapped Legacy Tokens for Seamless Cross-Module Consistency */
+  --amber: #D8A16F;
+  --amber-hover: #C88E5B;
+  --amber-text: #8A582C;
+  --amber-soft: #F9EFE4;
 
   /* Neutral UI Tokens */
-  --ink: #1E2A22;
-  --muted: #526257;
-  --muted-light: #6C7B70;
-  --line: #DCE1D4;
-  --surface: #FFFFFF;
-  --surface-soft: #FBFBF7;
-  --brand: #244B36;
-  --brand-dark: #1B3A29;
-  --accent: #D99A36;
-  --shadow-sm: 0 2px 10px rgba(36, 75, 54, .05);
-  --shadow-md: 0 10px 28px rgba(36, 75, 54, .09);
+  --ink: #303A30;
+  --muted: #5F665B;
+  --muted-light: #888B7F;
+  --line: #E2DEC9;
+  --surface: #FAF9F5;
+  --surface-white: #FFFFFF;
+  --surface-soft: #F7F5EC;
+  --brand: #263D2E;
+  --brand-dark: #304936;
+  --accent: #D8A16F;
+
+  /* Organic Radii & Soft Shadows */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 4px 16px rgba(38, 61, 46, 0.05);
+  --shadow-md: 0 12px 32px rgba(38, 61, 46, 0.08);
+  --shadow-lg: 0 20px 48px rgba(38, 61, 46, 0.12);
 }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; overflow-x: clip; }
-body { margin: 0; min-width: 320px; background: #F7F5EC; color: #1E2A22; overflow-x: clip; }
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--cream);
+  color: var(--ink);
+  overflow-x: clip;
+}
 a { color: inherit; }
 button, a, input, select, textarea { font: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 3px solid rgba(36, 75, 54, .32);
+  outline: 3px solid rgba(38, 61, 46, 0.32);
   outline-offset: 2px;
 }

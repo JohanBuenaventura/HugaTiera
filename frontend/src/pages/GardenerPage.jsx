@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, CalendarDays, Clock, Leaf, Users } from 'lucide-
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
 import TransientSuccess from '../components/TransientSuccess'
+import { EmptyGardenIllustration, GardenerCareIllustration } from '../components/BotanicalIllustrations'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
 import { formatWorkingDaysLabel, profileApi } from '../services/profiles'
@@ -70,15 +71,21 @@ export default function GardenerPage() {
         {data && (
           <>
             <Link className="back-link" to="/services"><ArrowLeft size={15} /> Back to services</Link>
-            <div className="gardener-profile-hero">
-              <p className="eyebrow">Gardener profile</p>
-              <h1>{data.gardener.business_name || `${data.gardener.first_name} ${data.gardener.last_name}`}</h1>
-              <p>{data.gardener.description || 'A local gardening service provider on HugaTiera.'}</p>
-              <span>
-                {data.gardener.service_area}
-                {data.gardener.years_of_experience ? ` · ${data.gardener.years_of_experience} years experience` : ''}
-                {data.gardener.average_rating ? ` · ★ ${data.gardener.average_rating} (${data.gardener.review_count} review${data.gardener.review_count === 1 ? '' : 's'})` : ' · No ratings yet'}
-              </span>
+            <div className="gardener-profile-hero" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 320px' }}>
+                <p className="eyebrow">Gardener profile</p>
+                <h1>{data.gardener.business_name || `${data.gardener.first_name} ${data.gardener.last_name}`}</h1>
+                <p>{data.gardener.description || 'A local gardening service provider on HugaTiera.'}</p>
+                <span>
+                  {data.gardener.service_area}
+                  {data.gardener.years_of_experience ? ` · ${data.gardener.years_of_experience} years experience` : ''}
+                  {data.gardener.average_rating ? ` · ★ ${data.gardener.average_rating} (${data.gardener.review_count} review${data.gardener.review_count === 1 ? '' : 's'})` : ' · No ratings yet'}
+                </span>
+              </div>
+              <div style={{ width: '170px', flexShrink: 0 }}>
+                <GardenerCareIllustration />
+              </div>
+              <div style={{ width: '100%' }}>
               {user?.role === 'client' && (
                 <div className="inline-actions" style={{ marginTop: '14px' }}>
                   <Link className="button" to={`/inquiries/new?gardenerId=${data.gardener.id}`}>
@@ -108,6 +115,7 @@ export default function GardenerPage() {
                   </button>
                 </form>
               )}
+              </div>
             </div>
 
             <section className="dashboard-panel schedule-public-card" style={{ marginTop: '20px' }}>
@@ -181,7 +189,11 @@ export default function GardenerPage() {
                 ))}
               </div>
             ) : (
-              <p className="form-note">No active services listed yet.</p>
+              <div className="botanical-empty-state">
+                <EmptyGardenIllustration />
+                <strong>No active services yet</strong>
+                <p>This gardener hasn&apos;t listed active services yet.</p>
+              </div>
             )}
 
             <section className="detail-portfolio">

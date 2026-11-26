@@ -173,6 +173,8 @@ export default function AppSidebar() {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const mobileNavLinks = links.slice(0, 4)
+
   return (
     <>
       <a className="skip-link visually-hidden" href="#main-content" onClick={skipToMainContent}>
@@ -271,6 +273,25 @@ export default function AppSidebar() {
           </button>
         </div>
       </aside>
+      <nav className="mobile-bottom-nav" aria-label="Mobile quick navigation">
+        {mobileNavLinks.map((item) => {
+          const Icon = iconFor(item.label)
+          const active = isActive(item)
+          const destination = item.type === 'anchor' ? `/dashboard${item.href}` : item.to
+          return (
+            <Link
+              key={`mobile-${item.label}`}
+              to={destination}
+              className={active ? 'is-active' : undefined}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon size={18} strokeWidth={2} />
+              <span>{item.label}</span>
+              {item.badge > 0 && <b className="mobile-nav-badge">{item.badge > 9 ? '9+' : item.badge}</b>}
+            </Link>
+          )
+        })}
+      </nav>
       {!['administrator', 'clerk'].includes(user.role) && location.pathname !== '/assistant' && <AiAssistantWidget />}
     </>
   )

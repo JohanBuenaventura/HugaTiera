@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import AppSidebar from './AppSidebar'
 import Modal from './Modal'
+import { GardenerCareIllustration } from './BotanicalIllustrations'
 import { useAuth } from '../hooks/useAuth'
 import { formatPHP } from '../utils/currency'
 import { clerkApi } from '../services/clerk'
@@ -322,12 +323,16 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
           </div>
         </div>
 
-        <div className="dashboard-hero-row">
+        <div className="botanical-hero-banner">
           <div>
-            <h1>Clerk Operations Desk.</h1>
-            <p className="dashboard-lead" style={{ marginBottom: 0 }}>
+            <p className="eyebrow">Clerk Operations Desk</p>
+            <h1>Coordinate schedules, crew &amp; payments.</h1>
+            <p>
               Manage schedules, daily crew capacity, service listings, and payment verifications exclusively for your assigned gardener accounts.
             </p>
+          </div>
+          <div className="botanical-hero-art">
+            <GardenerCareIllustration />
           </div>
         </div>
 

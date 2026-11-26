@@ -14,7 +14,7 @@ import {
   formatAddressPreview,
   validateStructuredAddress,
 } from '../utils/zamboangaAddress'
-import editorialAbout from '../assets/editorial-about.jpg'
+import { WelcomeBotanicalScene } from '../components/BotanicalIllustrations'
 
 function AuthLayout({ title, children, footer, wide = false }) {
   return (
@@ -22,8 +22,14 @@ function AuthLayout({ title, children, footer, wide = false }) {
       <div className={wide ? 'auth-layout auth-layout-register' : 'auth-layout'}>
         <aside className="auth-visual">
           <Link className="brand auth-visual-brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
-          <img src={editorialAbout} alt="Lush garden plants in natural light" />
-          <div className="auth-visual-copy"><p className="editorial-kicker editorial-kicker-light">A better way to grow</p><h2>Make room for<br /><em>something green.</em></h2><p>Find the right people and ideas to help your outdoor space flourish.</p></div>
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
+            <WelcomeBotanicalScene />
+          </div>
+          <div className="auth-visual-copy">
+            <p className="editorial-kicker">Growing together, one leaf at a time</p>
+            <h2>Make room for<br /><em>something green.</em></h2>
+            <p>Your local companion for discovering Zamboanga City gardeners, planning ideas, and booking with confidence.</p>
+          </div>
           <span className="auth-visual-caption">Local gardens · thoughtful conversations</span>
         </aside>
         <div className={wide ? 'auth-panel auth-panel-register' : 'auth-panel'}>

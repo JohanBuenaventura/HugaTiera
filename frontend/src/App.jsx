@@ -18,13 +18,16 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
+import './App.css'
 import './ClientGardener.css'
-import editorialAbout from './assets/editorial-about.jpg'
-import editorialFeature from './assets/editorial-feature.jpg'
-import editorialProcess1 from './assets/editorial-process-1.jpg'
-import editorialProcess2 from './assets/editorial-process-2.jpg'
-import editorialProcess4 from './assets/editorial-process-4.jpg'
-import editorialWhy from './assets/editorial-why.jpg'
+import './styles/botanical.css'
+import {
+  EmptyGardenIllustration,
+  GardenPlanningIllustration,
+  GardenerCareIllustration,
+  PottedPlantIllustration,
+  WelcomeBotanicalScene,
+} from './components/BotanicalIllustrations'
 import { AuthProvider } from './context/AuthContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -85,29 +88,26 @@ const workflowSteps = [
     num: '01',
     title: 'Share your space',
     description: 'Browse approved local services or post an open request with garden photos and AI-assisted scope notes.',
-    image: editorialFeature,
-    alt: 'Raised wooden garden bed filled with fresh green herbs and leafy plants',
+    Illustration: PottedPlantIllustration,
+    variant: 'monstera',
   },
   {
     num: '02',
     title: 'Compare clear offers',
     description: 'Approved Zamboanga City gardeners review site feasibility and send itemized offers.',
-    image: editorialProcess2,
-    alt: 'Collection of healthy potted indoor and terrace plants in bright natural light',
+    Illustration: GardenPlanningIllustration,
   },
   {
     num: '03',
     title: 'Agree together',
     description: 'Review and approve the exact scope, agreed price, schedule, and deposit on the same agreement version.',
-    image: editorialProcess1,
-    alt: 'Garden trowel with fresh potting soil prepared for planting',
+    Illustration: GardenerCareIllustration,
   },
   {
     num: '04',
     title: 'Confirm & enjoy',
     description: 'Bookings are created only after mutual approval—with verified payment tracking and post-job reviews.',
-    image: editorialProcess4,
-    alt: 'Gardener carefully planting young green seedlings into prepared garden beds',
+    Illustration: EmptyGardenIllustration,
   },
 ]
 
@@ -188,7 +188,7 @@ function HomePage() {
   return (
     <div className="landing-home" id="top">
       <a className="skip-link visually-hidden" href="#main-content">Skip to main content</a>
-      <header className="landing-header">
+      <header className="landing-header botanical-landing-header">
         <div className="landing-container landing-nav">
           <Logo to={user ? '/dashboard' : '/'} />
           <button
@@ -238,12 +238,12 @@ function HomePage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="landing-hero">
+        <section className="landing-hero botanical-landing-hero">
           <div className="landing-container landing-hero-grid">
             <div className="landing-hero-copy">
               <span className="landing-hero-badge">
                 <MapPin size={13} aria-hidden="true" />
-                Zamboanga City · Local Gardening Services
+                Zamboanga City · Growing Together, One Leaf at a Time
               </span>
               <h1>Book trusted local gardeners, on clear terms.</h1>
               <p className="landing-hero-lead">
@@ -268,18 +268,22 @@ function HomePage() {
             </div>
 
             <div className="landing-hero-visual">
-              <div className="landing-hero-photo-card">
-                <img
-                  src={editorialAbout}
-                  alt="Well-maintained garden pathway lined with trimmed hedges and flowering shrubs"
-                />
-                <div className="landing-hero-photo-bar">
-                  <div>
-                    <strong>Every project starts with clarity</strong>
-                    <small>Photos, indicative estimates, and written agreements in one place.</small>
-                  </div>
-                  <Link className="landing-photo-link" to="/services">
-                    Explore <ArrowUpRight size={14} />
+              <div className="botanical-landing-hero-card">
+                <WelcomeBotanicalScene />
+                <div className="botanical-feature-tiles" style={{ marginTop: '14px', marginBottom: 0 }}>
+                  <Link className="botanical-tile is-sage" to="/services" style={{ padding: '14px 16px' }}>
+                    <div className="botanical-tile-copy">
+                      <strong style={{ fontSize: '15px' }}>Explore Services</strong>
+                      <span style={{ fontSize: '12px' }}>Verified local gardeners</span>
+                    </div>
+                    <ArrowUpRight size={18} />
+                  </Link>
+                  <Link className="botanical-tile is-orange" to="/assistant" style={{ padding: '14px 16px' }}>
+                    <div className="botanical-tile-copy">
+                      <strong style={{ fontSize: '15px' }}>AI Garden Plan</strong>
+                      <span style={{ fontSize: '12px' }}>Ask for plant ideas</span>
+                    </div>
+                    <Sparkles size={18} />
                   </Link>
                 </div>
               </div>
@@ -368,18 +372,23 @@ function HomePage() {
             </div>
 
             <div className="landing-process-grid">
-              {workflowSteps.map((step) => (
-                <article className="landing-process-card" key={step.num}>
-                  <div className="landing-process-media">
-                    <img src={step.image} alt={step.alt} loading="lazy" />
-                    <span className="landing-step-num">{step.num}</span>
-                  </div>
-                  <div className="landing-process-body">
-                    <h3>{step.title}</h3>
-                    <p>{step.description}</p>
-                  </div>
-                </article>
-              ))}
+              {workflowSteps.map((step) => {
+                const StepArt = step.Illustration
+                return (
+                  <article className="landing-process-card" key={step.num}>
+                    <div className="landing-process-media" style={{ display: 'grid', placeItems: 'center', background: 'var(--cream)', padding: '16px' }}>
+                      <div style={{ width: '130px', height: '110px', display: 'grid', placeItems: 'center' }}>
+                        <StepArt variant={step.variant} />
+                      </div>
+                      <span className="landing-step-num">{step.num}</span>
+                    </div>
+                    <div className="landing-process-body">
+                      <h3>{step.title}</h3>
+                      <p>{step.description}</p>
+                    </div>
+                  </article>
+                )
+              })}
             </div>
           </div>
         </section>
@@ -403,12 +412,8 @@ function HomePage() {
                 ))}
               </div>
             </div>
-            <div className="landing-why-visual">
-              <img
-                src={editorialWhy}
-                alt="Vibrant tropical flower blooming in a sunlit home garden"
-                loading="lazy"
-              />
+            <div className="landing-why-visual botanical-landing-hero-card" style={{ display: 'grid', placeItems: 'center', background: 'var(--sage-soft)', padding: '32px' }}>
+              <GardenerCareIllustration />
             </div>
           </div>
         </section>
@@ -496,12 +501,8 @@ function HomePage() {
                   </Link>
                 </div>
               </div>
-              <div className="landing-cta-media">
-                <img
-                  src={editorialProcess2}
-                  alt="Assortment of lush potted greenery arranged indoors"
-                  loading="lazy"
-                />
+              <div className="landing-cta-media" style={{ display: 'grid', placeItems: 'center', background: 'var(--sage-soft)', borderRadius: '24px', padding: '24px' }}>
+                <GardenPlanningIllustration />
               </div>
             </div>
           </div>

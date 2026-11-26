@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, Leaf, MapPin, Search } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
+import { EmptyGardenIllustration, GardenPlanningIllustration, PottedPlantIllustration } from '../components/BotanicalIllustrations'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
 
@@ -84,10 +85,18 @@ export default function ServicesPage() {
     <main className={`marketplace-page${user ? ' protected-page' : ''}${['client', 'gardener'].includes(user?.role) ? ' member-workspace' : ''}`} data-workspace={user?.role || 'public'}>
       {user ? <AppSidebar /> : <PublicHeader />}
       <section className="container marketplace-content">
-        <h1>Gardening services for your space.</h1>
-        <p className="marketplace-lead">
-          Search active services from approved gardeners in Zamboanga City. Browse provider portfolios or start with an inquiry.
-        </p>
+        <div className="botanical-hero-banner">
+          <div>
+            <p className="eyebrow">Explore local help</p>
+            <h1>Gardening services for your space.</h1>
+            <p>
+              Search active services from approved gardeners in Zamboanga City. Browse provider portfolios or start with an inquiry.
+            </p>
+          </div>
+          <div className="botanical-hero-art">
+            <GardenPlanningIllustration />
+          </div>
+        </div>
 
         <form className="marketplace-filters" role="search" aria-label="Filter gardening services" onSubmit={(event) => event.preventDefault()}>
           <label className="search-field">
@@ -109,14 +118,16 @@ export default function ServicesPage() {
         {error && <div className="form-error" role="alert">{error}</div>}
         {loading && <p className="result-count" role="status">Loading services...</p>}
         {!loading && !error && services.length === 0 && (
-          <div className="empty-state" role="status">
-            No approved services match your search yet. Try another keyword or category, or check back after more gardeners are approved.
+          <div className="botanical-empty-state" role="status">
+            <EmptyGardenIllustration />
+            <strong>No matching services yet</strong>
+            <p>Try another keyword or category, or check back after more gardeners in Zamboanga City are approved.</p>
           </div>
         )}
         {!loading && <p className="result-count" role="status">{pagination.total} service{pagination.total === 1 ? '' : 's'} available</p>}
 
         <div className="marketplace-grid marketplace-card-grid">
-          {services.map((service) => {
+          {services.map((service, idx) => {
             const coverUrl = service.image_path
               ? servicesApi.serviceImageUrl(service.id)
               : (gardenerCovers[service.gardener_id] || null)
@@ -127,8 +138,11 @@ export default function ServicesPage() {
                   {coverUrl ? (
                     <img src={coverUrl} alt={`${service.title} by ${gardenerName}`} loading="lazy" />
                   ) : (
-                    <div className="marketplace-card-placeholder" aria-hidden="true">
-                      <Leaf size={26} />
+                    <div className="marketplace-card-placeholder" aria-hidden="true" style={{ padding: '10px' }}>
+                      <div style={{ width: '92px', height: '92px' }}>
+                        <PottedPlantIllustration variant={idx % 2 === 0 ? 'monstera' : 'orange'} />
+                      </div>
+                      <span>{service.category_name}</span>
                     </div>
                   )}
                   <span className="category-pill media-badge">{service.category_name}</span>

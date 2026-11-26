@@ -53,6 +53,11 @@ import { getRequestImageUrl } from '../services/requestImages'
 import AppSidebar from '../components/AppSidebar'
 import Modal from '../components/Modal'
 import { formatPHP } from '../utils/currency'
+import {
+  EmptyGardenIllustration,
+  GardenPlanningIllustration,
+  GardenerCareIllustration,
+} from '../components/BotanicalIllustrations'
 import ClerkDashboard from '../components/ClerkDashboard'
 import GardenerClerksPanel from '../components/GardenerClerksPanel'
 import GardenerScheduleCalendar from '../components/GardenerScheduleCalendar'
@@ -1418,8 +1423,10 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
         {loading ? (
           <p className="field-note">Finding top-rated and nearby gardening services...</p>
         ) : services.length === 0 ? (
-          <div className="empty-state">
-            No services match your active AI filters right now. Try turning off &ldquo;4.0★+ rated&rdquo; or &ldquo;Nearby only&rdquo;, or post an open general request with your garden photos.
+          <div className="botanical-empty-state">
+            <EmptyGardenIllustration />
+            <strong>No services match your active filters</strong>
+            <p>Try turning off &ldquo;4.0★+ rated&rdquo; or &ldquo;Nearby only&rdquo;, or post an open general request with your garden photos.</p>
           </div>
         ) : (
           <div className="marketplace-card-grid dashboard-service-grid">
@@ -1758,8 +1765,10 @@ function GardenerOpportunityShowcase({ isApproved, defaultArea = 'Zamboanga City
         ) : loading ? (
           <p className="field-note">Scanning open client requests near your service area...</p>
         ) : openRequests.length === 0 ? (
-          <div className="empty-state">
-            No open general client requests match your current filter. Try turning off &ldquo;Nearby only&rdquo; or clearing the area filter.
+          <div className="botanical-empty-state">
+            <EmptyGardenIllustration />
+            <strong>No open requests match right now</strong>
+            <p>Try turning off &ldquo;Nearby only&rdquo; or clearing the area filter.</p>
           </div>
         ) : (
           <div className="marketplace-card-grid dashboard-service-grid">
@@ -2163,6 +2172,77 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
         </div>
         {roleError && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{roleError}</div>}
         {roleNotice && <TransientSuccess key={roleNotice} message={roleNotice} onDismiss={() => setRoleNotice('')} style={{ marginBottom: '12px' }} />}
+
+        {activeTab === 'overview' && !loading && (
+          <>
+            <div className="botanical-hero-banner">
+              <div>
+                <p className="eyebrow">Zamboanga City · {roleLabel} Workspace</p>
+                <h2>{role === 'gardener' ? 'Grow your local gardening business.' : 'Your garden companion is ready.'}</h2>
+                <p>
+                  {role === 'gardener'
+                    ? 'Review open client leads, manage your working schedule, and confirm mutual service agreements.'
+                    : 'Compare offers from verified local gardeners, get AI garden ideas, and track every booking.'}
+                </p>
+                <div className="botanical-hero-meta">
+                  <div className="botanical-hero-meta-item">
+                    <strong>{counts.inquiries ?? 0}</strong>
+                    <span>Requests</span>
+                  </div>
+                  <div className="botanical-hero-meta-item">
+                    <strong>{counts.bookings ?? 0}</strong>
+                    <span>Bookings</span>
+                  </div>
+                  <div className="botanical-hero-meta-item">
+                    <strong>{role === 'gardener' ? (counts.services ?? 0) : (counts.unread_notifications ?? 0)}</strong>
+                    <span>{role === 'gardener' ? 'Services' : 'Alerts'}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="botanical-hero-art">
+                {role === 'gardener' ? <GardenerCareIllustration /> : <GardenPlanningIllustration />}
+              </div>
+            </div>
+
+            <div className="botanical-feature-tiles">
+              {role === 'client' ? (
+                <>
+                  <Link className="botanical-tile is-sage" to="/services">
+                    <div className="botanical-tile-copy">
+                      <strong>Browse Gardeners</strong>
+                      <span>Find verified services in Zamboanga City</span>
+                    </div>
+                    <span className="botanical-tile-icon"><Leaf size={22} /></span>
+                  </Link>
+                  <Link className="botanical-tile is-orange" to="/assistant">
+                    <div className="botanical-tile-copy">
+                      <strong>AI Garden Assistant</strong>
+                      <span>Plan layouts, plants &amp; care tips</span>
+                    </div>
+                    <span className="botanical-tile-icon"><Sparkles size={22} /></span>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link className="botanical-tile is-sage" to="/inquiries?tab=open">
+                    <div className="botanical-tile-copy">
+                      <strong>Open Client Requests</strong>
+                      <span>Send offers on nearby garden leads</span>
+                    </div>
+                    <span className="botanical-tile-icon"><Briefcase size={22} /></span>
+                  </Link>
+                  <Link className="botanical-tile is-orange" to="/dashboard?tab=services">
+                    <div className="botanical-tile-copy">
+                      <strong>Manage My Services</strong>
+                      <span>Update listings, pricing &amp; portfolio</span>
+                    </div>
+                    <span className="botanical-tile-icon"><Leaf size={22} /></span>
+                  </Link>
+                </>
+              )}
+            </div>
+          </>
+        )}
 
         {loading && (isProfileView || activeTab === 'overview') ? (
           <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading dashboard details">
@@ -2636,6 +2716,16 @@ function AdminDashboard({ summary, summaryLoading = false, onStatusChange, onUse
           </div>
         ) : (
           <>
+            <div className="botanical-hero-banner">
+              <div>
+                <p className="eyebrow">Platform Stewardship · Zamboanga City</p>
+                <h2>Keep the HugaTiera marketplace flourishing.</h2>
+                <p>Review pending gardener profiles, monitor inquiries and bookings, and keep community reports resolved.</p>
+              </div>
+              <div className="botanical-hero-art">
+                <GardenPlanningIllustration />
+              </div>
+            </div>
             <div className="stat-grid admin-stats">
               {[
                 ['Clients', counts.clients],

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, CalendarDays, Clock, Leaf, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, Clock, Leaf, MapPin, Tag, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
 import TransientSuccess from '../components/TransientSuccess'
+import { PottedPlantIllustration } from '../components/BotanicalIllustrations'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
 import { formatWorkingDaysLabel, profileApi } from '../services/profiles'
@@ -82,13 +83,32 @@ export default function ServiceDetailPage() {
                 <img src={servicesApi.serviceImageUrl(service.id)} alt={service.title} />
               </div>
             )}
-            <div className="category-pill">{service.category_name}</div>
-            <h1>{service.title}</h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 260px' }}>
+                <div className="category-pill">{service.category_name}</div>
+                <h1>{service.title}</h1>
+              </div>
+              <div style={{ width: '110px', flexShrink: 0 }}>
+                <PottedPlantIllustration variant="monstera" />
+              </div>
+            </div>
             <p className="detail-description">{service.description}</p>
-            <div className="detail-facts">
-              <span><strong>Service area</strong>{service.service_area}</span>
-              <span><strong>Starting price</strong>{service.indicative_price ? `₱${Number(service.indicative_price).toLocaleString()} ${service.price_unit || ''}` : 'Custom quote — ask gardener'}</span>
-              <span><strong>Workers needed</strong>{service.workers_required || 1} worker{(service.workers_required || 1) === 1 ? '' : 's'}</span>
+            <div className="botanical-info-badges">
+              <div className="botanical-info-badge">
+                <MapPin size={18} className="botanical-info-badge-icon" />
+                <small>Service Area</small>
+                <strong>{service.service_area}</strong>
+              </div>
+              <div className="botanical-info-badge">
+                <Tag size={18} className="botanical-info-badge-icon" />
+                <small>Starting Price</small>
+                <strong>{service.indicative_price ? `₱${Number(service.indicative_price).toLocaleString()} ${service.price_unit || ''}` : 'Custom quote'}</strong>
+              </div>
+              <div className="botanical-info-badge">
+                <Users size={18} className="botanical-info-badge-icon" />
+                <small>Crew Required</small>
+                <strong>{service.workers_required || 1} worker{(service.workers_required || 1) === 1 ? '' : 's'}</strong>
+              </div>
             </div>
             {user?.role === 'client' && (
               <div className="service-detail-cta-grid">

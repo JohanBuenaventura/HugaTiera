@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { fetchAiUsage, requestGardenPlan } from '../services/ai'
 import AppSidebar from '../components/AppSidebar'
+import { GardenPlanningIllustration } from '../components/BotanicalIllustrations'
 
 const promptExamples = [
   'I have a small sunny balcony in Zamboanga City. What low-maintenance plants could work?',
@@ -47,15 +48,18 @@ export default function AssistantPage() {
         <Link className="back-link" to={user ? '/dashboard' : '/'}>
           <ArrowLeft size={15} /> {user ? 'Back to dashboard' : 'Back home'}
         </Link>
-        <div className="assistant-page-heading">
-          <span className="assistant-icon"><Sparkles size={25} /></span>
+        <div className="botanical-hero-banner">
           <div>
+            <p className="eyebrow">AI Garden Planning Assistant</p>
             <h1>Turn a garden idea into a practical starting point.</h1>
+            <p>
+              Describe your space, light, goals, and preferences. The assistant suggests plants, layouts, and care ideas tailored to Zamboanga City.
+            </p>
+          </div>
+          <div className="botanical-hero-art">
+            <GardenPlanningIllustration />
           </div>
         </div>
-        <p className="assistant-page-intro">
-          Describe your yard, sunlight, and what you want to achieve. The assistant will suggest plants, layout ideas, and simple next steps before you talk to a local gardener.
-        </p>
         {usage && (
           <p className="form-note" style={{ marginBottom: '12px' }}>
             You have <strong>{usage.remaining}</strong> of <strong>{usage.limit}</strong> AI questions remaining this hour.
