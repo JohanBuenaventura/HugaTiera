@@ -245,7 +245,25 @@ function HomePage() {
 
       <main id="main-content" tabIndex={-1}>
         <section className="landing-hero botanical-landing-hero">
-          <div className="landing-container landing-hero-grid">
+          <div className="botanical-hero-leaves" aria-hidden="true">
+            <Leaf className="botanical-hero-leaf" size={20} />
+            <Leaf className="botanical-hero-leaf" size={16} />
+            <Sprout className="botanical-hero-leaf" size={22} />
+            <Leaf className="botanical-hero-leaf" size={18} />
+            <Leaf className="botanical-hero-leaf" size={15} />
+            <Sprout className="botanical-hero-leaf" size={18} />
+            <Leaf className="botanical-hero-leaf" size={22} />
+            <Leaf className="botanical-hero-leaf" size={14} />
+            <Leaf className="botanical-hero-leaf" size={19} />
+            <Sprout className="botanical-hero-leaf" size={16} />
+            <Leaf className="botanical-hero-leaf" size={21} />
+            <Leaf className="botanical-hero-leaf" size={17} />
+            <Leaf className="botanical-hero-leaf" size={15} />
+            <Sprout className="botanical-hero-leaf" size={20} />
+            <Leaf className="botanical-hero-leaf" size={18} />
+            <Leaf className="botanical-hero-leaf" size={16} />
+          </div>
+          <div className="landing-container landing-hero-grid" style={{ position: 'relative', zIndex: 1 }}>
             <div className="landing-hero-copy">
               <span className="landing-hero-badge">
                 <MapPin size={13} aria-hidden="true" />

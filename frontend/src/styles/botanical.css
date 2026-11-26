@@ -17,7 +17,7 @@ body {
 /* 2. Micro-Animations & Reduced Motion Accessibility */
 @keyframes botanicalFloat {
   0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-12px); }
 }
 
 @keyframes botanicalFadeUp {
@@ -26,27 +26,27 @@ body {
 }
 
 .botanical-float {
-  animation: botanicalFloat 6s ease-in-out infinite;
+  animation: botanicalFloat 3.8s ease-in-out infinite;
 }
 
 @keyframes botanicalSway {
-  0%, 100% { transform: rotate(-1.6deg); }
-  50% { transform: rotate(1.8deg); }
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5.5deg); }
 }
 
 @keyframes botanicalDriftA {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(4px, -6px); }
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(12px, -16px) scale(1.15); }
 }
 
 @keyframes botanicalDriftB {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(-5px, 5px); }
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-14px, 14px) scale(0.92); }
 }
 
 @keyframes botanicalPulse {
   0%, 100% { transform: scale(1); opacity: 0.85; }
-  50% { transform: scale(1.1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 1; }
 }
 
 @keyframes botanicalSpinSlow {
@@ -56,82 +56,134 @@ body {
 
 @keyframes botanicalBlobDrift {
   0%, 100% { transform: translate(0px, 0px) scale(1); }
-  50% { transform: translate(14px, -12px) scale(1.04); }
+  50% { transform: translate(26px, -22px) scale(1.08); }
 }
 
 .botanical-sway {
   transform-origin: 138px 222px;
-  animation: botanicalSway 5.5s ease-in-out infinite;
+  animation: botanicalSway 3.4s ease-in-out infinite;
 }
 
 .botanical-drift-1 {
-  animation: botanicalDriftA 4.8s ease-in-out infinite;
+  animation: botanicalDriftA 3.2s ease-in-out infinite;
 }
 
 .botanical-drift-2 {
-  animation: botanicalDriftB 5.6s ease-in-out infinite;
+  animation: botanicalDriftB 3.8s ease-in-out infinite;
 }
 
 .botanical-pulse {
   transform-box: fill-box;
   transform-origin: center;
-  animation: botanicalPulse 3.8s ease-in-out infinite;
+  animation: botanicalPulse 2.6s ease-in-out infinite;
 }
 
 .botanical-spin-slow {
   transform-box: fill-box;
   transform-origin: center;
-  animation: botanicalSpinSlow 24s linear infinite;
+  animation: botanicalSpinSlow 12s linear infinite;
 }
 
 @keyframes botanicalBob {
-  0%, 100% { transform: translate(278px, 92px); }
-  50% { transform: translate(278px, 86px); }
+  0%, 100% { transform: translate(278px, 92px) rotate(0deg); }
+  50% { transform: translate(278px, 81px) rotate(-2deg); }
 }
 
 @keyframes botanicalSproutWave {
-  0%, 100% { transform: rotate(-4deg); }
-  50% { transform: rotate(6deg); }
+  0%, 100% { transform: rotate(-12deg); }
+  50% { transform: rotate(14deg); }
 }
 
 @keyframes botanicalButterfly {
-  0%, 100% { transform: translate(226px, 74px) rotate(-6deg); }
-  33% { transform: translate(242px, 58px) rotate(8deg); }
-  66% { transform: translate(216px, 62px) rotate(-10deg); }
+  0%, 100% { transform: translate(226px, 74px) rotate(-10deg) scale(1); }
+  25% { transform: translate(252px, 50px) rotate(12deg) scale(1.08); }
+  50% { transform: translate(214px, 42px) rotate(-14deg) scale(0.95); }
+  75% { transform: translate(196px, 64px) rotate(8deg) scale(1.05); }
+}
+
+@keyframes botanicalPhotoButterfly {
+  0%, 100% { transform: translate(0px, 0px) rotate(-8deg) scaleX(1); }
+  25% { transform: translate(-22px, -12px) rotate(10deg) scaleX(0.72); }
+  50% { transform: translate(-34px, 6px) rotate(-12deg) scaleX(1); }
+  75% { transform: translate(-12px, 14px) rotate(8deg) scaleX(0.72); }
 }
 
 @keyframes botanicalCanTilt {
-  0%, 100% { transform: rotate(0deg); }
-  50% { transform: rotate(6deg) translateY(2px); }
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(12deg) translateY(4px); }
 }
 
 @keyframes botanicalWaterDrop {
   0% { transform: translateY(0px); opacity: 0; }
   25% { opacity: 1; }
-  100% { transform: translateY(28px); opacity: 0; }
+  100% { transform: translateY(34px); opacity: 0; }
+}
+
+@keyframes botanicalLeafFall {
+  0% { transform: translateY(-20px) translateX(0px) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.85; }
+  50% { transform: translateY(300px) translateX(34px) rotate(180deg); opacity: 0.9; }
+  88% { opacity: 0.65; }
+  100% { transform: translateY(620px) translateX(-22px) rotate(360deg); opacity: 0; }
 }
 
 .botanical-bob {
-  animation: botanicalBob 4s ease-in-out infinite;
+  animation: botanicalBob 2.8s ease-in-out infinite;
 }
 
 .botanical-sprout-wave {
   transform-origin: 14px 64px;
-  animation: botanicalSproutWave 3.2s ease-in-out infinite;
+  animation: botanicalSproutWave 2.2s ease-in-out infinite;
 }
 
 .botanical-butterfly {
-  animation: botanicalButterfly 6.5s ease-in-out infinite;
+  animation: botanicalButterfly 4.8s ease-in-out infinite;
 }
+
+.botanical-photo-butterfly {
+  animation: botanicalPhotoButterfly 4.5s ease-in-out infinite !important;
+}
+
+.botanical-hero-leaves {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.botanical-hero-leaf {
+  position: absolute;
+  top: -16px;
+  color: rgba(165, 185, 148, 0.7);
+  animation: botanicalLeafFall 6s linear infinite;
+}
+
+.botanical-hero-leaf:nth-child(1) { left: 4%; animation-duration: 5.2s; animation-delay: 0s; }
+.botanical-hero-leaf:nth-child(2) { left: 10%; animation-duration: 6.4s; animation-delay: -1.8s; color: rgba(216, 161, 111, 0.55); }
+.botanical-hero-leaf:nth-child(3) { left: 17%; animation-duration: 5.8s; animation-delay: -3.2s; }
+.botanical-hero-leaf:nth-child(4) { left: 24%; animation-duration: 7.0s; animation-delay: -0.9s; color: rgba(233, 226, 206, 0.5); }
+.botanical-hero-leaf:nth-child(5) { left: 31%; animation-duration: 5.5s; animation-delay: -4.1s; }
+.botanical-hero-leaf:nth-child(6) { left: 38%; animation-duration: 6.6s; animation-delay: -2.4s; color: rgba(181, 190, 154, 0.72); }
+.botanical-hero-leaf:nth-child(7) { left: 45%; animation-duration: 4.9s; animation-delay: -1.1s; }
+.botanical-hero-leaf:nth-child(8) { left: 52%; animation-duration: 6.2s; animation-delay: -3.7s; color: rgba(216, 161, 111, 0.5); }
+.botanical-hero-leaf:nth-child(9) { left: 59%; animation-duration: 5.4s; animation-delay: -0.4s; }
+.botanical-hero-leaf:nth-child(10) { left: 66%; animation-duration: 6.8s; animation-delay: -2.9s; color: rgba(233, 226, 206, 0.48); }
+.botanical-hero-leaf:nth-child(11) { left: 73%; animation-duration: 5.1s; animation-delay: -4.6s; }
+.botanical-hero-leaf:nth-child(12) { left: 79%; animation-duration: 6.3s; animation-delay: -1.5s; color: rgba(181, 190, 154, 0.7); }
+.botanical-hero-leaf:nth-child(13) { left: 85%; animation-duration: 5.7s; animation-delay: -3.1s; }
+.botanical-hero-leaf:nth-child(14) { left: 91%; animation-duration: 6.5s; animation-delay: -0.7s; color: rgba(216, 161, 111, 0.55); }
+.botanical-hero-leaf:nth-child(15) { left: 95%; animation-duration: 5.0s; animation-delay: -2.2s; }
+.botanical-hero-leaf:nth-child(16) { left: 42%; animation-duration: 5.9s; animation-delay: -5.0s; color: rgba(165, 185, 148, 0.75); }
 
 .botanical-can-tilt {
   transform-origin: 70px 72px;
-  animation: botanicalCanTilt 3.6s ease-in-out infinite;
+  animation: botanicalCanTilt 2.6s ease-in-out infinite;
 }
 
 .botanical-sway-plant {
   transform-origin: 163px 140px;
-  animation: botanicalSway 4.8s ease-in-out infinite;
+  animation: botanicalSway 3.2s ease-in-out infinite;
 }
 
 .botanical-drop-1 { animation: botanicalWaterDrop 1.8s ease-in infinite; }
@@ -227,6 +279,8 @@ body {
   .botanical-drop-1,
   .botanical-drop-2,
   .botanical-drop-3,
+  .botanical-hero-leaf,
+  .botanical-photo-butterfly,
   .botanical-landing-hero::before,
   .botanical-landing-hero::after,
   .dashboard-panel,
@@ -662,10 +716,10 @@ textarea {
   }
 }
 
-/* 8. GreenScape Landing Page Redesign */
+/* 8. GreenScape Landing Page Redesign (Lush Garden Green Palette) */
 .editorial-home,
 .landing-home {
-  background: var(--cream);
+  background: #F1F5EC;
   color: var(--ink);
 }
 
@@ -675,9 +729,9 @@ textarea {
   top: 0;
   z-index: 40;
   padding: 14px 0;
-  background: rgba(247, 245, 236, 0.94);
+  background: rgba(241, 245, 236, 0.94);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid #CFDDC8;
 }
 
 .botanical-landing-header .brand,
@@ -688,19 +742,19 @@ textarea {
 .botanical-landing-header .editorial-links a,
 .landing-header.botanical-landing-header .landing-links a,
 .landing-header.botanical-landing-header .landing-nav-signin {
-  color: var(--ink);
-  font-weight: 500;
+  color: var(--forest);
+  font-weight: 600;
 }
 
 .botanical-landing-header .editorial-links a:hover,
 .landing-header.botanical-landing-header .landing-links a:hover,
 .landing-header.botanical-landing-header .landing-nav-signin:hover {
-  color: var(--forest);
+  color: #3D6B4A;
 }
 
 .landing-header.botanical-landing-header .landing-menu-toggle {
   color: var(--forest);
-  border-color: var(--line);
+  border-color: #C4D5BC;
   background: var(--soft-offwhite);
 }
 
@@ -714,24 +768,48 @@ textarea {
 }
 
 .landing-btn-amber {
-  background: var(--forest) !important;
-  color: var(--cream) !important;
-  border-color: var(--forest) !important;
-  box-shadow: 0 6px 18px rgba(38, 61, 46, 0.16);
+  background: #A5B994 !important;
+  color: #1B2E22 !important;
+  border-color: #8EA87B !important;
+  font-weight: 700 !important;
+  box-shadow: 0 6px 18px rgba(38, 61, 46, 0.22);
 }
 
 .landing-btn-amber:hover {
+  background: #B8CA9F !important;
+}
+
+.landing-header .landing-btn-amber {
+  background: var(--forest) !important;
+  color: var(--cream) !important;
+  border-color: var(--forest) !important;
+}
+
+.landing-header .landing-btn-amber:hover {
   background: var(--forest-deep) !important;
 }
 
 .landing-btn-ghost {
-  background: var(--soft-offwhite) !important;
-  color: var(--forest) !important;
-  border: 1.5px solid #C6D1C1 !important;
+  background: rgba(250, 249, 245, 0.14) !important;
+  color: #F7F5EC !important;
+  border: 1.5px solid rgba(165, 185, 148, 0.65) !important;
 }
 
 .landing-btn-ghost:hover {
-  background: var(--sage-soft) !important;
+  background: rgba(165, 185, 148, 0.26) !important;
+  border-color: #A5B994 !important;
+}
+
+.landing-section .landing-btn-ghost,
+.landing-section-alt .landing-btn-ghost {
+  background: var(--soft-offwhite) !important;
+  color: var(--forest) !important;
+  border: 1.5px solid #9CB494 !important;
+}
+
+.landing-section .landing-btn-ghost:hover,
+.landing-section-alt .landing-btn-ghost:hover {
+  background: #DCE8D4 !important;
   border-color: var(--forest) !important;
 }
 
@@ -740,8 +818,8 @@ textarea {
   position: relative;
   overflow: hidden;
   padding: 64px 0 80px;
-  background: linear-gradient(155deg, var(--beige) 0%, var(--cream) 58%, var(--sage-soft) 100%) !important;
-  color: var(--ink) !important;
+  background: linear-gradient(150deg, #263D2E 0%, #304936 55%, #3E6045 100%) !important;
+  color: var(--cream) !important;
 }
 
 .botanical-landing-hero::before {
@@ -749,8 +827,8 @@ textarea {
   position: absolute;
   top: -80px;
   left: -60px;
-  width: 300px;
-  height: 300px;
+  width: 340px;
+  height: 340px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(165, 185, 148, 0.28) 0%, transparent 70%);
   animation: botanicalBlobDrift 10s ease-in-out infinite;
@@ -762,18 +840,18 @@ textarea {
   position: absolute;
   bottom: -90px;
   right: -50px;
-  width: 340px;
-  height: 340px;
+  width: 360px;
+  height: 360px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(216, 161, 111, 0.22) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(181, 190, 154, 0.24) 0%, transparent 70%);
   animation: botanicalBlobDrift 12s ease-in-out infinite reverse;
   pointer-events: none;
 }
 
 .landing-hero.botanical-landing-hero .landing-hero-badge {
-  background: var(--sage-soft);
-  color: var(--forest);
-  border: 1px solid #C8D6C0;
+  background: rgba(165, 185, 148, 0.2);
+  color: #E8F2E2;
+  border: 1px solid rgba(165, 185, 148, 0.5);
   border-radius: var(--radius-pill);
 }
 
@@ -781,26 +859,26 @@ textarea {
 .botanical-landing-hero h1 {
   font-size: clamp(36px, 4.4vw, 54px);
   line-height: 1.08;
-  color: var(--forest) !important;
+  color: #FAF9F5 !important;
   margin: 12px 0 18px;
 }
 
 .landing-hero.botanical-landing-hero .landing-hero-lead {
-  color: var(--muted) !important;
+  color: #DCE6D8 !important;
 }
 
 .landing-hero.botanical-landing-hero .landing-hero-trust {
-  color: var(--forest) !important;
+  color: #D2E3CB !important;
 }
 
 .landing-section {
-  background: var(--cream);
+  background: #F1F5EC;
 }
 
 .landing-section-alt {
-  background: var(--soft-offwhite);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  background: #E4EDE0;
+  border-top: 1px solid #C8D9C1;
+  border-bottom: 1px solid #C8D9C1;
 }
 
 .landing-category-card,
@@ -808,16 +886,49 @@ textarea {
 .landing-process-card,
 .landing-benefit-card {
   border-radius: var(--radius-lg) !important;
-  border: 1px solid var(--line) !important;
+  border: 1px solid #C9D8C2 !important;
   background: var(--soft-offwhite) !important;
   box-shadow: var(--shadow-sm);
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease !important;
 }
 
-.landing-category-card:nth-child(4n+1) { background: var(--sage-soft) !important; }
-.landing-category-card:nth-child(4n+2) { background: var(--earthy-orange-soft) !important; }
-.landing-category-card:nth-child(4n+3) { background: var(--beige) !important; }
-.landing-category-card:nth-child(4n+4) { background: var(--soft-offwhite) !important; }
+.landing-category-card:nth-child(4n+1) { background: #DCE8D5 !important; color: #1E3326; }
+.landing-category-card:nth-child(4n+2) { background: #C8DABF !important; color: #1B2E22; }
+.landing-category-card:nth-child(4n+3) { background: #EAF2E5 !important; color: #263D2E; }
+.landing-category-card:nth-child(4n+4) {
+  background: #304936 !important;
+  border-color: #263D2E !important;
+  color: #F7F5EC !important;
+}
+.landing-category-card:nth-child(4n+4) h3,
+.landing-category-card:nth-child(4n+4) p,
+.landing-category-card:nth-child(4n+4) .landing-category-arrow {
+  color: #F7F5EC !important;
+}
+.landing-category-card:nth-child(4n+4) .landing-category-icon {
+  background: rgba(165, 185, 148, 0.24) !important;
+  color: #DCE8D5 !important;
+}
+
+.landing-step-num {
+  background: var(--forest) !important;
+  color: var(--cream) !important;
+}
+
+.landing-pill {
+  background: #DCE8D5 !important;
+  color: #263D2E !important;
+}
+
+.botanical-real-example-card {
+  border-color: #C4D6BC;
+  background: var(--soft-offwhite);
+}
+
+.botanical-real-example-card .botanical-info-badge {
+  background: #EAF2E5;
+  border-color: #C9D9C1;
+}
 
 .landing-category-card:hover,
 .landing-service-card:hover,
@@ -825,7 +936,7 @@ textarea {
 .landing-benefit-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-md);
-  border-color: var(--sage) !important;
+  border-color: #6B8E67 !important;
 }
 
 .landing-reviews-section {
@@ -837,23 +948,26 @@ textarea {
   border-radius: var(--radius-lg) !important;
   background: var(--soft-offwhite) !important;
   color: var(--ink) !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid rgba(165, 185, 148, 0.35) !important;
 }
 
 .landing-cta-card {
   border-radius: var(--radius-xl) !important;
-  background: linear-gradient(135deg, var(--beige) 0%, var(--sage-soft) 100%) !important;
-  border: 1px solid var(--line);
-  color: var(--forest) !important;
+  background: linear-gradient(135deg, #263D2E 0%, #304936 60%, #44654B 100%) !important;
+  border: 1px solid #304936;
+  color: var(--cream) !important;
 }
 
-.landing-cta-card h2,
+.landing-cta-card h2 {
+  color: #FAF9F5 !important;
+}
+
 .landing-cta-card p {
-  color: var(--forest) !important;
+  color: #DCE6D8 !important;
 }
 
 .landing-footer {
-  background: var(--forest) !important;
+  background: #1C2E22 !important;
   color: var(--cream) !important;
 }
 
