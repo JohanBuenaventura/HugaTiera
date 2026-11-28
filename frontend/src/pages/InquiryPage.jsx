@@ -1041,6 +1041,7 @@ function InquiryDetails({ id }) {
   const [offerGoodConductOnly, setOfferGoodConductOnly] = useState(false)
   const [offerAiRanking, setOfferAiRanking] = useState(null)
   const [responseStep, setResponseStep] = useState(1)
+  const [detailTab, setDetailTab] = useState('offers')
   const load = useCallback(() => inquiriesApi.get(id).then((res) => {
     setData(res)
     if (res?.activeAgreement) {
@@ -1408,75 +1409,149 @@ function InquiryDetails({ id }) {
       }
   }
 
+  const activeDetailTab = detailTab
+
   return (
-    <section className="container inquiry-content">
+    <section className="container inquiry-content inq-hub-shell">
       <Link className="back-link" to="/inquiries"><ArrowLeft size={15} /> Back to inquiries</Link>
-      <h1>{inquiry.subject}</h1>
-      <div className="inquiry-status-row">
-        <span className="category-pill">Inquiry #{inquiry.id} · {inquiry.request_type === 'general' ? 'General request' : 'Direct inquiry'}</span>
-        <span className={getStatusBadgeClass(inquiry.status)}>{formatStatusLabel(inquiry.status)}</span>
-        <span>{inquiry.service_title || inquiry.category_name || (inquiry.request_type === 'general' ? 'Open gardening request' : 'Direct gardener inquiry')}</span>
-        {inquiry.gardener_name && <span>Provider: {inquiry.gardener_name}</span>}
-        {(inquiry.request_type !== 'general' || inquiry.gardener_id) && (user.role === 'client' || canGardenerMessage) && (
-          <button className="table-action" type="button" onClick={() => openConversation(inquiry.gardener_id || null)}>Open conversation</button>
-        )}
-        {inquiry.request_type === 'general' && !inquiry.gardener_id && canGardenerMessage && (
-          <button className="table-action" type="button" onClick={() => openConversation()}>Message client</button>
-        )}
-        {canRenew && (
-          <>
-            <select aria-label="Renewal duration" value={renewDays} onChange={(e) => setRenewDays(e.target.value)} style={{ padding: '4px 8px', borderRadius: '6px' }}>
-              <option value="7">Renew 7 days</option>
-              <option value="14">Renew 14 days</option>
-              <option value="30">Renew 30 days</option>
-            </select>
-            <button className="table-action" type="button" disabled={updatingStatus} onClick={handleRenewInquiry}>
-              {updatingStatus ? 'Saving...' : (inquiry.status === 'expired' ? 'Renew expired request' : 'Extend validity')}
+      <header className="inq-hub-hero">
+        <div>
+          <p className="inq-hub-eyebrow">
+            <Sparkles size={14} />
+            Inquiry #{inquiry.id} · {inquiry.request_type === 'general' ? 'General request' : 'Direct inquiry'}
+          </p>
+          <h1>{inquiry.subject}</h1>
+          <div className="inquiry-status-row" style={{ marginTop: '10px', marginBottom: 0 }}>
+            <span className={getStatusBadgeClass(inquiry.status)}>{formatStatusLabel(inquiry.status)}</span>
+            <span className="inq-hub-tag">{inquiry.service_title || inquiry.category_name || (inquiry.request_type === 'general' ? 'Open gardening request' : 'Direct gardener inquiry')}</span>
+            {inquiry.gardener_name && <span className="inq-hub-tag">Provider: {inquiry.gardener_name}</span>}
+          </div>
+        </div>
+
+        <div className="inq-hub-actions">
+          {(inquiry.request_type !== 'general' || inquiry.gardener_id) && (user.role === 'client' || canGardenerMessage) && (
+            <button className="inq-hub-btn-primary" type="button" onClick={() => openConversation(inquiry.gardener_id || null)}>
+              <MessageSquareText size={15} />
+              Open conversation
             </button>
-          </>
-        )}
-        {canCloseOrCancel && user.role === 'client' && (
-          <button className="table-action" type="button" disabled={updatingStatus} onClick={() => changeInquiryStatus('cancelled')}>
-            {updatingStatus ? 'Saving...' : 'Cancel inquiry'}
-          </button>
-        )}
-        {canCloseOrCancel && (user.role === 'client' || inquiry.gardener_id === user.id) && (
-          <button className="table-action" type="button" disabled={updatingStatus} onClick={() => changeInquiryStatus('closed')}>
-            {updatingStatus ? 'Saving...' : 'Close inquiry'}
-          </button>
-        )}
-      </div>
+          )}
+          {inquiry.request_type === 'general' && !inquiry.gardener_id && canGardenerMessage && (
+            <button className="inq-hub-btn-primary" type="button" onClick={() => openConversation()}>
+              <MessageSquareText size={15} />
+              Message client
+            </button>
+          )}
+          {canRenew && (
+            <>
+              <select className="inq-hub-sort" aria-label="Renewal duration" value={renewDays} onChange={(e) => setRenewDays(e.target.value)}>
+                <option value="7">Renew 7 days</option>
+                <option value="14">Renew 14 days</option>
+                <option value="30">Renew 30 days</option>
+              </select>
+              <button className="inq-hub-btn-soft" type="button" disabled={updatingStatus} onClick={handleRenewInquiry}>
+                {updatingStatus ? 'Saving...' : (inquiry.status === 'expired' ? 'Renew expired request' : 'Extend validity')}
+              </button>
+            </>
+          )}
+          {canCloseOrCancel && user.role === 'client' && (
+            <button className="inq-hub-btn-soft" type="button" disabled={updatingStatus} onClick={() => changeInquiryStatus('cancelled')}>
+              {updatingStatus ? 'Saving...' : 'Cancel inquiry'}
+            </button>
+          )}
+          {canCloseOrCancel && (user.role === 'client' || inquiry.gardener_id === user.id) && (
+            <button className="inq-hub-btn-soft" type="button" disabled={updatingStatus} onClick={() => changeInquiryStatus('closed')}>
+              {updatingStatus ? 'Saving...' : 'Close inquiry'}
+            </button>
+          )}
+        </div>
+      </header>
+
       {!inquiryFlowClosed && (
         <ol className="booking-stepper inquiry-stepper" aria-label="Inquiry progress">
           {inquirySteps.map((step) => {
             const done = step.num < inquiryStageIndex
             const active = step.num === inquiryStageIndex
+            const targetTab = step.num === 1 ? 'overview' : 'offers'
             return (
               <li
                 key={step.num}
                 className={`booking-step${done ? ' is-done' : ''}${active ? ' is-current' : ''}`}
               >
-                <span className="booking-step-num" aria-hidden="true">
-                  {done ? <CheckCircle2 size={16} /> : step.num}
-                </span>
-                <span className="booking-step-copy">
-                  <strong>{step.label}</strong>
-                  <small>{step.sub}</small>
-                </span>
+                <button
+                  type="button"
+                  className="detail-hub-step-btn"
+                  onClick={() => setDetailTab(targetTab)}
+                >
+                  <span className="booking-step-num" aria-hidden="true">
+                    {done ? <CheckCircle2 size={16} /> : step.num}
+                  </span>
+                  <span className="booking-step-copy">
+                    <strong>{step.label}</strong>
+                    <small>{step.sub}</small>
+                  </span>
+                </button>
               </li>
             )
           })}
         </ol>
       )}
+
       {nextStepGuidance && (
         <div className={`booking-next-banner tone-${nextStepGuidance.tone}`} role="status">
-          <strong>{nextStepGuidance.title}</strong>
-          <p>{nextStepGuidance.text}</p>
+          <div className="detail-hub-next-row">
+            <div>
+              <strong>{nextStepGuidance.title}</strong>
+              <p>{nextStepGuidance.text}</p>
+            </div>
+            {activeDetailTab !== 'offers' && (
+              <button
+                type="button"
+                className="inq-hub-btn-primary detail-hub-next-action"
+                onClick={() => setDetailTab('offers')}
+              >
+                Go to Offers &amp; Agreement <ArrowRight size={15} />
+              </button>
+            )}
+          </div>
         </div>
       )}
+
+      <div className="detail-hub-tabs" role="tablist" aria-label="Inquiry sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeDetailTab === 'offers'}
+          className={`detail-hub-tab${activeDetailTab === 'offers' ? ' is-active' : ''}`}
+          onClick={() => setDetailTab('offers')}
+        >
+          <span>Offers &amp; Agreement</span>
+          <span className="detail-hub-tab-badge">{quotations.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeDetailTab === 'overview'}
+          className={`detail-hub-tab${activeDetailTab === 'overview' ? ' is-active' : ''}`}
+          onClick={() => setDetailTab('overview')}
+        >
+          <span>Project &amp; Photos</span>
+          <span className="detail-hub-tab-badge">{images.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeDetailTab === 'all'}
+          className={`detail-hub-tab${activeDetailTab === 'all' ? ' is-active' : ''}`}
+          onClick={() => setDetailTab('all')}
+        >
+          <span>All Sections</span>
+        </button>
+      </div>
+
       {message && <TransientSuccess key={message} message={message} onDismiss={() => setMessage('')} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
-      <div className="inquiry-detail-grid">
+      <div className={activeDetailTab === 'all' ? 'inquiry-detail-grid' : ''}>
+        {(activeDetailTab === 'overview' || activeDetailTab === 'all') && (
         <article className="dashboard-panel">
           <p className="eyebrow">{user.role === 'gardener' ? 'Provider decision-support view' : 'Request & AI-assisted scope'}</p>
           <h2>Project details</h2>
@@ -1603,6 +1678,10 @@ function InquiryDetails({ id }) {
               </div>
             </div>
           )}
+        </article>
+        )}
+        {(activeDetailTab === 'offers' || activeDetailTab === 'all') && (
+        <article className="dashboard-panel">
           <h2>Quotations and provider responses</h2>
           {user.role === 'client' && quotations.length > 0 && (
             <div className="ai-filter-bar ai-offer-filter-bar" role="region" aria-label="AI offer comparison filter">
@@ -1947,7 +2026,8 @@ function InquiryDetails({ id }) {
             </details>
           )}
         </article>
-        {canGardenerRespond && (
+        )}
+        {(activeDetailTab === 'offers' || activeDetailTab === 'all') && canGardenerRespond && (
           <form className="dashboard-panel profile-form" onSubmit={sendQuote}>
             <div className="activity-heading">
               <div>

@@ -2187,7 +2187,7 @@ textarea {
   }
 }
 
-/* 18. Inquiries Workspace (AI Assistant Palette) */
+/* 18. Inquiries & Bookings Workspace (De-boxed Botanical Palette) */
 .inq-hub-shell {
   display: grid;
   gap: 18px;
@@ -2196,14 +2196,15 @@ textarea {
 .inq-hub-hero {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px 24px;
-  border-radius: 22px;
-  border: 1px solid #D5E0CE;
-  background: linear-gradient(135deg, #EFF3EA 0%, #E4EDE0 100%);
-  box-shadow: var(--shadow-sm);
+  padding: 6px 0 18px;
+  border: 0;
+  border-bottom: 1px solid #D5E0CE;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .inq-hub-eyebrow {
@@ -2292,18 +2293,17 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 14px 16px;
-  border: 1px solid #D5E0CE;
-  border-radius: 16px;
-  background: var(--soft-offwhite);
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: #EFF3EA;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.14s ease;
 }
 
 .inq-hub-stat:hover {
-  background: #EAEFE5;
-  border-color: #9BB894;
+  background: #E4EDE0;
   transform: translateY(-1px);
 }
 
@@ -2354,10 +2354,10 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid #D5E0CE;
-  border-radius: 18px;
-  background: #EFF3EA;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .inq-hub-search {
@@ -2450,10 +2450,10 @@ textarea {
   justify-items: center;
   text-align: center;
   gap: 12px;
-  padding: 32px 22px;
-  border: 1px solid #D5E0CE;
-  border-radius: 22px;
-  background: linear-gradient(180deg, #EFF3EA 0%, var(--soft-offwhite) 100%);
+  padding: 26px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .inq-hub-empty-art {
@@ -2526,12 +2526,13 @@ textarea {
 .inq-hub-guide {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 14px;
   width: 100%;
-  margin-top: 6px;
-  padding: 14px;
-  border-radius: 16px;
-  background: #EAEFE5;
+  margin-top: 12px;
+  padding: 18px 0 0;
+  border-top: 1px solid #D5E0CE;
+  border-radius: 0;
+  background: transparent;
   text-align: left;
 }
 
@@ -2614,5 +2615,262 @@ textarea {
 @media (max-width: 560px) {
   .inq-hub-stats {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Interactive Detail Workspace Tabs & Stepper */
+.detail-hub-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid #D5E0CE;
+  border-radius: 0;
+  background: transparent;
+  margin-bottom: 4px;
+}
+
+/* De-box nested containers inside Detail views */
+.inq-hub-shell .dashboard-panel {
+  border-color: #D5E0CE;
+  box-shadow: none;
+}
+
+.inq-hub-shell .payment-status-panel,
+.inq-hub-shell .booking-agreement-summary,
+.inq-hub-shell .estimate-summary-card,
+.inq-hub-shell .category-specs-summary {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #E5ECE0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0 18px;
+  margin-bottom: 18px;
+}
+
+.inq-hub-shell .detail-facts > span {
+  background: #F4F7F0;
+  border: 0;
+  border-radius: 10px;
+}
+
+.inq-hub-shell .booking-stepper {
+  background: #EFF3EA;
+  border: 0;
+  box-shadow: none;
+}
+
+.detail-hub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border: 1px solid #C8D9C1;
+  border-radius: var(--radius-pill);
+  background: var(--surface-white);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.detail-hub-tab:hover {
+  background: #E2EBDD;
+  color: var(--forest);
+}
+
+.detail-hub-tab.is-active {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: var(--cream);
+}
+
+.detail-hub-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: #E4EDE0;
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detail-hub-tab.is-active .detail-hub-tab-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--cream);
+}
+
+.detail-hub-step-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.detail-hub-next-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-hub-next-row > div {
+  flex: 1 1 280px;
+}
+
+@media print {
+  .detail-hub-tabs,
+  .detail-hub-next-action {
+    display: none !important;
+  }
+}
+
+/* 19. Step-by-Step Page De-boxing: Services & Service Detail */
+.marketplace-content .botanical-hero-banner {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #D5E0CE;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 6px 0 18px;
+}
+
+.marketplace-content .marketplace-filters {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 4px 0 8px;
+}
+
+.marketplace-content .marketplace-filters .search-field,
+.marketplace-content .marketplace-filters select,
+.marketplace-content .marketplace-filters input {
+  border-color: #C8D9C1;
+  background: var(--surface-white);
+}
+
+.detail-content .detail-main {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.detail-content .botanical-info-badge {
+  background: #EFF3EA;
+  border: 0;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.detail-content .detail-sidebar .dashboard-panel,
+.detail-content .gardener-aside-card {
+  border-color: #D5E0CE;
+  box-shadow: none;
+}
+
+/* 20. Purposeful Micro-Interactions & Transitions */
+@keyframes botanicalShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-line {
+  background: linear-gradient(90deg, #E8EFE3 25%, #F4F8F1 50%, #E8EFE3 75%);
+  background-size: 200% 100%;
+  animation: botanicalShimmer 1.4s ease-in-out infinite;
+}
+
+.marketplace-card-grid > .visual-market-card {
+  animation: botanicalFadeUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.marketplace-card-grid > .visual-market-card:nth-child(1) { animation-delay: 0ms; }
+.marketplace-card-grid > .visual-market-card:nth-child(2) { animation-delay: 35ms; }
+.marketplace-card-grid > .visual-market-card:nth-child(3) { animation-delay: 70ms; }
+.marketplace-card-grid > .visual-market-card:nth-child(4) { animation-delay: 105ms; }
+.marketplace-card-grid > .visual-market-card:nth-child(5) { animation-delay: 140ms; }
+.marketplace-card-grid > .visual-market-card:nth-child(6) { animation-delay: 175ms; }
+.marketplace-card-grid > .visual-market-card:nth-child(7) { animation-delay: 210ms; }
+.marketplace-card-grid > .visual-market-card:nth-child(8) { animation-delay: 245ms; }
+
+.inq-hub-empty,
+.booking-next-banner,
+.inq-hub-shell .dashboard-panel {
+  animation: botanicalFadeUp 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.visual-market-card .marketplace-card-media,
+.inquiry-photo-card,
+.service-detail-cover {
+  overflow: hidden;
+}
+
+.visual-market-card .marketplace-card-media img,
+.inquiry-photo-card img,
+.service-detail-cover img {
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.visual-market-card:hover .marketplace-card-media img,
+.inquiry-photo-card:hover img,
+.service-detail-cover:hover img {
+  transform: scale(1.035);
+}
+
+.card-cta svg,
+.detail-hub-next-action svg {
+  transition: transform 0.18s ease;
+}
+
+.visual-market-card:hover .card-cta svg,
+.card-cta:hover svg,
+.detail-hub-next-action:hover svg {
+  transform: translateX(3px);
+}
+
+.inq-hub-btn-primary:active:not(:disabled),
+.inq-hub-btn-soft:active:not(:disabled),
+.inq-hub-chip:active:not(:disabled),
+.detail-hub-tab:active:not(:disabled),
+.inq-hub-stat:active:not(:disabled),
+.inq-hub-starter-card:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line,
+  .marketplace-card-grid > .visual-market-card,
+  .inq-hub-empty,
+  .booking-next-banner,
+  .inq-hub-shell .dashboard-panel {
+    animation: none !important;
+  }
+  .visual-market-card:hover .marketplace-card-media img,
+  .inquiry-photo-card:hover img,
+  .service-detail-cover:hover img {
+    transform: none;
   }
 }

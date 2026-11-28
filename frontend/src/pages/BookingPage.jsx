@@ -436,6 +436,7 @@ function BookingDetails({ id }) {
   const [openReviewBookingId, setOpenReviewBookingId] = useState(null)
   const reviewOpen = openReviewBookingId === id
   const [searchParams] = useSearchParams()
+  const [bookingTab, setBookingTab] = useState('payment')
 
   const load = useCallback(() => bookingsApi.get(id).then((result) => {
     setBooking(result.booking)
@@ -963,31 +964,53 @@ function BookingDetails({ id }) {
     )
   }
 
+  const pendingPaymentsCount = payments.filter((p) => p.status === 'pending').length
+  const pendingReschedulesCount = rescheduleRequests.filter((r) => r.status === 'pending').length
+  const recommendedBookingTab = !isBookedPaid
+    ? 'payment'
+    : !isWorkCompleted
+      ? 'schedule'
+      : !isFullyPaid
+        ? 'payment'
+        : 'schedule'
+
   return (
-    <section className="container booking-content">
+    <section className="container booking-content inq-hub-shell">
       <Link className="back-link" to="/bookings"><ArrowLeft size={15} /> Back to bookings</Link>
-      <h1>{booking.service_title || 'Gardening service'}</h1>
-      <div className="booking-status-row">
-        <span className="category-pill">Booking #{booking.id}</span>
-        <span className={getStatusBadgeClass(booking.booking_stage)}>{formatStatusLabel(booking.booking_stage)}</span>
-        <span className={getStatusBadgeClass(booking.payment_status)}>{formatStatusLabel(booking.payment_status)}</span>
-        <span className={getStatusBadgeClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
-        {booking.transaction_status && booking.transaction_status !== 'open' && (
-          <span className={getStatusBadgeClass(booking.transaction_status)}>
-            {booking.transaction_status === 'closed' ? 'Transaction Closed' : formatStatusLabel(booking.transaction_status)}
-          </span>
-        )}
-        <span>{gardener ? booking.client_name : booking.gardener_name}</span>
-        {agreementSummary.inquiryPath && (
-          <Link className="text-link" to={agreementSummary.inquiryPath}>
-            View source inquiry #{booking.inquiry_id}
-          </Link>
-        )}
-        <button className="table-action" type="button" onClick={openConversation}>Open conversation</button>
-        <button className="table-action no-print" type="button" onClick={() => window.print()}>
-          <Printer size={14} style={{ verticalAlign: 'text-bottom', marginRight: '4px' }} /> Print / Save PDF
-        </button>
-      </div>
+      <header className="inq-hub-hero">
+        <div>
+          <p className="inq-hub-eyebrow">
+            <Sparkles size={14} />
+            Booking #{booking.id} · {gardener ? booking.client_name : booking.gardener_name}
+          </p>
+          <h1>{booking.service_title || 'Gardening service'}</h1>
+          <div className="booking-status-row" style={{ marginTop: '10px', marginBottom: 0 }}>
+            <span className={getStatusBadgeClass(booking.booking_stage)}>{formatStatusLabel(booking.booking_stage)}</span>
+            <span className={getStatusBadgeClass(booking.payment_status)}>{formatStatusLabel(booking.payment_status)}</span>
+            <span className={getStatusBadgeClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
+            {booking.transaction_status && booking.transaction_status !== 'open' && (
+              <span className={getStatusBadgeClass(booking.transaction_status)}>
+                {booking.transaction_status === 'closed' ? 'Transaction Closed' : formatStatusLabel(booking.transaction_status)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="inq-hub-actions">
+          <button className="inq-hub-btn-primary" type="button" onClick={openConversation}>
+            Open conversation
+          </button>
+          {agreementSummary.inquiryPath && (
+            <Link className="inq-hub-btn-soft" to={agreementSummary.inquiryPath}>
+              Source inquiry #{booking.inquiry_id}
+            </Link>
+          )}
+          <button className="inq-hub-btn-soft no-print" type="button" onClick={() => window.print()}>
+            <Printer size={14} />
+            Print / PDF
+          </button>
+        </div>
+      </header>
       {roleModeMismatch && (
         <div className="booking-next-banner tone-warning no-print" role="status">
           <strong>Viewing in opposite workspace mode</strong>
@@ -997,32 +1020,102 @@ function BookingDetails({ id }) {
         </div>
       )}
       {booking.status !== 'cancelled' && booking.status !== 'declined' && !showReviewForm && (
-        <p className="field-note booking-stepper-caption">Where you are — each stage unlocks the next.</p>
+        <p className="field-note booking-stepper-caption">Where you are — click any stage to jump straight to that section.</p>
       )}
       {booking.status !== 'cancelled' && booking.status !== 'declined' && !showReviewForm && (
         <ol className="booking-stepper" aria-label="Booking progress">
-          {workflowSteps.map((step) => (
-            <li
-              key={step.num}
-              className={`booking-step${step.done ? ' is-done' : ''}${step.active ? ' is-current' : ''}`}
-            >
-              <span className="booking-step-num" aria-hidden="true">
-                {step.done ? <CheckCircle2 size={16} /> : step.num}
-              </span>
-              <span className="booking-step-copy">
-                <strong>{step.label}</strong>
-                <small>{step.sub}</small>
-              </span>
-            </li>
-          ))}
+          {workflowSteps.map((step) => {
+            const targetTab = step.num <= 2 ? 'payment' : 'schedule'
+            return (
+              <li
+                key={step.num}
+                className={`booking-step${step.done ? ' is-done' : ''}${step.active ? ' is-current' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="detail-hub-step-btn"
+                  onClick={() => setBookingTab(targetTab)}
+                >
+                  <span className="booking-step-num" aria-hidden="true">
+                    {step.done ? <CheckCircle2 size={16} /> : step.num}
+                  </span>
+                  <span className="booking-step-copy">
+                    <strong>{step.label}</strong>
+                    <small>{step.sub}</small>
+                  </span>
+                </button>
+              </li>
+            )
+          })}
         </ol>
       )}
       {nextStepGuidance && (
         <div className={`booking-next-banner tone-${nextStepGuidance.tone}`} role="status">
-          <strong>{nextStepGuidance.title}</strong>
-          <p>{nextStepGuidance.text}</p>
+          <div className="detail-hub-next-row">
+            <div>
+              <strong>{nextStepGuidance.title}</strong>
+              <p>{nextStepGuidance.text}</p>
+            </div>
+            {bookingTab !== recommendedBookingTab && bookingTab !== 'all' && (
+              <button
+                type="button"
+                className="inq-hub-btn-primary detail-hub-next-action"
+                onClick={() => setBookingTab(recommendedBookingTab)}
+              >
+                {recommendedBookingTab === 'payment' ? 'Go to Payment' : 'Go to Schedule & Actions'} <ArrowRight size={15} />
+              </button>
+            )}
+          </div>
         </div>
       )}
+
+      <div className="detail-hub-tabs no-print" role="tablist" aria-label="Booking sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={bookingTab === 'payment'}
+          className={`detail-hub-tab${bookingTab === 'payment' ? ' is-active' : ''}`}
+          onClick={() => setBookingTab('payment')}
+        >
+          <span>Payment &amp; Balance</span>
+          {(pendingPaymentsCount > 0 || !isFullyPaid) && (
+            <span className="detail-hub-tab-badge">
+              {pendingPaymentsCount > 0 ? `${pendingPaymentsCount} pending` : 'Due'}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={bookingTab === 'schedule'}
+          className={`detail-hub-tab${bookingTab === 'schedule' ? ' is-active' : ''}`}
+          onClick={() => setBookingTab('schedule')}
+        >
+          <span>Schedule &amp; Actions</span>
+          {pendingReschedulesCount > 0 && (
+            <span className="detail-hub-tab-badge">{pendingReschedulesCount}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={bookingTab === 'agreement'}
+          className={`detail-hub-tab${bookingTab === 'agreement' ? ' is-active' : ''}`}
+          onClick={() => setBookingTab('agreement')}
+        >
+          <span>Mutual Agreement</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={bookingTab === 'all'}
+          className={`detail-hub-tab${bookingTab === 'all' ? ' is-active' : ''}`}
+          onClick={() => setBookingTab('all')}
+        >
+          <span>All Details</span>
+        </button>
+      </div>
+
       {!gardener && booking?.can_review && !review && !reviewOpen && (
         <div className="review-entry-panel">
           <div>
@@ -1038,6 +1131,7 @@ function BookingDetails({ id }) {
       {statusMessage && <TransientSuccess key={statusMessage} message={statusMessage} onDismiss={() => setStatusMessage('')} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
       <article className="dashboard-panel booking-detail-card">
+        {(bookingTab === 'payment' || bookingTab === 'all') && (
         <div className="payment-status-panel">
           <div className="payment-status-heading">
             <div>
@@ -1454,13 +1548,16 @@ function BookingDetails({ id }) {
             )}
           </Modal>
         </div>
+        )}
 
+        {(bookingTab === 'schedule' || bookingTab === 'all') && (
         <div className="detail-facts">
           <span><strong>Starts</strong>{new Date(booking.scheduled_start).toLocaleString()}</span>
           <span><strong>Ends</strong>{new Date(booking.scheduled_end).toLocaleString()}</span>
           <span><strong>Location</strong>{booking.location}</span>
         </div>
-        {agreementSummary.hasAgreement && (
+        )}
+        {(bookingTab === 'agreement' || bookingTab === 'all') && agreementSummary.hasAgreement && (
           <div className="booking-agreement-summary">
             <p className="eyebrow">Mutual service agreement</p>
             <h2>{agreementSummary.versionLabel}</h2>
@@ -1492,6 +1589,14 @@ function BookingDetails({ id }) {
             )}
           </div>
         )}
+        {(bookingTab === 'agreement' || bookingTab === 'all') && !agreementSummary.hasAgreement && (
+          <div className="booking-agreement-summary">
+            <p className="eyebrow">Mutual service agreement</p>
+            <p className="field-note" style={{ margin: 0 }}>No separate agreement version record is attached to this booking.</p>
+          </div>
+        )}
+        {(bookingTab === 'schedule' || bookingTab === 'all') && (
+          <>
         <h2>Additional information</h2>
         <p className="inquiry-description">{booking.notes || 'No additional information provided.'}</p>
         <div className="inline-actions">
@@ -1891,6 +1996,8 @@ function BookingDetails({ id }) {
               </div>
             )}
           </div>
+        )}
+          </>
         )}
 
       </article>
