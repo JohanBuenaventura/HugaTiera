@@ -3080,4 +3080,87 @@ textarea {
   .landing-category-card:hover .landing-category-icon {
     transform: none;
   }
+  .botanical-hero-bee,
+  .botanical-hero-bee .bee-wing {
+    animation: none !important;
+  }
+}
+
+/* 23. Ambient Hero Bees */
+.botanical-hero-bee {
+  position: absolute;
+  opacity: 0.78;
+  will-change: transform;
+  animation: botanicalBeeDrift 14s ease-in-out infinite;
+}
+
+.botanical-hero-bee .bee-wing {
+  transform-origin: center bottom;
+  animation: botanicalWingFlutter 0.24s ease-in-out infinite alternate;
+}
+
+.botanical-hero-bee.bee-1 {
+  top: 18%;
+  left: -40px;
+  animation-duration: 15s;
+  animation-delay: -2s;
+}
+
+.botanical-hero-bee.bee-2 {
+  top: 46%;
+  left: -40px;
+  animation-duration: 18s;
+  animation-delay: -9s;
+  transform: scale(0.88);
+}
+
+.botanical-hero-bee.bee-3 {
+  top: 72%;
+  left: -40px;
+  animation-duration: 13s;
+  animation-delay: -5s;
+  transform: scale(0.95);
+}
+
+.botanical-hero-bee.bee-4 {
+  top: 30%;
+  left: -40px;
+  animation-duration: 16.5s;
+  animation-delay: -12s;
+  transform: scale(0.82);
+}
+
+@keyframes botanicalBeeDrift {
+  0% {
+    transform: translate3d(-40px, 12px, 0) rotate(-4deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.78;
+  }
+  25% {
+    transform: translate3d(28vw, -22px, 0) rotate(4deg);
+  }
+  50% {
+    transform: translate3d(56vw, 18px, 0) rotate(-3deg);
+  }
+  75% {
+    transform: translate3d(82vw, -16px, 0) rotate(3deg);
+  }
+  92% {
+    opacity: 0.78;
+  }
+  100% {
+    transform: translate3d(108vw, 10px, 0) rotate(-2deg);
+    opacity: 0;
+  }
+}
+
+@keyframes botanicalWingFlutter {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(0.55);
+  }
 }

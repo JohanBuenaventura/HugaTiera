@@ -262,6 +262,23 @@ function HomePage() {
             <Sprout className="botanical-hero-leaf" size={24} />
             <Leaf className="botanical-hero-leaf" size={22} />
             <Leaf className="botanical-hero-leaf" size={20} />
+            {[1, 2, 3, 4].map((beeIndex) => (
+              <svg
+                key={`bee-${beeIndex}`}
+                className={`botanical-hero-bee bee-${beeIndex}`}
+                viewBox="0 0 28 24"
+                width="24"
+                height="20"
+                fill="none"
+              >
+                <ellipse className="bee-wing" cx="11" cy="7" rx="5" ry="3.5" fill="rgba(255,255,255,0.75)" />
+                <ellipse className="bee-wing" cx="17" cy="7.5" rx="4.5" ry="3" fill="rgba(255,255,255,0.65)" />
+                <ellipse cx="14" cy="14" rx="7" ry="4.8" fill="#E39D46" />
+                <path d="M11.5 9.6v8.8M15.2 9.4v9.2" stroke="#263D2E" strokeWidth="1.9" strokeLinecap="round" />
+                <circle cx="20.5" cy="13.5" r="2.6" fill="#263D2E" />
+                <path d="M7 14l-2.8-1.2L7 12.2" fill="#263D2E" />
+              </svg>
+            ))}
           </div>
           <div className="landing-container landing-hero-grid" style={{ position: 'relative', zIndex: 1 }}>
             <div className="landing-hero-copy">
