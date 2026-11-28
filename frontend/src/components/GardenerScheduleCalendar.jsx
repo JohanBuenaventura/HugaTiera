@@ -402,6 +402,14 @@ export default function GardenerScheduleCalendar({ profileForm, onUnavailableDat
                       onClick={() => setSelectedDate(cell.dateKey)}
                     >
                       <span className="calendar-day-num">{cell.day}</span>
+                      <span className="calendar-day-dots" aria-hidden="true">
+                        {cell.isAtCapacity && cell.activeCount > 0 && <i className="legend-dot dot-full" />}
+                        {cell.confirmedPaidCount > 0 && <i className="legend-dot dot-booked" />}
+                        {cell.reservedUnpaidCount > 0 && <i className="legend-dot dot-reserved" />}
+                        {cell.completedCount > 0 && cell.activeCount === 0 && <i className="legend-dot dot-completed" />}
+                        {cell.isBlocked && <i className="legend-dot dot-blocked" />}
+                        {!cell.isWorkingDay && !cell.isBlocked && cell.dayBookings.length === 0 && <i className="legend-dot dot-offday" />}
+                      </span>
                       <span className="calendar-day-indicators">
                         {cell.isAtCapacity && cell.activeCount > 0 && (
                           <span className="cal-pill cal-pill-full">Full</span>

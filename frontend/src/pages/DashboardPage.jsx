@@ -17,6 +17,7 @@ import {
   Plus,
   RotateCcw,
   Save,
+  Search,
   ShieldCheck,
   Sparkles,
   Star,
@@ -58,6 +59,7 @@ import GardenerClerksPanel from '../components/GardenerClerksPanel'
 import GardenerScheduleCalendar from '../components/GardenerScheduleCalendar'
 import StructuredAddressFields from '../components/StructuredAddressFields'
 import {
+  ZAMBOANGA_BARANGAYS,
   composeStructuredAddress,
   parseStructuredAddress,
   validateStructuredAddress,
@@ -305,7 +307,14 @@ function ProfileForm({ role, profile, userId, onSaved }) {
         <label>About your gardening work<textarea placeholder="Tell homeowners what you specialize in..." value={form.description || ''} onChange={change('description')} rows="4" /></label>
 
         <div className="schedule-settings-box">
-          <p className="auth-section-title">Days &amp; hours you accept work</p>
+          <div className="schedule-preset-head">
+            <p className="auth-section-title" style={{ margin: 0 }}>Days &amp; hours you accept work</p>
+            <div className="inline-actions" style={{ gap: '6px' }}>
+              <button type="button" className="table-action" onClick={() => { setError(''); setForm({ ...form, workingDays: ['mon', 'tue', 'wed', 'thu', 'fri'] }) }}>Mon–Fri</button>
+              <button type="button" className="table-action" onClick={() => { setError(''); setForm({ ...form, workingDays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'] }) }}>Mon–Sat</button>
+              <button type="button" className="table-action" onClick={() => { setError(''); setForm({ ...form, workingDays: WEEKDAY_OPTIONS.map((d) => d.code) }) }}>Every day</button>
+            </div>
+          </div>
           <div className="weekday-toggle-grid" role="group" aria-label="Working days">
             {WEEKDAY_OPTIONS.map((day) => {
               const checked = parseWorkingDaysArray(form.workingDays).includes(day.code)
@@ -1343,11 +1352,15 @@ function ClientDiscoveryShowcase({ defaultLocation = 'Zamboanga City' }) {
             <label>
               <span className="ai-filter-label-text">Your barangay / area</span>
               <input
+                list="zamboanga-barangays-client"
                 maxLength="120"
                 placeholder="e.g., Tetuan, Sta. Maria, Pasonanca"
                 value={locationInput}
                 onChange={(e) => setLocationInput(e.target.value)}
               />
+              <datalist id="zamboanga-barangays-client">
+                {ZAMBOANGA_BARANGAYS.map((brgy) => <option key={brgy} value={brgy} />)}
+              </datalist>
             </label>
             <label>
               <span className="ai-filter-label-text">
@@ -1651,11 +1664,21 @@ function GardenerReviewsPanel({ userId }) {
 
 function GardenerOpportunityShowcase({ isApproved, defaultArea = 'Zamboanga City' }) {
   const [openRequests, setOpenRequests] = useState([])
+  const [categories, setCategories] = useState([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [loading, setLoading] = useState(true)
   const [areaInput, setAreaInput] = useState(defaultArea || '')
   const [sortBy, setSortBy] = useState('smart_ai')
   const [nearbyOnly, setNearbyOnly] = useState(false)
   const [goodConductOnly, setGoodConductOnly] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    servicesApi.categories()
+      .then((catRes) => { if (active) setCategories(catRes?.categories || []) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     if (!isApproved) {
@@ -1668,6 +1691,7 @@ function GardenerOpportunityShowcase({ isApproved, defaultArea = 'Zamboanga City
       fetchSmartRecommendations({
         mode: 'leads',
         location: areaInput.trim() || defaultArea || 'Zamboanga City',
+        categoryId: selectedCategoryId || undefined,
         sortBy,
         nearbyOnly,
         goodConductOnly,
@@ -1678,7 +1702,7 @@ function GardenerOpportunityShowcase({ isApproved, defaultArea = 'Zamboanga City
         })
         .catch(() => {
           if (!active) return
-          inquiriesApi.listOpen().then((fallback) => {
+          inquiriesApi.listOpen({ categoryId: selectedCategoryId || undefined }).then((fallback) => {
             if (active) setOpenRequests((fallback?.requests || fallback?.inquiries || []).slice(0, 3))
           }).catch(() => {})
         })
@@ -1690,7 +1714,7 @@ function GardenerOpportunityShowcase({ isApproved, defaultArea = 'Zamboanga City
       active = false
       clearTimeout(timer)
     }
-  }, [isApproved, defaultArea, areaInput, sortBy, nearbyOnly, goodConductOnly])
+  }, [isApproved, defaultArea, areaInput, selectedCategoryId, sortBy, nearbyOnly, goodConductOnly])
 
   return (
     <section className="dashboard-showcase-full" aria-label="AI filtered open client leads">
@@ -1730,14 +1754,29 @@ function GardenerOpportunityShowcase({ isApproved, defaultArea = 'Zamboanga City
                 ))}
               </div>
               <div className="ai-filter-toggles">
+                <select
+                  className="ai-filter-inline-select"
+                  aria-label="Filter open leads by category"
+                  value={selectedCategoryId}
+                  onChange={(e) => setSelectedCategoryId(e.target.value)}
+                >
+                  <option value="">All categories</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
                 <input
                   className="ai-filter-inline-input"
+                  list="zamboanga-barangays-gardener"
                   aria-label="Filter near barangay or service area"
                   maxLength="120"
                   placeholder="Area (e.g., Tetuan)"
                   value={areaInput}
                   onChange={(e) => setAreaInput(e.target.value)}
                 />
+                <datalist id="zamboanga-barangays-gardener">
+                  {ZAMBOANGA_BARANGAYS.map((brgy) => <option key={brgy} value={brgy} />)}
+                </datalist>
                 <label className="ai-toggle-chip">
                   <input type="checkbox" checked={nearbyOnly} onChange={(e) => setNearbyOnly(e.target.checked)} />
                   <span>Nearby only</span>
@@ -1831,17 +1870,27 @@ function GardenerOpportunityShowcase({ isApproved, defaultArea = 'Zamboanga City
 
 function DashboardActivity({ role }) {
   const [inquiries, setInquiries] = useState([])
-  const [bookings, setBookings] = useState([])
+  const [allBookings, setAllBookings] = useState([])
   const [error, setError] = useState('')
 
   useEffect(() => {
     Promise.all([inquiriesApi.list(), bookingsApi.list()])
       .then(([inquiryData, bookingData]) => {
         setInquiries(inquiryData.inquiries.slice(0, 5))
-        setBookings(bookingData.bookings.slice(0, 5))
+        setAllBookings(bookingData.bookings || [])
       })
       .catch((loadError) => setError(loadError.message))
   }, [])
+
+  const bookings = allBookings.slice(0, 5)
+  const gardenerEarnings = useMemo(() => {
+    if (role !== 'gardener') return null
+    const activeNonCancelled = allBookings.filter((b) => b.status !== 'cancelled' && b.status !== 'declined')
+    const verifiedPaid = activeNonCancelled.reduce((sum, b) => sum + Number(b.amount_paid || 0), 0)
+    const pendingBalance = activeNonCancelled.reduce((sum, b) => sum + Math.max(0, Number(b.remaining_balance ?? (Number(b.agreed_amount || 0) - Number(b.amount_paid || 0)))), 0)
+    const awaitingPaymentCount = activeNonCancelled.filter((b) => b.payment_status !== 'fully_paid').length
+    return { verifiedPaid, pendingBalance, awaitingPaymentCount, totalJobs: activeNonCancelled.length }
+  }, [allBookings, role])
 
   const offersWaitingCount = role === 'client'
     ? inquiries.filter((inq) => Number(inq.offer_count || 0) > 0 && ['open', 'responded', 'provider_selected', 'in_agreement'].includes(inq.status)).length
@@ -1897,6 +1946,22 @@ function DashboardActivity({ role }) {
           </div>
           <Link className="button button-outline button-sm" to="/bookings">View all</Link>
         </div>
+        {gardenerEarnings && gardenerEarnings.totalJobs > 0 && (
+          <div className="earnings-snapshot-strip" aria-label="Earnings and payments snapshot">
+            <div>
+              <small>Verified paid</small>
+              <strong>{formatPHP(gardenerEarnings.verifiedPaid)}</strong>
+            </div>
+            <div>
+              <small>Pending balance</small>
+              <strong>{formatPHP(gardenerEarnings.pendingBalance)}</strong>
+            </div>
+            <div>
+              <small>Awaiting payment</small>
+              <strong>{gardenerEarnings.awaitingPaymentCount} job{gardenerEarnings.awaitingPaymentCount === 1 ? '' : 's'}</strong>
+            </div>
+          </div>
+        )}
         {!error && bookings.length === 0 && (
           <p className="form-note">
             No reservations or bookings yet. Reservations are created automatically when both parties approve a mutual service agreement.
@@ -2356,6 +2421,11 @@ function AdminDashboard({ summary, summaryLoading = false, onStatusChange, onUse
   const [approvalInProgress, setApprovalInProgress] = useState(null)
   const [approvalModal, setApprovalModal] = useState(null)
   const [approvalReason, setApprovalReason] = useState('')
+  const [reportFilter, setReportFilter] = useState('all')
+  const [accountSearch, setAccountSearch] = useState('')
+  const [accountRoleFilter, setAccountRoleFilter] = useState('all')
+  const [accountStatusFilter, setAccountStatusFilter] = useState('all')
+  const [accountPage, setAccountPage] = useState(1)
 
   async function saveAccountEdit(event) {
     event.preventDefault()
@@ -2540,7 +2610,14 @@ function AdminDashboard({ summary, summaryLoading = false, onStatusChange, onUse
     }
   }
   async function toggleService(service) { try { await profileApi.updateServiceStatus(service.id, !service.is_active); loadAdminData() } catch (error) { setAdminError(error.message) } }
-  async function updateReport(id, status) { try { await profileApi.updateReport(id, status); loadAdminData() } catch (error) { setAdminError(error.message) } }
+  async function updateReport(id, status) {
+    setAdminError(''); setAdminMessage('')
+    try {
+      await profileApi.updateReport(id, status)
+      await loadAdminData()
+      setAdminMessage(`Report #${id} marked as ${formatStatusLabel(status)}.`)
+    } catch (error) { setAdminError(error.message) }
+  }
   function updateGardenerApproval(userId, isApproved) {
     const gardener = pendingGardeners.find((item) => item.id === userId)
     if (!gardener) return
@@ -3184,124 +3261,241 @@ function AdminDashboard({ summary, summaryLoading = false, onStatusChange, onUse
           </section>
         )}
 
-        {activeTab === 'reports' && (
-          <section className="dashboard-panel user-management" id="admin-reports">
-            <p className="eyebrow">Reports</p>
-            <h2>Review reported content</h2>
-            <div className="admin-item-list">
-              {reports.length === 0 && <p className="form-note">No reports have been submitted.</p>}
-              {reports.map((report) => (
-                <div className="admin-item admin-report" key={report.id}>
-                  <span>
-                    <strong>{report.reason}</strong>
-                    <small>{report.reporter_name} · {report.status}</small>
-                    {report.details && <em>{report.details}</em>}
-                  </span>
-                  <select value={report.status} onChange={(event) => updateReport(report.id, event.target.value)}>
-                    <option value="open" disabled>Open</option>
-                    <option value="reviewing">Reviewing</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="dismissed">Dismissed</option>
-                  </select>
+        {activeTab === 'reports' && (() => {
+          const reportStatuses = ['all', 'open', 'reviewing', 'resolved', 'dismissed']
+          const filteredReports = reportFilter === 'all'
+            ? reports
+            : reports.filter((r) => r.status === reportFilter)
+          return (
+            <section className="dashboard-panel user-management" id="admin-reports">
+              <div className="activity-heading">
+                <div>
+                  <p className="eyebrow">Reports</p>
+                  <h2>Review reported content</h2>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'accounts' && (
-          <section className="dashboard-panel user-management" id="admin-accounts">
-            <p className="eyebrow">Account management</p>
-            <h2>Manage accounts</h2>
-            {editingAccount && (
-              <form className="profile-form admin-account-edit-form" onSubmit={saveAccountEdit}>
-                <div className="activity-heading">
-                  <h3>Edit {editingAccount.email}</h3>
-                  <button className="table-action" type="button" onClick={() => setEditingAccount(null)}>Cancel</button>
-                </div>
-                <div className="form-row form-row-3">
-                  <label>First name<input required maxLength="100" value={editingAccount.firstName} onChange={(e) => setEditingAccount({ ...editingAccount, firstName: e.target.value })} /></label>
-                  <label>Middle name <span className="label-note">(Optional)</span><input maxLength="100" placeholder="Optional" value={editingAccount.middleName || ''} onChange={(e) => setEditingAccount({ ...editingAccount, middleName: e.target.value })} /></label>
-                  <label>Last name<input required maxLength="100" value={editingAccount.lastName} onChange={(e) => setEditingAccount({ ...editingAccount, lastName: e.target.value })} /></label>
-                </div>
-                <div className="form-row form-row-3">
-                  <label>Mobile number<input type="tel" maxLength="30" value={editingAccount.phone} onChange={(e) => setEditingAccount({ ...editingAccount, phone: e.target.value })} /></label>
-                  <label>Birthday <span className="label-note">(18+ if set)</span><input type="date" max={getMaxBirthDateForAge(MIN_REGISTRATION_AGE)} value={editingAccount.dateOfBirth || ''} onChange={(e) => setEditingAccount({ ...editingAccount, dateOfBirth: e.target.value })} /></label>
-                  <label>
-                    Role
-                    <select value={editingAccount.role} onChange={(e) => setEditingAccount({ ...editingAccount, role: e.target.value })}>
-                      <option value="client">Client</option>
-                      <option value="gardener">Gardener</option>
-                      <option value="clerk">Clerk (Assigned Gardener Manager)</option>
-                      <option value="administrator">Administrator</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="inline-actions">
-                  <button className="button" type="submit" disabled={accountSaving}>
-                    <Save size={15} /> {accountSaving ? 'Saving...' : 'Save changes'}
-                  </button>
-                </div>
-              </form>
-            )}
-            <div className="user-table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr>
-                </thead>
-                <tbody>
-                  {summary.users.map((account) => {
-                    const accountFullName = formatUserFullName({
-                      firstName: account.first_name,
-                      middleName: account.middle_name,
-                      lastName: account.last_name,
-                    })
+                <span className="panel-count">{filteredReports.length} of {reports.length}</span>
+              </div>
+              {reports.length > 0 && (
+                <div className="booking-filter-bar" role="tablist" aria-label="Filter reports by status" style={{ marginBottom: '14px' }}>
+                  {reportStatuses.map((key) => {
+                    const count = key === 'all' ? reports.length : reports.filter((r) => r.status === key).length
                     return (
-                    <tr key={account.id}>
-                      <td>
-                        {accountFullName}
-                        <small>{account.email}{account.age !== null && account.age !== undefined ? ` · Age ${account.age}` : ''}</small>
-                      </td>
-                      <td>
-                        {account.role}
-                        {Boolean(account.can_act_as_client) && Boolean(account.can_act_as_gardener) && (
-                          <small>Dual role (Client + Gardener)</small>
-                        )}
-                      </td>
-                      <td><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td>
-                      <td>
-                        <div className="inline-actions">
-                          <button
-                            className="table-action"
-                            type="button"
-                            onClick={() => setEditingAccount({
-                              id: account.id,
-                              email: account.email,
-                              firstName: account.first_name,
-                              middleName: account.middle_name || '',
-                              lastName: account.last_name,
-                              phone: account.phone || '',
-                              dateOfBirth: account.date_of_birth ? String(account.date_of_birth).slice(0, 10) : '',
-                              role: account.role,
-                              isActive: Boolean(account.is_active),
-                            })}
-                          >
-                            Edit
-                          </button>
-                          <button className="table-action" type="button" onClick={() => onStatusChange(account.id, !account.is_active)}>
-                            {account.is_active ? 'Deactivate' : 'Activate'}
-                          </button>
-                          <button className="table-action table-action-danger" type="button" onClick={() => setDeleteAccountTarget(account)}>
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                      <button
+                        key={key}
+                        type="button"
+                        role="tab"
+                        aria-selected={reportFilter === key}
+                        className={`booking-filter-pill${reportFilter === key ? ' is-active' : ''}`}
+                        onClick={() => setReportFilter(key)}
+                      >
+                        <span>{key === 'all' ? 'All' : formatStatusLabel(key)}</span>
+                        <span className="booking-filter-count">{count}</span>
+                      </button>
                     )
                   })}
-                </tbody>
-              </table>
-            </div>
+                </div>
+              )}
+              <div className="admin-item-list">
+                {reports.length === 0 && <p className="form-note">No reports have been submitted.</p>}
+                {reports.length > 0 && filteredReports.length === 0 && (
+                  <p className="form-note">No reports with status &ldquo;{formatStatusLabel(reportFilter)}&rdquo;.</p>
+                )}
+                {filteredReports.map((report) => (
+                  <div className="admin-item admin-report" key={report.id}>
+                    <span>
+                      <strong>{report.reason}</strong>
+                      <small>{report.reporter_name} · <span className={getStatusBadgeClass(report.status)}>{formatStatusLabel(report.status)}</span></small>
+                      {report.details && <em>{report.details}</em>}
+                    </span>
+                    <select aria-label={`Status for report ${report.id}`} value={report.status} onChange={(event) => updateReport(report.id, event.target.value)}>
+                      <option value="open" disabled>Open</option>
+                      <option value="reviewing">Reviewing</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="dismissed">Dismissed</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )
+        })()}
+
+        {activeTab === 'accounts' && (() => {
+          const PAGE_SIZE = 10
+          const query = accountSearch.trim().toLowerCase()
+          const filteredUsers = summary.users.filter((account) => {
+            if (accountRoleFilter !== 'all' && account.role !== accountRoleFilter) return false
+            if (accountStatusFilter === 'active' && !account.is_active) return false
+            if (accountStatusFilter === 'inactive' && account.is_active) return false
+            if (!query) return true
+            const fullName = formatUserFullName({
+              firstName: account.first_name,
+              middleName: account.middle_name,
+              lastName: account.last_name,
+            }).toLowerCase()
+            return fullName.includes(query) || String(account.email || '').toLowerCase().includes(query)
+          })
+          const totalAccountPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE))
+          const safeAccountPage = Math.min(accountPage, totalAccountPages)
+          const pagedUsers = filteredUsers.slice((safeAccountPage - 1) * PAGE_SIZE, safeAccountPage * PAGE_SIZE)
+
+          return (
+            <section className="dashboard-panel user-management" id="admin-accounts">
+              <div className="activity-heading">
+                <div>
+                  <p className="eyebrow">Account management</p>
+                  <h2>Manage accounts</h2>
+                </div>
+                <span className="panel-count">{filteredUsers.length} of {summary.users.length}</span>
+              </div>
+
+              <div className="admin-accounts-toolbar">
+                <label className="admin-accounts-search">
+                  <Search size={15} aria-hidden="true" />
+                  <input
+                    type="search"
+                    aria-label="Search accounts by name or email"
+                    placeholder="Search by name or email..."
+                    value={accountSearch}
+                    onChange={(e) => { setAccountSearch(e.target.value); setAccountPage(1) }}
+                  />
+                </label>
+                <div className="admin-accounts-role-pills" role="tablist" aria-label="Filter accounts by role">
+                  {[
+                    { key: 'all', label: 'All' },
+                    { key: 'client', label: 'Clients' },
+                    { key: 'gardener', label: 'Gardeners' },
+                    { key: 'clerk', label: 'Clerks' },
+                    { key: 'administrator', label: 'Admins' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={accountRoleFilter === opt.key}
+                      className={`booking-filter-pill${accountRoleFilter === opt.key ? ' is-active' : ''}`}
+                      onClick={() => { setAccountRoleFilter(opt.key); setAccountPage(1) }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  className="admin-accounts-status-select"
+                  aria-label="Filter accounts by status"
+                  value={accountStatusFilter}
+                  onChange={(e) => { setAccountStatusFilter(e.target.value); setAccountPage(1) }}
+                >
+                  <option value="all">All statuses</option>
+                  <option value="active">Active only</option>
+                  <option value="inactive">Inactive only</option>
+                </select>
+              </div>
+
+              {editingAccount && (
+                <form className="profile-form admin-account-edit-form" onSubmit={saveAccountEdit}>
+                  <div className="activity-heading">
+                    <h3>Edit {editingAccount.email}</h3>
+                    <button className="table-action" type="button" onClick={() => setEditingAccount(null)}>Cancel</button>
+                  </div>
+                  <div className="form-row form-row-3">
+                    <label>First name<input required maxLength="100" value={editingAccount.firstName} onChange={(e) => setEditingAccount({ ...editingAccount, firstName: e.target.value })} /></label>
+                    <label>Middle name <span className="label-note">(Optional)</span><input maxLength="100" placeholder="Optional" value={editingAccount.middleName || ''} onChange={(e) => setEditingAccount({ ...editingAccount, middleName: e.target.value })} /></label>
+                    <label>Last name<input required maxLength="100" value={editingAccount.lastName} onChange={(e) => setEditingAccount({ ...editingAccount, lastName: e.target.value })} /></label>
+                  </div>
+                  <div className="form-row form-row-3">
+                    <label>Mobile number<input type="tel" maxLength="30" value={editingAccount.phone} onChange={(e) => setEditingAccount({ ...editingAccount, phone: e.target.value })} /></label>
+                    <label>Birthday <span className="label-note">(18+ if set)</span><input type="date" max={getMaxBirthDateForAge(MIN_REGISTRATION_AGE)} value={editingAccount.dateOfBirth || ''} onChange={(e) => setEditingAccount({ ...editingAccount, dateOfBirth: e.target.value })} /></label>
+                    <label>
+                      Role
+                      <select value={editingAccount.role} onChange={(e) => setEditingAccount({ ...editingAccount, role: e.target.value })}>
+                        <option value="client">Client</option>
+                        <option value="gardener">Gardener</option>
+                        <option value="clerk">Clerk (Assigned Gardener Manager)</option>
+                        <option value="administrator">Administrator</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="inline-actions">
+                    <button className="button" type="submit" disabled={accountSaving}>
+                      <Save size={15} /> {accountSaving ? 'Saving...' : 'Save changes'}
+                    </button>
+                  </div>
+                </form>
+              )}
+              <div className="user-table-wrap admin-responsive-table-wrap">
+                <table className="admin-responsive-table">
+                  <thead>
+                    <tr><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr>
+                  </thead>
+                  <tbody>
+                    {pagedUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="admin-empty-cell">No accounts match your search or filters.</td>
+                      </tr>
+                    ) : pagedUsers.map((account) => {
+                      const accountFullName = formatUserFullName({
+                        firstName: account.first_name,
+                        middleName: account.middle_name,
+                        lastName: account.last_name,
+                      })
+                      return (
+                        <tr key={account.id}>
+                          <td data-label="Name">
+                            {accountFullName}
+                            <small>{account.email}{account.age !== null && account.age !== undefined ? ` · Age ${account.age}` : ''}</small>
+                          </td>
+                          <td data-label="Role">
+                            {account.role}
+                            {Boolean(account.can_act_as_client) && Boolean(account.can_act_as_gardener) && (
+                              <small>Dual role (Client + Gardener)</small>
+                            )}
+                          </td>
+                          <td data-label="Status"><span className={account.is_active ? 'status-active' : 'status-inactive'}>{account.is_active ? 'Active' : 'Inactive'}</span></td>
+                          <td data-label="Action">
+                            <div className="inline-actions">
+                              <button
+                                className="table-action"
+                                type="button"
+                                onClick={() => setEditingAccount({
+                                  id: account.id,
+                                  email: account.email,
+                                  firstName: account.first_name,
+                                  middleName: account.middle_name || '',
+                                  lastName: account.last_name,
+                                  phone: account.phone || '',
+                                  dateOfBirth: account.date_of_birth ? String(account.date_of_birth).slice(0, 10) : '',
+                                  role: account.role,
+                                  isActive: Boolean(account.is_active),
+                                })}
+                              >
+                                Edit
+                              </button>
+                              <button className="table-action" type="button" onClick={() => onStatusChange(account.id, !account.is_active)}>
+                                {account.is_active ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button className="table-action table-action-danger" type="button" onClick={() => setDeleteAccountTarget(account)}>
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {totalAccountPages > 1 && (
+                <nav className="pagination" aria-label="Accounts pagination" style={{ marginTop: '14px' }}>
+                  <button type="button" disabled={safeAccountPage <= 1} onClick={() => setAccountPage((p) => Math.max(1, p - 1))}>
+                    Previous
+                  </button>
+                  <span aria-live="polite">Page {safeAccountPage} of {totalAccountPages}</span>
+                  <button type="button" disabled={safeAccountPage >= totalAccountPages} onClick={() => setAccountPage((p) => Math.min(totalAccountPages, p + 1))}>
+                    Next
+                  </button>
+                </nav>
+              )}
 
             <div className="admin-clerk-assignments" style={{ marginTop: '28px', paddingTop: '22px', borderTop: '1px solid var(--border-subtle, #e2e8f0)' }}>
               <p className="eyebrow">Assigned clerks</p>
@@ -3420,7 +3614,8 @@ function AdminDashboard({ summary, summaryLoading = false, onStatusChange, onUse
               )}
             </Modal>
           </section>
-        )}
+          )
+        })()}
 
         <Modal
           open={Boolean(approvalModal)}
@@ -3508,7 +3703,7 @@ export default function DashboardPage({ profileView = false }) {
         .finally(() => {
           if (active) setLoadedRole('administrator')
         })
-    } else if (user.role !== 'clerk') {
+    } else if (user.role !== 'clerk' || activeTab === 'profile') {
       profileApi.get()
         .then((result) => {
           if (!active) return
@@ -3525,7 +3720,7 @@ export default function DashboardPage({ profileView = false }) {
         })
     }
     return () => { active = false }
-  }, [user.role])
+  }, [user.role, activeTab])
 
   async function changeStatus(userId, isActive) {
     try {
@@ -3550,7 +3745,54 @@ export default function DashboardPage({ profileView = false }) {
 
   if (error) return <main className="dashboard-page"><AppSidebar /><section className="container dashboard-content"><div className="form-error" role="alert">{error}</div></section></main>
   if (user.role === 'administrator') return <AdminDashboard summary={summary} summaryLoading={summaryLoading} onStatusChange={changeStatus} onUserUpdated={handleUserUpdated} onUserDeleted={handleUserDeleted} activeTab={activeTab} />
-  if (user.role === 'clerk') return <ClerkDashboard activeTab={activeTab} />
+  if (user.role === 'clerk') {
+    if (activeTab === 'profile') {
+      const form = profileData.form || initialProfile
+      return (
+        <main className="dashboard-page protected-page">
+          <AppSidebar />
+          <section className="container dashboard-content">
+            <div className="dashboard-hero-row">
+              <div>
+                <h1>Profile &amp; settings.</h1>
+                <p className="dashboard-lead" style={{ marginBottom: 0 }}>
+                  Update your personal name, mobile number, and profile photo.
+                </p>
+              </div>
+              <Link className="button button-outline button-sm" to="/dashboard">Back to desk</Link>
+            </div>
+            {loadedRole !== 'clerk' ? (
+              <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading profile details">
+                <div className="skeleton-line" />
+                <div className="skeleton-line short" />
+              </div>
+            ) : (
+              <section className="dashboard-panel profile-settings-panel">
+                <ProfileForm
+                  key={`${form.id || user.id}-${form.email || ''}`}
+                  role="clerk"
+                  profile={form}
+                  userId={user.id}
+                  onSaved={(result) => {
+                    setProfileData((current) => ({ ...current, form: buildProfileForm(result, current.form) }))
+                    if (result?.user) {
+                      updateUser({
+                        firstName: result.user.firstName ?? result.user.first_name ?? user.firstName,
+                        middleName: result.user.middleName ?? result.user.middle_name ?? user.middleName,
+                        lastName: result.user.lastName ?? result.user.last_name ?? user.lastName,
+                        avatarPath: result.user.avatarPath ?? result.user.avatar_path ?? user.avatarPath,
+                      })
+                    }
+                  }}
+                />
+              </section>
+            )}
+          </section>
+        </main>
+      )
+    }
+    return <ClerkDashboard activeTab={activeTab} />
+  }
   return (
     <UserDashboard
       user={user}

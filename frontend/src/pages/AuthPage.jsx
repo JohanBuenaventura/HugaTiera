@@ -28,6 +28,7 @@ function AuthLayout({ title, children, footer, wide = false }) {
         </aside>
         <div className={wide ? 'auth-panel auth-panel-register' : 'auth-panel'}>
           <Link className="auth-mobile-brand brand" to="/"><span className="brand-mark"><Leaf size={19} /></span><span>Huga<span>Tiera</span></span></Link>
+          <Link className="back-link" to="/" style={{ marginBottom: '12px' }}><ArrowLeft size={14} /> Back to home</Link>
           <p className="eyebrow">Welcome to HugaTiera</p>
           <h1>{title}</h1>
           {children}
@@ -61,9 +62,20 @@ function saveRecentEmail(email) {
   }
 }
 
+function sanitizeNextPath(raw) {
+  if (!raw || typeof raw !== 'string') return '/dashboard'
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/login') || trimmed.startsWith('/register')) {
+    return '/dashboard'
+  }
+  return trimmed
+}
+
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const nextPath = sanitizeNextPath(searchParams.get('next'))
   const [recentEmails, setRecentEmails] = useState(loadRecentEmails)
   const [form, setForm] = useState(() => ({ email: recentEmails[0] || '', password: '' }))
   const [showPassword, setShowPassword] = useState(false)
@@ -78,7 +90,7 @@ export function LoginPage() {
       await login(form)
       saveRecentEmail(form.email)
       setRecentEmails(loadRecentEmails())
-      navigate('/dashboard')
+      navigate(nextPath, { replace: true })
     } catch (submitError) {
       setError(submitError.message)
     } finally {

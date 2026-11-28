@@ -106,6 +106,7 @@ async function listServices(req, res, next) {
              s.service_area, s.workers_required, s.image_path, s.category_id, c.name AS category_name,
              s.gardener_id, u.first_name, u.last_name, u.avatar_path AS gardener_avatar_path,
              gp.business_name, gp.years_of_experience, gp.crew_size, gp.max_concurrent_jobs,
+             (SELECT p.id FROM portfolios p WHERE p.gardener_id = s.gardener_id ORDER BY p.created_at DESC, p.id DESC LIMIT 1) AS first_portfolio_id,
              (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.gardener_id = s.gardener_id AND r.is_visible = TRUE) AS average_rating,
              (SELECT COUNT(*) FROM reviews r WHERE r.gardener_id = s.gardener_id AND r.is_visible = TRUE) AS review_count
       FROM services s

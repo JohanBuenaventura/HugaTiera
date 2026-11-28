@@ -192,6 +192,7 @@ export function getDashboardNavLinks(role, unreadCounts = {}) {
       { to: '/dashboard?tab=services', label: 'Services', type: 'route' },
       { to: '/notifications', label: 'Notifications', badge: unreadCounts.notifications || 0, type: 'route' },
       { to: '/services', label: 'Marketplace', type: 'route' },
+      { to: '/profile', label: 'Profile', type: 'route' },
     ]
   }
   if (role === 'gardener') {

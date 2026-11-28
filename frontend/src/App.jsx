@@ -608,8 +608,10 @@ function App() {
                 <Route element={<ProtectedRoute roles={['client', 'gardener', 'clerk', 'administrator']} />}>
                   <Route path="/notifications" element={<CommunicationPage mode="notifications" />} />
                 </Route>
-                <Route element={<ProtectedRoute roles={['client', 'gardener']} />}>
+                <Route element={<ProtectedRoute roles={['client', 'gardener', 'clerk']} />}>
                   <Route path="/profile" element={<DashboardPage profileView />} />
+                </Route>
+                <Route element={<ProtectedRoute roles={['client', 'gardener']} />}>
                   <Route path="/inquiries" element={<InquiryPage />} />
                   <Route path="/inquiries/new" element={<InquiryPage create />} />
                   <Route path="/messages" element={<CommunicationPage mode="messages" />} />

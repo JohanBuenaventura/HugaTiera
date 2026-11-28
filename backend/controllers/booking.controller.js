@@ -202,6 +202,7 @@ async function listBookings(req, res, next) {
               COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gardener.first_name, ' ', gardener.last_name)) AS gardener_name,
               CONCAT(canceller.first_name, ' ', canceller.last_name) AS cancelled_by_name,
               canceller.role AS cancelled_by_role,
+              (SELECT ri.id FROM request_images ri WHERE ri.inquiry_id = b.inquiry_id AND ri.kind = 'original' ORDER BY ri.id ASC LIMIT 1) AS first_image_id,
               (SELECT COUNT(*) FROM booking_reschedule_requests rr WHERE rr.booking_id = b.id AND rr.status = 'pending') AS pending_reschedule_count
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id

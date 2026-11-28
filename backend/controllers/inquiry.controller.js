@@ -202,6 +202,7 @@ async function listInquiries(req, res, next) {
                 u.first_name AS client_first_name, u.last_name AS client_last_name,
                 gp.business_name,
                 COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name,
+                (SELECT ri.id FROM request_images ri WHERE ri.inquiry_id = i.id AND ri.kind = 'original' ORDER BY ri.id ASC LIMIT 1) AS first_image_id,
                 (SELECT COUNT(*) FROM quotations q WHERE q.inquiry_id = i.id AND q.status <> 'withdrawn') AS offer_count
          FROM inquiries i
          LEFT JOIN services s ON s.id = i.service_id
@@ -238,6 +239,7 @@ async function listInquiries(req, res, next) {
               u.first_name AS client_first_name, u.last_name AS client_last_name,
               gp.business_name,
               COALESCE(NULLIF(TRIM(gp.business_name), ''), CONCAT(gu.first_name, ' ', gu.last_name)) AS gardener_name,
+              (SELECT ri.id FROM request_images ri WHERE ri.inquiry_id = i.id AND ri.kind = 'original' ORDER BY ri.id ASC LIMIT 1) AS first_image_id,
               my_q.id AS my_quotation_id,
               my_q.status AS my_quotation_status,
               my_q.response_type AS my_response_type,

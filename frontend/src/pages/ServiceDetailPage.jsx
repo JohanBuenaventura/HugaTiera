@@ -104,7 +104,11 @@ export default function ServiceDetailPage() {
                 )}
               </div>
             )}
-            {!user && <Link className="button" to="/login">Sign in to ask or book</Link>}
+            {!user && (
+              <Link className="button" to={`/login?next=${encodeURIComponent(`/services/${service.id}`)}`}>
+                Sign in to ask or book
+              </Link>
+            )}
             {user && user.id === service.gardener_id && (
               <div className="inline-actions" style={{ marginTop: '14px' }}>
                 <Link className="button button-outline button-sm" to="/dashboard?tab=services">

@@ -3929,3 +3929,464 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ============================================================================
+   Wave 3 Polish — Admin Accounts/Reports, Gardener Earnings & Category Filter,
+   AI Markdown Formatting, Schedule Presets & Mobile Calendar Dots
+   ============================================================================ */
+
+.schedule-preset-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-filter-inline-select {
+  min-width: 155px;
+  padding: 7px 10px;
+  border: 1px solid #cfd9d0;
+  border-radius: 8px;
+  color: #18251d;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.earnings-snapshot-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #d7dfd8;
+  border-radius: 10px;
+  background: #f6f9f6;
+}
+
+.earnings-snapshot-strip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.earnings-snapshot-strip small {
+  color: #526257;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.earnings-snapshot-strip strong {
+  color: #193b2b;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Admin Accounts Search / Role Filter / Responsive Mobile Cards */
+.admin-accounts-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 16px;
+}
+
+.admin-accounts-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+  padding: 8px 12px;
+  border: 1px solid #cfd9d0;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #526257;
+}
+
+.admin-accounts-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #18251d;
+  font-size: 13.5px;
+}
+
+.admin-accounts-role-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-accounts-status-select {
+  padding: 8px 10px;
+  border: 1px solid #cfd9d0;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #18251d;
+  font-size: 13px;
+}
+
+.admin-empty-cell {
+  text-align: center;
+  color: #526257;
+  padding: 24px 12px;
+}
+
+@media (max-width: 680px) {
+  .earnings-snapshot-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-responsive-table thead {
+    display: none;
+  }
+
+  .admin-responsive-table,
+  .admin-responsive-table tbody,
+  .admin-responsive-table tr,
+  .admin-responsive-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-responsive-table tr {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border: 1px solid #d7dfd8;
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  .admin-responsive-table td {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 0;
+    border: 0;
+  }
+
+  .admin-responsive-table td::before {
+    content: attr(data-label);
+    color: #526257;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .admin-responsive-table td.admin-empty-cell::before {
+    content: none;
+  }
+}
+
+/* AI Assistant Safe Formatted Plan */
+.assistant-answer-formatted {
+  display: grid;
+  gap: 10px;
+  white-space: normal;
+  line-height: 1.65;
+}
+
+.assistant-plan-heading {
+  margin: 8px 0 2px;
+  color: #193b2b;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.assistant-plan-para {
+  margin: 0;
+  color: #213026;
+}
+
+.assistant-plan-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 5px;
+  color: #213026;
+}
+
+/* Compact Mobile Calendar Dots (<= 560px) */
+.calendar-day-dots {
+  display: none;
+}
+
+.legend-dot.dot-full {
+  background: #b9382c;
+}
+
+@media (max-width: 560px) {
+  .calendar-day-indicators {
+    display: none;
+  }
+
+  .calendar-day-dots {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 4px;
+  }
+
+  .calendar-day-dots .legend-dot {
+    width: 6px;
+    height: 6px;
+  }
+}
+
+
+/* ============================================================================
+   Wave 4 — 2-Column Desktop Booking Detail Workspace (Sticky Summary Rail)
+   ============================================================================ */
+
+.booking-detail-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.95fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.booking-detail-main {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.booking-detail-rail {
+  position: sticky;
+  top: 20px;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.booking-rail-card {
+  padding: 20px;
+}
+
+.booking-rail-facts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid #e3e9e2;
+  border-bottom: 1px solid #e3e9e2;
+}
+
+.booking-rail-facts > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.booking-rail-facts dt {
+  color: #5d6e62;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.booking-rail-facts dd {
+  margin: 0;
+  color: #18251d;
+  text-align: right;
+  word-break: break-word;
+}
+
+.booking-rail-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.booking-rail-actions .button,
+.booking-rail-actions .table-action {
+  width: 100%;
+  justify-content: center;
+}
+
+.booking-rail-text-block {
+  margin-top: 12px;
+}
+
+.booking-rail-text-block h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #193b2b;
+}
+
+.booking-rail-text-block p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.booking-work-actions-box {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid #cfe0d2;
+  border-radius: 10px;
+  background: #f4f9f5;
+}
+
+@media (max-width: 1080px) {
+  .booking-detail-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-detail-rail {
+    position: static;
+  }
+}
+
+@media print {
+  .booking-detail-workspace {
+    grid-template-columns: 1fr !important;
+  }
+
+  .booking-detail-rail {
+    position: static !important;
+  }
+}
+
+
+/* ============================================================================
+   Wave 5 — Bug Fixes, Inquiry Details Semantic Classes & Mobile Hardening
+   ============================================================================ */
+
+/* Fix legacy App.css rotate(180deg) hack now that ServiceDetailPage uses ArrowRight */
+.gardener-summary .text-link svg {
+  transform: none;
+}
+
+.marketplace-results-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ai-callout-box {
+  padding: 12px 14px;
+  border: 1px solid #d4e3d7;
+  border-radius: 10px;
+  background: #f3f8f4;
+  margin-bottom: 12px;
+}
+
+.ai-callout-list {
+  margin: 6px 0 6px 18px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #213026;
+}
+
+.offer-provider-strip {
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid #e1e8e2;
+  border-radius: 8px;
+  background: #f7faf7;
+}
+
+.offer-provider-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 13px;
+  color: #36493d;
+}
+
+.offer-portfolio-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.offer-portfolio-thumbs figure {
+  margin: 0;
+  width: 76px;
+}
+
+.offer-portfolio-thumbs img {
+  width: 76px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #d7dfd8;
+  display: block;
+}
+
+.revision-history-item {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 2px solid #cbd7cd;
+}
+
+/* Mobile Responsiveness Hardening (<= 640px & <= 480px) */
+@media (max-width: 640px) {
+  .ai-filter-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .ai-filter-inline-select,
+  .ai-filter-inline-input {
+    flex: 1 1 140px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .admin-accounts-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-accounts-search,
+  .admin-accounts-status-select {
+    width: 100%;
+    flex: none;
+  }
+
+  .msg-thread-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .msg-thread-links {
+    width: 100%;
+  }
+
+  .service-detail-cta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .managed-visual-actions .table-action {
+    margin-left: 0;
+  }
+
+  .booking-rail-facts > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .booking-rail-facts dd {
+    text-align: left;
+  }
+}

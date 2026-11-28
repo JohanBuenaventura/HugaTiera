@@ -1,8 +1,9 @@
-import { Link, Navigate, Outlet } from 'react-router-dom'
+import { Link, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 export default function ProtectedRoute({ roles }) {
   const { user, loading, authError, retryAuth } = useAuth()
+  const location = useLocation()
 
   if (loading) return <div className="route-loading">Checking your session...</div>
   if (authError) {
@@ -20,7 +21,11 @@ export default function ProtectedRoute({ roles }) {
       </main>
     )
   }
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    const intended = `${location.pathname || ''}${location.search || ''}`
+    const shouldCarryNext = intended && intended !== '/' && !intended.startsWith('/login') && !intended.startsWith('/register')
+    return <Navigate to={shouldCarryNext ? `/login?next=${encodeURIComponent(intended)}` : '/login'} replace />
+  }
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />
 
   return <Outlet />

@@ -15,7 +15,7 @@ import {
 } from '../services/bookings'
 import { inquiriesApi } from '../services/inquiries'
 import { computeEstimatedEndDateTime, formatWorkingDaysLabel } from '../services/profiles'
-import { fetchInquiryImages, getRequestImageUrl } from '../services/requestImages'
+import { getRequestImageUrl } from '../services/requestImages'
 import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
@@ -1036,8 +1036,10 @@ function BookingDetails({ id }) {
       )}
       {statusMessage && <TransientSuccess key={statusMessage} message={statusMessage} onDismiss={() => setStatusMessage('')} style={{ marginBottom: '16px' }} />}
       {error && <div className="form-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
-      <article className="dashboard-panel booking-detail-card">
-        <div className="payment-status-panel">
+      <div className="booking-detail-workspace">
+        <div className="booking-detail-main">
+          <article className="dashboard-panel booking-detail-card">
+            <div className="payment-status-panel">
           <div className="payment-status-heading">
             <div>
               <p className="eyebrow" style={{ margin: 0 }}>Reservation &amp; payment status</p>
@@ -1454,93 +1456,40 @@ function BookingDetails({ id }) {
           </Modal>
         </div>
 
-        <div className="detail-facts">
-          <span><strong>Starts</strong>{new Date(booking.scheduled_start).toLocaleString()}</span>
-          <span><strong>Ends</strong>{new Date(booking.scheduled_end).toLocaleString()}</span>
-          <span><strong>Location</strong>{booking.location}</span>
-        </div>
-        {agreementSummary.hasAgreement && (
-          <div className="booking-agreement-summary">
-            <p className="eyebrow">Mutual service agreement</p>
-            <h2>{agreementSummary.versionLabel}</h2>
-            <div className="detail-facts booking-agreement-facts">
-              {agreementSummary.amountLabel && (
-                <span><strong>Agreed price</strong>{agreementSummary.amountLabel}</span>
+        {(gardener && ['pending', 'accepted', 'in_progress'].includes(booking.status)) && (
+          <div className="booking-work-actions-box">
+            <p className="eyebrow" style={{ margin: '0 0 8px' }}>Service progress action</p>
+            <div className="inline-actions">
+              {gardener && booking.status === 'pending' && (
+                <>
+                  <button className="button" type="button" disabled={updatingStatus} onClick={() => update('accepted')}>
+                    {updatingStatus ? 'Saving...' : 'Accept'}
+                  </button>
+                  <button className="table-action" type="button" disabled={updatingStatus} onClick={() => update('declined')}>
+                    {updatingStatus ? 'Saving...' : 'Decline'}
+                  </button>
+                </>
               )}
-              <span><strong>Client approval</strong>{agreementSummary.clientApproval.label}</span>
-              <span><strong>Gardener approval</strong>{agreementSummary.gardenerApproval.label}</span>
+              {gardener && booking.status === 'accepted' && (
+                <>
+                  <button className="button" type="button" disabled={updatingStatus || !isBookedPaid} onClick={() => update('in_progress')}>
+                    {updatingStatus ? 'Saving...' : 'Start service'}
+                  </button>
+                  {!isBookedPaid && (
+                    <span className="field-note">
+                      Verify at least the required deposit ({formatPHP(booking.required_deposit_amount || 0)}) above to upgrade this reservation into a confirmed booking before starting service.
+                    </span>
+                  )}
+                </>
+              )}
+              {gardener && booking.status === 'in_progress' && (
+                <button className="button" type="button" disabled={updatingStatus} onClick={() => update('completed')}>
+                  {updatingStatus ? 'Saving...' : 'Mark completed'}
+                </button>
+              )}
             </div>
-            {agreementSummary.scopeOfWork && (
-              <>
-                <h3>Agreed scope of work</h3>
-                <p className="inquiry-description">{agreementSummary.scopeOfWork}</p>
-              </>
-            )}
-            {agreementSummary.conditions && (
-              <>
-                <h3>Agreed conditions</h3>
-                <p className="inquiry-description">{agreementSummary.conditions}</p>
-              </>
-            )}
-            {agreementSummary.inquiryPath && (
-              <p className="booking-agreement-link">
-                <Link className="text-link" to={agreementSummary.inquiryPath}>
-                  Open originating inquiry #{booking.inquiry_id}
-                </Link>
-              </p>
-            )}
           </div>
         )}
-        <h2>Additional information</h2>
-        <p className="inquiry-description">{booking.notes || 'No additional information provided.'}</p>
-        <div className="inline-actions">
-          {gardener && booking.status === 'pending' && (
-            <>
-              <button className="button" type="button" disabled={updatingStatus} onClick={() => update('accepted')}>
-                {updatingStatus ? 'Saving...' : 'Accept'}
-              </button>
-              <button className="table-action" type="button" disabled={updatingStatus} onClick={() => update('declined')}>
-                {updatingStatus ? 'Saving...' : 'Decline'}
-              </button>
-            </>
-          )}
-          {gardener && booking.status === 'accepted' && (
-            <>
-              <button className="button" type="button" disabled={updatingStatus || !isBookedPaid} onClick={() => update('in_progress')}>
-                {updatingStatus ? 'Saving...' : 'Start service'}
-              </button>
-              {!isBookedPaid && (
-                <span className="field-note">
-                  Verify at least the required deposit (₱{Number(booking.required_deposit_amount || 0).toLocaleString()}) above to upgrade this reservation into a confirmed booking before starting service.
-                </span>
-              )}
-            </>
-          )}
-          {gardener && booking.status === 'in_progress' && (
-            <button className="button" type="button" disabled={updatingStatus} onClick={() => update('completed')}>
-              {updatingStatus ? 'Saving...' : 'Mark completed'}
-            </button>
-          )}
-          {canModifyScheduleOrCancel && (
-            <>
-              <button
-                className="table-action"
-                type="button"
-                disabled={Boolean(pendingReschedule)}
-                onClick={() => setActiveSchedulePanel((prev) => (prev === 'reschedule' ? null : 'reschedule'))}
-              >
-                <CalendarClock size={15} /> {pendingReschedule ? 'Reschedule pending' : 'Move date (Reschedule)'}
-              </button>
-              <button
-                className="table-action table-action-danger"
-                type="button"
-                onClick={() => setActiveSchedulePanel((prev) => (prev === 'cancel' ? null : 'cancel'))}
-              >
-                <AlertTriangle size={15} /> {isBookedPaid ? 'Cancel booking (Event / Reason)' : 'Cancel reservation (Event / Reason)'}
-              </button>
-            </>
-          )}
-        </div>
 
         {booking.status === 'cancelled' && (
           <div className="event-cancel-record" role="status">
@@ -1580,7 +1529,7 @@ function BookingDetails({ id }) {
         )}
 
         {canModifyScheduleOrCancel && activeSchedulePanel === 'reschedule' && !pendingReschedule && (
-          <form className="profile-form schedule-event-panel" onSubmit={handleRescheduleSubmit}>
+          <form id="booking-schedule-event-panel" className="profile-form schedule-event-panel" onSubmit={handleRescheduleSubmit}>
             <div className="price-predictor-range-row">
               <div>
                 <p className="eyebrow" style={{ margin: 0 }}>Move service date</p>
@@ -1651,7 +1600,7 @@ function BookingDetails({ id }) {
         )}
 
         {canModifyScheduleOrCancel && activeSchedulePanel === 'cancel' && (
-          <form className="profile-form schedule-event-panel is-cancel-panel" onSubmit={handleCancelSubmit}>
+          <form id="booking-schedule-event-panel" className="profile-form schedule-event-panel is-cancel-panel" onSubmit={handleCancelSubmit}>
             <div className="price-predictor-range-row">
               <div>
                 <p className="eyebrow" style={{ margin: 0 }}>Event-based cancellation</p>
@@ -1892,27 +1841,139 @@ function BookingDetails({ id }) {
           </div>
         )}
 
-      </article>
-      {!gardener && isWorkCompleted && !review && !booking.can_review && (
-        <div className="dashboard-panel review-locked-notice">
-          <div className="review-locked-head">
-            <Lock size={18} />
-            <h2>Rating &amp; review locked until transaction closes</h2>
+          </article>
+          {!gardener && isWorkCompleted && !review && !booking.can_review && (
+            <div className="dashboard-panel review-locked-notice">
+              <div className="review-locked-head">
+                <Lock size={18} />
+                <h2>Rating &amp; review locked until transaction closes</h2>
+              </div>
+              <p className="field-note" style={{ margin: 0 }}>
+                {!isFullyPaid
+                  ? `Please submit and have the gardener verify the remaining balance of ${formatPHP(booking.remaining_balance || 0, { decimals: 2 })} above, then sign the Transaction Completion Agreement to unlock rating.`
+                  : 'Full payment is verified! Both you and the gardener must sign the Transaction Completion Agreement above to finalize the transaction and unlock rating.'}
+              </p>
+            </div>
+          )}
+          {!gardener && review && (
+            <div className="dashboard-panel review-card">
+              <h2>Your review</h2>
+              <StarRating className="review-card-stars" value={review.rating} size={20} />
+              <p>{review.review_text || 'No written feedback provided.'}</p>
+            </div>
+          )}
+        </div>
+
+        <aside className="booking-detail-rail" aria-label="Schedule and agreement summary">
+          <div className="dashboard-panel booking-rail-card">
+            <p className="eyebrow" style={{ margin: '0 0 6px' }}>Schedule &amp; details</p>
+            <h2 style={{ margin: '0 0 12px', fontSize: '19px' }}>Appointment summary</h2>
+            <dl className="booking-rail-facts">
+              <div>
+                <dt>{gardener ? 'Client' : 'Gardener'}</dt>
+                <dd>{gardener ? booking.client_name : booking.gardener_name}</dd>
+              </div>
+              <div>
+                <dt>Starts</dt>
+                <dd>{new Date(booking.scheduled_start).toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>Ends</dt>
+                <dd>{new Date(booking.scheduled_end).toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>Location</dt>
+                <dd>{booking.location || 'Zamboanga City'}</dd>
+              </div>
+            </dl>
+
+            <div className="booking-rail-actions no-print">
+              <button className="button button-outline button-sm" type="button" onClick={openConversation}>
+                Open conversation
+              </button>
+              <button className="button button-outline button-sm" type="button" onClick={() => window.print()}>
+                <Printer size={14} /> Print / Save PDF
+              </button>
+              {canModifyScheduleOrCancel && (
+                <>
+                  <button
+                    className="table-action"
+                    type="button"
+                    disabled={Boolean(pendingReschedule)}
+                    onClick={() => {
+                      const next = activeSchedulePanel === 'reschedule' ? null : 'reschedule'
+                      setActiveSchedulePanel(next)
+                      if (next) requestAnimationFrame(() => document.getElementById('booking-schedule-event-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+                    }}
+                  >
+                    <CalendarClock size={14} /> {pendingReschedule ? 'Reschedule pending' : 'Move date (Reschedule)'}
+                  </button>
+                  <button
+                    className="table-action table-action-danger"
+                    type="button"
+                    onClick={() => {
+                      const next = activeSchedulePanel === 'cancel' ? null : 'cancel'
+                      setActiveSchedulePanel(next)
+                      if (next) requestAnimationFrame(() => document.getElementById('booking-schedule-event-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+                    }}
+                  >
+                    <AlertTriangle size={14} /> {isBookedPaid ? 'Cancel booking' : 'Cancel reservation'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-          <p className="field-note" style={{ margin: 0 }}>
-            {!isFullyPaid
-              ? `Please submit and have the gardener verify the remaining balance of ₱${Number(booking.remaining_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} above, then sign the Transaction Completion Agreement to unlock rating.`
-              : 'Full payment is verified! Both you and the gardener must sign the Transaction Completion Agreement above to finalize the transaction and unlock rating.'}
-          </p>
-        </div>
-      )}
-      {!gardener && review && (
-        <div className="dashboard-panel review-card">
-          <h2>Your review</h2>
-          <StarRating className="review-card-stars" value={review.rating} size={20} />
-          <p>{review.review_text || 'No written feedback provided.'}</p>
-        </div>
-      )}
+
+          {agreementSummary.hasAgreement && (
+            <div className="dashboard-panel booking-rail-card booking-agreement-summary">
+              <p className="eyebrow" style={{ margin: '0 0 4px' }}>Mutual service agreement</p>
+              <h2 style={{ margin: '0 0 10px', fontSize: '18px' }}>{agreementSummary.versionLabel}</h2>
+              <dl className="booking-rail-facts">
+                {agreementSummary.amountLabel && (
+                  <div>
+                    <dt>Agreed price</dt>
+                    <dd><strong>{agreementSummary.amountLabel}</strong></dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Client approval</dt>
+                  <dd>{agreementSummary.clientApproval.label}</dd>
+                </div>
+                <div>
+                  <dt>Gardener approval</dt>
+                  <dd>{agreementSummary.gardenerApproval.label}</dd>
+                </div>
+              </dl>
+              {agreementSummary.scopeOfWork && (
+                <div className="booking-rail-text-block">
+                  <h3>Agreed scope of work</h3>
+                  <p className="inquiry-description">{agreementSummary.scopeOfWork}</p>
+                </div>
+              )}
+              {agreementSummary.conditions && (
+                <div className="booking-rail-text-block">
+                  <h3>Agreed conditions</h3>
+                  <p className="inquiry-description">{agreementSummary.conditions}</p>
+                </div>
+              )}
+              {agreementSummary.inquiryPath && (
+                <p className="booking-agreement-link" style={{ marginBottom: 0 }}>
+                  <Link className="text-link" to={agreementSummary.inquiryPath}>
+                    Open originating inquiry #{booking.inquiry_id}
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="dashboard-panel booking-rail-card">
+            <h2 style={{ margin: '0 0 6px', fontSize: '17px' }}>Additional information</h2>
+            <p className="inquiry-description" style={{ margin: 0 }}>
+              {booking.notes || 'No additional information provided.'}
+            </p>
+          </div>
+        </aside>
+      </div>
     </section>
   )
 }
@@ -1920,31 +1981,16 @@ function BookingDetails({ id }) {
 function BookingList() {
   const { user } = useAuth()
   const [bookings, setBookings] = useState([])
-  const [covers, setCovers] = useState({})
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
     bookingsApi.list()
-      .then(async (result) => {
+      .then((result) => {
         if (!active) return
         setBookings(result.bookings)
         setLoading(false)
-        const inquiryIds = [...new Set(result.bookings.map((b) => b.inquiry_id).filter(Boolean))]
-        if (inquiryIds.length === 0) return
-        const settled = await Promise.allSettled(
-          inquiryIds.map((inqId) => fetchInquiryImages(inqId).then((res) => [inqId, res.images?.[0]?.id || null])),
-        )
-        if (!active) return
-        const nextCovers = {}
-        for (const item of settled) {
-          if (item.status === 'fulfilled') {
-            const [inqId, imageId] = item.value
-            if (imageId) nextCovers[inqId] = getRequestImageUrl(imageId)
-          }
-        }
-        setCovers(nextCovers)
       })
       .catch((loadError) => {
         if (active) {
@@ -2021,7 +2067,7 @@ function BookingList() {
       )}
       <div className="marketplace-grid marketplace-card-grid">
         {filteredBookings.map((booking) => {
-          const coverUrl = booking.inquiry_id ? covers[booking.inquiry_id] : null
+          const coverUrl = booking.first_image_id ? getRequestImageUrl(booking.first_image_id) : null
           const otherParty = user?.role === 'gardener' ? booking.client_name : booking.gardener_name
           const stageBadgeKey = booking.transaction_status === 'closed'
             ? 'closed'

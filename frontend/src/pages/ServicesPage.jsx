@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import AppSidebar from '../components/AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { servicesApi } from '../services/services'
+import { ZAMBOANGA_BARANGAYS } from '../utils/zamboangaAddress'
 
 function PublicHeader() {
   return (
@@ -27,7 +28,6 @@ export default function ServicesPage() {
   const [searchParams] = useSearchParams()
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
-  const [gardenerCovers, setGardenerCovers] = useState({})
   const [filters, setFilters] = useState({
     keyword: searchParams.get('keyword') || '',
     categoryId: searchParams.get('categoryId') || '',
@@ -46,30 +46,21 @@ export default function ServicesPage() {
 
   useEffect(() => {
     let active = true
-    servicesApi.list({ ...filters, page: pagination.page })
-      .then(async (result) => {
-        if (!active) return
-        setServices(result.services)
-        setPagination(result.pagination)
-
-        const uniqueGardenerIds = [...new Set(result.services.map((s) => s.gardener_id).filter(Boolean))]
-        if (uniqueGardenerIds.length === 0) return
-        const settled = await Promise.allSettled(
-          uniqueGardenerIds.map((gid) => servicesApi.gardener(gid).then((res) => [gid, res.portfolios?.[0]?.id || null])),
-        )
-        if (!active) return
-        const nextCovers = {}
-        for (const item of settled) {
-          if (item.status === 'fulfilled') {
-            const [gid, portfolioId] = item.value
-            if (portfolioId) nextCovers[gid] = servicesApi.imageUrl(portfolioId)
-          }
-        }
-        setGardenerCovers((prev) => ({ ...prev, ...nextCovers }))
-      })
-      .catch((loadError) => { if (active) setError(loadError.message) })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+    const timer = setTimeout(() => {
+      if (!active) return
+      servicesApi.list({ ...filters, page: pagination.page })
+        .then((result) => {
+          if (!active) return
+          setServices(result.services)
+          setPagination(result.pagination)
+        })
+        .catch((loadError) => { if (active) setError(loadError.message) })
+        .finally(() => { if (active) setLoading(false) })
+    }, 220)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
   }, [filters, pagination.page])
 
   function changeFilter(field) {
@@ -98,7 +89,16 @@ export default function ServicesPage() {
             <option value="">All categories</option>
             {categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}
           </select>
-          <input aria-label="Filter by service area" placeholder="Service area" value={filters.serviceArea} onChange={changeFilter('serviceArea')} />
+          <input
+            aria-label="Filter by service area"
+            list="zamboanga-barangays-marketplace"
+            placeholder="Service area (e.g. Tetuan)"
+            value={filters.serviceArea}
+            onChange={changeFilter('serviceArea')}
+          />
+          <datalist id="zamboanga-barangays-marketplace">
+            {ZAMBOANGA_BARANGAYS.map((brgy) => <option key={brgy} value={brgy} />)}
+          </datalist>
           <select aria-label="Sort services" value={filters.sort} onChange={changeFilter('sort')}>
             <option value="newest">Newest first</option>
             <option value="price_low">Lowest price</option>
@@ -107,19 +107,48 @@ export default function ServicesPage() {
         </form>
 
         {error && <div className="form-error" role="alert">{error}</div>}
-        {loading && <p className="result-count" role="status">Loading services...</p>}
+        {loading && (
+          <div className="marketplace-grid marketplace-card-grid" aria-busy="true" role="status" aria-label="Loading services">
+            {[1, 2, 3].map((idx) => (
+              <div className="dashboard-panel skeleton-stack" key={idx}>
+                <div className="skeleton-line" style={{ height: '140px' }} />
+                <div className="skeleton-line" />
+                <div className="skeleton-line short" />
+              </div>
+            ))}
+          </div>
+        )}
         {!loading && !error && services.length === 0 && (
           <div className="empty-state" role="status">
             No approved services match your search yet. Try another keyword or category, or check back after more gardeners are approved.
           </div>
         )}
-        {!loading && <p className="result-count" role="status">{pagination.total} service{pagination.total === 1 ? '' : 's'} available</p>}
+        {!loading && (
+          <div className="marketplace-results-bar">
+            <p className="result-count" role="status" style={{ margin: 0 }}>
+              {pagination.total} service{pagination.total === 1 ? '' : 's'} available
+            </p>
+            {(filters.keyword || filters.categoryId || filters.serviceArea || filters.sort !== 'newest') && (
+              <button
+                type="button"
+                className="table-action"
+                onClick={() => {
+                  setLoading(true)
+                  setPagination((current) => ({ ...current, page: 1 }))
+                  setFilters({ keyword: '', categoryId: '', serviceArea: '', sort: 'newest' })
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="marketplace-grid marketplace-card-grid">
           {services.map((service) => {
             const coverUrl = service.image_path
               ? servicesApi.serviceImageUrl(service.id)
-              : (gardenerCovers[service.gardener_id] || null)
+              : (service.first_portfolio_id ? servicesApi.imageUrl(service.first_portfolio_id) : null)
             const gardenerName = service.business_name || `${service.first_name} ${service.last_name}`
             return (
               <article className="marketplace-card visual-market-card" key={service.id} aria-labelledby={`service-title-${service.id}`}>

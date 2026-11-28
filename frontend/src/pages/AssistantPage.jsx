@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { fetchAiUsage, requestGardenPlan } from '../services/ai'
+import { fetchAiUsage, requestGardenPlanStream } from '../services/ai'
 import AppSidebar from '../components/AppSidebar'
 
 const promptExamples = [
@@ -10,6 +10,76 @@ const promptExamples = [
   'Suggest a simple tropical garden layout for a small front yard.',
   'How can I maintain herbs in containers during the rainy season?',
 ]
+
+function renderInlineBold(text, keyPrefix) {
+  const segments = String(text).split(/(\*\*[^*]+\*\*)/g)
+  return segments.map((segment, idx) => {
+    if (segment.startsWith('**') && segment.endsWith('**') && segment.length > 4) {
+      return <strong key={`${keyPrefix}-b-${idx}`}>{segment.slice(2, -2)}</strong>
+    }
+    return segment
+  })
+}
+
+function renderFormattedPlan(rawText) {
+  const lines = String(rawText || '').replace(/\r\n/g, '\n').split('\n')
+  const blocks = []
+  let listItems = []
+  let listOrdered = false
+
+  const flushList = (keyIdx) => {
+    if (listItems.length === 0) return
+    const Tag = listOrdered ? 'ol' : 'ul'
+    blocks.push(
+      <Tag className="assistant-plan-list" key={`list-${keyIdx}`}>
+        {listItems.map((item, idx) => (
+          <li key={`li-${keyIdx}-${idx}`}>{renderInlineBold(item, `li-${keyIdx}-${idx}`)}</li>
+        ))}
+      </Tag>,
+    )
+    listItems = []
+  }
+
+  lines.forEach((rawLine, index) => {
+    const trimmed = rawLine.trim()
+    if (!trimmed) {
+      flushList(index)
+      return
+    }
+    const headingMatch = /^(#{1,3})\s+(.+)$/.exec(trimmed)
+    if (headingMatch) {
+      flushList(index)
+      blocks.push(
+        <h3 className="assistant-plan-heading" key={`h-${index}`}>
+          {renderInlineBold(headingMatch[2], `h-${index}`)}
+        </h3>,
+      )
+      return
+    }
+    const bulletMatch = /^[-*•]\s+(.+)$/.exec(trimmed)
+    if (bulletMatch) {
+      if (listItems.length > 0 && listOrdered) flushList(index)
+      listOrdered = false
+      listItems.push(bulletMatch[1])
+      return
+    }
+    const orderedMatch = /^\d+[.)]\s+(.+)$/.exec(trimmed)
+    if (orderedMatch) {
+      if (listItems.length > 0 && !listOrdered) flushList(index)
+      listOrdered = true
+      listItems.push(orderedMatch[1])
+      return
+    }
+    flushList(index)
+    blocks.push(
+      <p className="assistant-plan-para" key={`p-${index}`}>
+        {renderInlineBold(trimmed, `p-${index}`)}
+      </p>,
+    )
+  })
+  flushList(lines.length)
+  return blocks
+}
 
 export default function AssistantPage() {
   const { user } = useAuth()
@@ -26,11 +96,15 @@ export default function AssistantPage() {
 
   async function submit(event) {
     event.preventDefault()
-    setLoading(true); setError(''); setAnswer('')
+    setLoading(true); setError(''); setAnswer(''); setDisclaimer('')
     try {
-      const result = await requestGardenPlan(input)
-      setAnswer(result.answer)
-      setDisclaimer(result.disclaimer)
+      const result = await requestGardenPlanStream(input, {
+        onChunk: (_piece, fullSoFar) => {
+          setAnswer(fullSoFar)
+        },
+      })
+      if (result?.answer) setAnswer(result.answer)
+      setDisclaimer(result?.disclaimer || '')
       fetchAiUsage().then(setUsage).catch(() => {})
     } catch (requestError) {
       setError(requestError.message)
@@ -94,7 +168,9 @@ export default function AssistantPage() {
         {answer && (
           <article className="dashboard-panel assistant-answer">
             <p className="eyebrow">Your garden plan</p>
-            <div className="assistant-answer-text">{answer}</div>
+            <div className="assistant-answer-text assistant-answer-formatted">
+              {renderFormattedPlan(answer)}
+            </div>
             <p className="assistant-disclaimer">{disclaimer}</p>
             {user?.role === 'client' && (
               <div className="inline-actions" style={{ marginTop: '14px' }}>

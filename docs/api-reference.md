@@ -106,7 +106,7 @@ This document provides the complete technical reference for all **16 REST API ro
 |---|---|---|---|---|
 | `GET` | `/api/services/categories` | Public | All | Lists all active service categories (`is_active = TRUE`) including per-sq.m baseline rates (`rate_per_sqm_min`, `rate_per_sqm_max`, `min_base_fee`). |
 | `GET` | `/api/services/pricing-addons` | Public | All | Lists active configurable plant, material, equipment, and disposal pricing add-ons (`pricing_addons`). |
-| `GET` | `/api/services` | Public | All | Searches and paginates public gardening services from active, approved gardeners (includes `image_path`, `workers_required`, and `gardener_avatar_path`). |
+| `GET` | `/api/services` | Public | All | Searches and paginates public gardening services from active, approved gardeners (includes `image_path`, `first_portfolio_id`, `workers_required`, and `gardener_avatar_path`). |
 | `GET` | `/api/services/:serviceId/image` | Public | All | Streams the service's cover/business design photo (`services.image_path`). |
 | `GET` | `/api/services/:serviceId` | Public | All | Returns details of a single public service listing. |
 | `GET` | `/api/services/mine` | Required | `gardener` | Lists all services owned by the authenticated gardener (including inactive or pending-approval listings). |
@@ -171,7 +171,7 @@ This document provides the complete technical reference for all **16 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/inquiries` | Required | `client`, `gardener` | Lists inquiries for the authenticated client or gardener (including Case 1 requests where the gardener submitted an offer). Administrators are blocked (`403` — use `/api/admin/activity`). |
+| `GET` | `/api/inquiries` | Required | `client`, `gardener` | Lists inquiries for the authenticated client or gardener (including `first_image_id` thumbnail reference and Case 1 requests where the gardener submitted an offer). Administrators are blocked (`403` — use `/api/admin/activity`). |
 | `GET` | `/api/inquiries/open` | Required | `gardener`, `administrator` | Lists non-expired open Case 1 general service requests (`request_type = 'general'`, `status IN ('open', 'responded')`) for approved gardeners (`403` if unapproved). |
 | `POST` | `/api/inquiries/estimate` | Required | `client`, `gardener`, `administrator` | Computes an itemized per-sq.m price estimate (`estimatedLaborMin/Max`, `estimatedMaterialsMin/Max`, `estimatedMin/MaxAmount`, duration estimate) from category, `areaSqm`, `workComplexity`, `materialsOption`, and selected `addonItems`. |
 | `POST` | `/api/inquiries` | Required | `client` | Creates a Case 1 (`general`) or Case 2 (`direct`) service request with optional price predictor inputs, `priceComment`, `categorySpecs` JSON, itemized `addonItems`, and up to 5 draft `imageIds`. |
@@ -211,7 +211,7 @@ This document provides the complete technical reference for all **16 REST API ro
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
 | `GET` | `/api/bookings/payment-gateway/config` | Required | `client`, `gardener`, `clerk`, `administrator` | Returns active payment gateway configuration (`paymongo` vs built-in `sandbox_demo` mode and supported methods). |
-| `GET` | `/api/bookings` | Required | `client`, `gardener` | Lists bookings belonging to the authenticated client or gardener, including agreement summary, `booking_stage` (`reserved` \| `booked`), `payment_status`, `transaction_status`, and computed `schedule_urgency` fields. Administrators receive `403`. |
+| `GET` | `/api/bookings` | Required | `client`, `gardener` | Lists bookings belonging to the authenticated client or gardener, including `first_image_id`, agreement summary, `booking_stage` (`reserved` \| `booked`), `payment_status`, `transaction_status`, and computed `schedule_urgency` fields. Administrators receive `403`. |
 | `POST` | `/api/bookings` | Required | All authenticated | **Retired in Step R3:** Always returns `409 Conflict` (`code: 'MUTUAL_AGREEMENT_REQUIRED'`). Bookings are created exclusively via mutual agreement approval. |
 | `GET` | `/api/bookings/:bookingId` | Required | `client`, `gardener` | Returns full booking details, Mutual Agreement Summary, `payments` (`booking_payments` with `TXN-...` codes), `rescheduleRequests` (`booking_reschedule_requests`), and completion closure status. |
 | `PATCH` | `/api/bookings/:bookingId/status` | Required | `client`, `gardener` | Updates booking status (`in_progress` / `completed` by gardener on paid bookings; event-based `cancelled` with `cancellationReasonType` and `cancellationReason` by client or gardener). |
@@ -265,7 +265,8 @@ This document provides the complete technical reference for all **16 REST API ro
 | `GET` | `/api/ai/usage` | Required | `client`, `gardener`, `administrator` | Returns the user's rolling 60-minute AI quota status (`limit`, `used`, `remaining`, `windowHours`) and `recentUsage` log entries from `ai_usage_log`. |
 | `GET` | `/api/ai/recommendations` | Required | `client`, `gardener`, `administrator` | Ranks nearby services (`mode=services`) or open leads (`mode=leads`) using hybrid Zamboanga City barangay proximity, verified review scores, and clean conduct metrics (`smartMatching.js`). Supports `area`, `categoryId` (positive integer category filter), `keyword`, `sortBy`, `nearbyOnly`, `highRatingOnly`, and `cleanConductOnly`. |
 | `POST` | `/api/ai/recommendations/summary` | Required | `client`, `gardener`, `administrator` | Generates an optional Gemini-powered advisory summary explaining top recommended services or leads. |
-| `POST` | `/api/ai/garden-plan` | Required | `client`, `gardener`, `administrator` | Generates a structured tropical garden planning guide from `{ prompt }` (max `3,000` chars). |
+| `POST` | `/api/ai/garden-plan` | Required | `client`, `gardener`, `administrator` | Generates a concise Zamboanga City tropical garden planning guide from `{ prompt }` (max `3,000` chars) with strict gardening-only `systemInstruction` domain guardrails. |
+| `POST` | `/api/ai/garden-plan/stream` | Required | `client`, `gardener`, `administrator` | Streams a garden planning guide over Server-Sent Events (`text/event-stream`: `chunk`, `done`, `error` events) with strict gardening-only `systemInstruction` guardrails, model-aware thinking levels, automatic fallback, and DB-backed `ai_usage_log` quota enforcement. |
 | `POST` | `/api/ai/requirements` | Required | `client`, `gardener`, `administrator` | Generates editable JSON requirement suggestions (`structuredSummary`, `refinedDescription`, `suggestedCategoryId`, `suggestedCategoryName`, `gardeningIdeas`, `followUpQuestions`) from `{ prompt, location, requestType, imageIds }`. |
 | `POST` | `/api/ai/photo-analysis` | Required | `client`, `gardener`, `administrator` | Analyzes a client's uploaded garden photo (`{ imageId, note }`) using multimodal Gemini (`gemini-3.8-flash` primary, `gemini-3.5-flash-lite` automatic fallback) and stores the description in `request_images.ai_description`. |
 

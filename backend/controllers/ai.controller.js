@@ -15,6 +15,7 @@ const {
   getFallbackModelName,
   getModelName,
   getProviderFailureCode,
+  streamWithModelFallback,
 } = require('../services/ai.service')
 
 const DEFAULT_HOURLY_LIMIT = 10
@@ -261,6 +262,89 @@ async function createGardenPlan(req, res, next) {
       return res.status(classified.status).json({ message: classified.message })
     }
     return next(error)
+  }
+}
+
+async function streamGardenPlan(req, res) {
+  const input = text(req.body?.input)
+  if (!input || input.length > MAX_INPUT_LENGTH) {
+    return res.status(400).json({ message: `Please provide a request between 1 and ${MAX_INPUT_LENGTH} characters.` })
+  }
+
+  const provider = getAiProvider()
+  const primaryModel = typeof provider.getModel === 'function' ? provider.getModel() : getModelName()
+  let reservedUsageId = null
+
+  try {
+    const rateCheck = await reserveAiUsageSlot({
+      userId: req.user.id,
+      feature: 'garden_plan',
+      model: primaryModel,
+    })
+    if (!rateCheck.allowed) {
+      return res.status(429).json({
+        message: `Assistant usage is limited to ${rateCheck.limit} requests per hour. Please try again later.`,
+      })
+    }
+    reservedUsageId = rateCheck.usageId
+  } catch (rateErr) {
+    return res.status(500).json({ message: rateErr?.message || 'Unable to check AI usage quota right now.' })
+  }
+
+  const abortController = new AbortController()
+  let clientClosed = false
+  req.on('close', () => {
+    clientClosed = true
+    abortController.abort()
+  })
+
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders()
+  }
+
+  const sendEvent = (payload) => {
+    if (clientClosed || res.writableEnded) return
+    res.write(`data: ${JSON.stringify(payload)}\n\n`)
+  }
+
+  try {
+    const execution = await streamWithModelFallback('streamGardenPlan', input, {
+      signal: abortController.signal,
+      onChunk: (piece) => sendEvent({ type: 'chunk', text: piece }),
+    })
+
+    await finalizeAiUsageSlot(reservedUsageId, {
+      outcome: 'success',
+      errorCode: execution.fallbackUsed ? `FALLBACK_FROM_${execution.primaryErrorCode}` : null,
+      model: execution.model,
+    })
+
+    sendEvent({
+      type: 'done',
+      answer: execution.result,
+      model: execution.model,
+      fallbackUsed: execution.fallbackUsed,
+      disclaimer: 'AI suggestions are informational and may require verification from a qualified local gardening professional.',
+    })
+    return res.end()
+  } catch (error) {
+    const classified = classifyAiError(error)
+    const auditMeta = buildFailureAuditMetadata(error, primaryModel, classified)
+    await finalizeAiUsageSlot(reservedUsageId, {
+      outcome: 'error',
+      errorCode: auditMeta.errorCode,
+      model: auditMeta.model,
+    }).catch(() => {})
+
+    sendEvent({
+      type: 'error',
+      message: classified?.message || 'The Garden Planning Assistant could not complete your request.',
+    })
+    return res.end()
   }
 }
 
@@ -877,4 +961,5 @@ module.exports = {
   createRequirementAssistance,
   getAiUsageStatus,
   getSmartRecommendations,
+  streamGardenPlan,
 }
