@@ -158,6 +158,7 @@ HugaTiera/
 │   │   ├── project-inventory.md
 │   │   ├── recommended-changes.md
 │   │   └── ui-ux-audit.md
+│   ├── ai-setup-guide.md
 │   ├── api-reference.md
 │   ├── architecture-and-workflows.md
 │   ├── erd-and-dfd.md

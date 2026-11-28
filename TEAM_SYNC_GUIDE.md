@@ -9,12 +9,12 @@ Use this guide whenever you pull **`main`** (which includes merged `mergedbranch
 If you are using an AI coding agent (**Antigravity, Codex, OpenCode, GitHub Copilot Agent Mode, Cursor, Claude Code**), first run `git pull origin main`, then paste this prompt so it syncs your database, imports the Zamboanga City test data, and verifies your setup without accidentally re-editing code:
 
 ```text
-Read ONLY TEAM_SYNC_GUIDE.md and AGENTS.md (do NOT edit application code). Sync my local environment for branch main:
-1. Verify I am on main (latest origin/main) and check git status without discarding any of my uncommitted work.
-2. Inspect my local hugatiera_db and hugatiera_db_migration_test table/column counts (read-only) to determine which migrations from database/migrations/001..013 are missing.
+Read ONLY TEAM_SYNC_GUIDE.md, docs/ai-setup-guide.md, and AGENTS.md (do NOT edit application code). Sync my local environment for the current branch:
+1. Verify my current branch is up to date with origin and check git status without discarding any of my uncommitted work.
+2. Inspect my local hugatiera_db and hugatiera_db_migration_test table/column counts (read-only) to determine which migrations from database/migrations/001..014 are missing.
 3. Ask my approval first, then back up hugatiera_db to database/backups/ and apply ONLY the missing migrations in numerical order (do NOT rerun already-applied migrations).
 4. Import database/seeds/zamboanga_demo_data.sql into hugatiera_db ONLY so I have the Zamboanga City demo providers/services/bookings/reviews (do NOT import it into hugatiera_db_migration_test, which must stay clean for automated tests).
-5. Sync missing keys from backend/.env.example into backend/.env without overwriting my existing secrets, and run npm install in backend and frontend if needed.
+5. Sync missing keys from backend/.env.example into backend/.env without overwriting my existing secrets, guide me through docs/ai-setup-guide.md if I want Gemini + Cloudflare Workers AI enabled, and run npm install in backend and frontend if needed.
 6. Restart the backend/frontend dev servers if stale, verify GET http://localhost:5000/api/health, and run frontend lint/build + backend tests against hugatiera_db_migration_test.
 ```
 
@@ -111,7 +111,8 @@ $migs = @(
   'database/migrations/010_inquiry_category_specs.sql',
   'database/migrations/011_crew_capacity_workers.sql',
   'database/migrations/012_dual_role_and_assigned_clerk.sql',
-  'database/migrations/013_payment_gateway_sessions.sql'
+  'database/migrations/013_payment_gateway_sessions.sql',
+  'database/migrations/014_ai_image_generation_log.sql'
 )
 foreach ($m in $migs) {
   c:\xampp\mysql\bin\mysql.exe -u root hugatiera_db -e "SOURCE $m;"
@@ -146,6 +147,7 @@ Get-Content -Raw database\seeds\zamboanga_demo_data.sql | c:\xampp\mysql\bin\mys
    - `PAYMONGO_SECRET_KEY=` is **optional** (leaving it blank automatically enables built-in Sandbox/Demo Checkout mode).
    - `GEMINI_API_KEY=` is optional for local non-AI testing; recommended fast setup is `GEMINI_MODEL=gemini-3.5-flash-lite` and `GEMINI_FALLBACK_MODEL=gemini-3.8-flash`.
    - For free-tier Cloudflare Workers AI photo editing (`@cf/black-forest-labs/flux-2-klein-4b`), set `AI_IMAGE_GEN_ENABLED=true`, `CF_ACCOUNT_ID=...`, `CF_API_TOKEN=...`, and `AI_IMAGE_DAILY_LIMIT=3` (keep `AI_IMAGE_GEN_ENABLED=false` when disabled).
+   - **Step-by-step AI key creation & verification:** See [`docs/ai-setup-guide.md`](docs/ai-setup-guide.md) (includes exact Cloudflare Account ID / API Token steps and a copy-paste AI Agent setup prompt).
 3. **Restart both servers** so Express loads all new routes and Vite picks up all updated components:
    ```powershell
    # Terminal 1
