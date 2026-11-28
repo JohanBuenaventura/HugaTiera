@@ -3164,3 +3164,33 @@ textarea {
     transform: scaleY(0.55);
   }
 }
+
+/* 24. Landing Sign-in Hover & Auth Page Entrance */
+.landing-nav-signin {
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.16s ease, color 0.16s ease, transform 0.14s ease;
+}
+
+.landing-nav-signin:hover {
+  background: #E4EDE0;
+  color: var(--forest);
+}
+
+.landing-nav-signin:active {
+  transform: scale(0.97);
+}
+
+.auth-login-progress-fast span {
+  animation-duration: 0.32s;
+}
+
+.editorial-auth-page .auth-layout {
+  animation: botanicalFadeUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editorial-auth-page .auth-layout {
+    animation: none !important;
+  }
+}

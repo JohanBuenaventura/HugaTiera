@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   ArrowUpRight,
@@ -162,9 +162,19 @@ function HomePage() {
   const [featuredServices, setFeaturedServices] = useState([])
   const [recentReviews, setRecentReviews] = useState([])
   const [categoryMap, setCategoryMap] = useState({})
+  const [navTransition, setNavTransition] = useState('')
   const { user } = useAuth()
+  const navigate = useNavigate()
 
   const closeMenu = () => setMenuOpen(false)
+
+  function handleAuthLink(event, targetPath, mode) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    closeMenu()
+    setNavTransition(mode)
+    setTimeout(() => navigate(targetPath), 320)
+  }
 
   useEffect(() => {
     let active = true
@@ -193,6 +203,20 @@ function HomePage() {
 
   return (
     <div className="landing-home" id="top">
+      {navTransition && (
+        <div className="workspace-switch-overlay" role="status" aria-live="polite">
+          <div className="workspace-switch-card">
+            <div className="auth-login-badge" aria-hidden="true">
+              <Leaf size={24} />
+            </div>
+            <h2>{navTransition === 'register' ? 'Opening Registration' : 'Opening Sign In'}</h2>
+            <p className="muted">Preparing your HugaTiera garden portal...</p>
+            <div className="auth-login-progress auth-login-progress-fast" aria-hidden="true">
+              <span />
+            </div>
+          </div>
+        </div>
+      )}
       <a className="skip-link visually-hidden" href="#main-content">Skip to main content</a>
       <header className="landing-header botanical-landing-header">
         <div className="landing-container landing-nav">
@@ -218,8 +242,8 @@ function HomePage() {
                 </Link>
               ) : (
                 <>
-                  <Link className="landing-btn landing-btn-ghost" to="/login" onClick={closeMenu}>Sign in</Link>
-                  <Link className="landing-btn landing-btn-amber" to="/register" onClick={closeMenu}>
+                  <Link className="landing-btn landing-btn-ghost" to="/login" onClick={(e) => handleAuthLink(e, '/login', 'login')}>Sign in</Link>
+                  <Link className="landing-btn landing-btn-amber" to="/register" onClick={(e) => handleAuthLink(e, '/register', 'register')}>
                     Get started <ArrowUpRight size={15} />
                   </Link>
                 </>
@@ -233,8 +257,8 @@ function HomePage() {
               </Link>
             ) : (
               <>
-                <Link className="landing-nav-signin" to="/login" onClick={closeMenu}>Sign in</Link>
-                <Link className="landing-btn landing-btn-amber" to="/register" onClick={closeMenu}>
+                <Link className="landing-nav-signin" to="/login" onClick={(e) => handleAuthLink(e, '/login', 'login')}>Sign in</Link>
+                <Link className="landing-btn landing-btn-amber" to="/register" onClick={(e) => handleAuthLink(e, '/register', 'register')}>
                   Get started <ArrowUpRight size={15} />
                 </Link>
               </>
