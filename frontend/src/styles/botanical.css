@@ -1519,25 +1519,83 @@ textarea {
   border-top: 1px solid var(--line);
 }
 
-/* 16. Collapsible Sidebar Section Dividers (Noticeable & Smooth Delayed) */
+/* 16. Collapsible Sidebar Section Dividers & Compact Sidebar Sizing */
+@media (min-width: 901px) {
+  .app-sidebar,
+  .member-workspace .app-sidebar[data-user-role='client'],
+  .member-workspace .app-sidebar[data-user-role='gardener'] {
+    width: 192px !important;
+    padding: 14px 10px 12px !important;
+  }
+
+  .app-sidebar.is-collapsed,
+  .member-workspace .app-sidebar[data-user-role='client'].is-collapsed,
+  .member-workspace .app-sidebar[data-user-role='gardener'].is-collapsed {
+    width: 60px !important;
+    padding: 14px 8px 12px !important;
+  }
+
+  .protected-page > .container,
+  .dashboard-page > .dashboard-content,
+  .member-workspace > .container,
+  .member-workspace > .dashboard-content {
+    width: calc(100% - 192px) !important;
+    margin-left: 192px !important;
+  }
+
+  .app-sidebar.is-collapsed + .container,
+  .app-sidebar.is-collapsed + .dashboard-content,
+  .member-workspace > .app-sidebar.is-collapsed ~ .container,
+  .member-workspace > .app-sidebar.is-collapsed ~ .dashboard-content {
+    width: calc(100% - 60px) !important;
+    margin-left: 60px !important;
+  }
+}
+
+.app-sidebar-topline,
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-topline,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-topline {
+  margin-bottom: 14px !important;
+}
+
+.app-sidebar-nav a,
+.member-workspace .app-sidebar[data-user-role='client'] .app-sidebar-nav a,
+.member-workspace .app-sidebar[data-user-role='gardener'] .app-sidebar-nav a {
+  min-height: 36px !important;
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+  border-radius: 10px !important;
+}
+
+.app-sidebar-role {
+  padding: 8px 0 6px !important;
+}
+
+.app-sidebar-switch-role,
+.app-sidebar-logout {
+  min-height: 36px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+}
+
 .app-sidebar-group {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .app-sidebar-section-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  margin: 6px 0 2px;
-  padding: 8px 12px;
+  margin: 4px 0 2px;
+  padding: 5px 9px;
   border: 1px solid #C8D9C1;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #E8F0E3;
   color: var(--forest);
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1546,7 +1604,7 @@ textarea {
 }
 
 .app-sidebar-section-btn.is-secondary {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .app-sidebar-section-btn:hover {
@@ -1576,9 +1634,9 @@ textarea {
 .app-sidebar-section-chevron-wrap {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
   background: rgba(38, 61, 46, 0.12);
 }
 

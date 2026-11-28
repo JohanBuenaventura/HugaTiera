@@ -49,6 +49,12 @@ export function AuthProvider({ children }) {
     },
     logout: async () => {
       await authApi.logout()
+      try {
+        localStorage.removeItem('hugatiera.sidebar.collapsedGroups')
+      } catch {
+        // Ignore storage errors
+      }
+      window.dispatchEvent(new Event('hugatiera:role-switched'))
       setUser(null)
       setAuthError('')
     },
@@ -60,6 +66,12 @@ export function AuthProvider({ children }) {
     },
     switchRole: async (targetRole) => {
       const result = await authApi.switchRole(targetRole)
+      try {
+        localStorage.removeItem('hugatiera.sidebar.collapsedGroups')
+      } catch {
+        // Ignore storage errors
+      }
+      window.dispatchEvent(new Event('hugatiera:role-switched'))
       setUser(result.user)
       setAuthError('')
       return result.user

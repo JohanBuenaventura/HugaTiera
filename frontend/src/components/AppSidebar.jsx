@@ -90,12 +90,22 @@ export default function AppSidebar() {
 
   useEffect(() => {
     refreshUnreadCounts()
-  }, [refreshUnreadCounts, location.pathname, location.search])
+  }, [refreshUnreadCounts, location.pathname, location.search, user?.id, user?.role])
 
   useEffect(() => {
     const handleSync = () => refreshUnreadCounts()
+    const handleRoleReset = () => {
+      setCollapsedGroups({})
+      setUnreadCounts({})
+      setLogoutConfirmOpen(false)
+      setRoleSwitchError('')
+    }
     window.addEventListener('hugatiera:notifications-updated', handleSync)
-    return () => window.removeEventListener('hugatiera:notifications-updated', handleSync)
+    window.addEventListener('hugatiera:role-switched', handleRoleReset)
+    return () => {
+      window.removeEventListener('hugatiera:notifications-updated', handleSync)
+      window.removeEventListener('hugatiera:role-switched', handleRoleReset)
+    }
   }, [refreshUnreadCounts])
 
   if (!user) return null
@@ -150,8 +160,11 @@ export default function AppSidebar() {
     setRoleSwitchError('')
     try {
       await switchRole(nextRole)
+      setCollapsedGroups({})
+      setUnreadCounts({})
       closeMobile()
-      navigate('/dashboard')
+      window.dispatchEvent(new Event('hugatiera:notifications-updated'))
+      navigate('/dashboard', { replace: true })
     } catch (error) {
       setRoleSwitchError(error?.message || 'Unable to switch role right now.')
     } finally {
