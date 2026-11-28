@@ -154,8 +154,9 @@ body {
 
 .botanical-hero-leaf {
   position: absolute;
-  top: -16px;
-  color: rgba(165, 185, 148, 0.7);
+  top: -28px;
+  color: rgba(165, 185, 148, 0.65);
+  opacity: 0.72;
   animation: botanicalLeafFall 6s linear infinite;
 }
 
