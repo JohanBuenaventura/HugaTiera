@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Calculator, Check, CheckCircle2, ClipboardCheck, Leaf, MapPin, ShieldCheck, Sparkles, Star } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Calculator, Check, CheckCircle2, ClipboardCheck, Clock3, Layers, Leaf, MapPin, MessageSquareText, Plus, Search, ShieldCheck, Sparkles, Star, X } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -31,6 +31,7 @@ import {
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
+import { GardenPlanningIllustration } from '../components/BotanicalIllustrations'
 import TransientSuccess from '../components/TransientSuccess'
 import { OTHER_BARANGAY_VALUE, ZAMBOANGA_BARANGAYS } from '../utils/zamboangaAddress'
 
@@ -69,8 +70,8 @@ function InquiryForm() {
   const isGeneralRequest = typeParam === 'general' || (!validServiceId && !validGardenerId)
 
   const [form, setForm] = useState({
-    subject: '',
-    description: '',
+    subject: params.get('subject') || '',
+    description: params.get('description') || '',
     aiSummary: '',
     requestedDate: '',
     location: '',
@@ -2140,6 +2141,10 @@ function InquiryList() {
   const [openRequests, setOpenRequests] = useState([])
   const [categories, setCategories] = useState([])
   const [filters, setFilters] = useState({ categoryId: '', area: '' })
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('newest')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -2190,75 +2195,419 @@ function InquiryList() {
     return () => { active = false }
   }, [activeTab, filters, user?.role])
 
+  const sourceList = activeTab === 'open' ? openRequests : inquiries
+
+  const stats = {
+    all: sourceList.length,
+    open: sourceList.filter((item) => item.status === 'open').length,
+    offers: sourceList.filter(
+      (item) =>
+        item.status === 'responded' ||
+        Number(item.offer_count || 0) > 0 ||
+        Boolean(item.my_quotation_id),
+    ).length,
+    agreement: sourceList.filter((item) =>
+      ['provider_selected', 'in_agreement', 'booked', 'confirmed'].includes(item.status),
+    ).length,
+  }
+
+  const normalizedQuery = searchTerm.trim().toLowerCase()
+  const filteredList = sourceList
+    .filter((item) => {
+      if (statusFilter === 'open' && item.status !== 'open') return false
+      if (
+        statusFilter === 'offers' &&
+        !(
+          item.status === 'responded' ||
+          Number(item.offer_count || 0) > 0 ||
+          Boolean(item.my_quotation_id)
+        )
+      ) {
+        return false
+      }
+      if (
+        statusFilter === 'agreement' &&
+        !['provider_selected', 'in_agreement', 'booked', 'confirmed'].includes(item.status)
+      ) {
+        return false
+      }
+      if (activeTab === 'mine' && typeFilter !== 'all') {
+        const isGen = item.request_type === 'general'
+        if (typeFilter === 'general' && !isGen) return false
+        if (typeFilter === 'direct' && isGen) return false
+      }
+      if (!normalizedQuery) return true
+      const haystack = [
+        item.subject,
+        item.description,
+        item.ai_summary,
+        item.location,
+        item.gardener_name,
+        item.client_first_name,
+        item.client_last_name,
+        item.category_name,
+        item.service_title,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(normalizedQuery)
+    })
+    .sort((a, b) => {
+      if (sortBy === 'offers') {
+        return Number(b.offer_count || 0) - Number(a.offer_count || 0)
+      }
+      if (sortBy === 'estimate') {
+        const aMax = Number(a.my_quotation_amount ?? a.estimated_max_amount ?? a.estimated_min_amount ?? 0)
+        const bMax = Number(b.my_quotation_amount ?? b.estimated_max_amount ?? b.estimated_min_amount ?? 0)
+        return bMax - aMax
+      }
+      const ta = a.created_at ? new Date(a.created_at).getTime() : Number(a.id || 0)
+      const tb = b.created_at ? new Date(b.created_at).getTime() : Number(b.id || 0)
+      return tb - ta
+    })
+
+  const hasActiveFilters =
+    Boolean(normalizedQuery) ||
+    statusFilter !== 'all' ||
+    typeFilter !== 'all' ||
+    Boolean(filters.categoryId) ||
+    Boolean(filters.area)
+
+  function resetAllFilters() {
+    setSearchTerm('')
+    setStatusFilter('all')
+    setTypeFilter('all')
+    setSortBy('newest')
+    if (activeTab === 'open') {
+      setFilters({ categoryId: '', area: '' })
+    }
+  }
+
   return (
-    <section className="container inquiry-content">
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+    <section className="container inquiry-content inq-hub-shell">
+      <header className="inq-hub-hero">
         <div>
-          <h1>{activeTab === 'open' ? 'Browse open client requests.' : 'Inquiries and offers.'}</h1>
+          <p className="inq-hub-eyebrow">
+            <Sparkles size={14} />
+            {activeTab === 'open' ? 'Zamboanga Open Requests' : 'Service Requests & Quotations'}
+          </p>
+          <h1>{activeTab === 'open' ? 'Browse open client requests' : 'Inquiries & offers'}</h1>
+          <p className="inq-hub-subtitle">
+            {activeTab === 'open'
+              ? 'Review local garden photos, scope estimates, and submit your quotation before a client locks an agreement.'
+              : user?.role === 'gardener'
+                ? 'Track direct client inquiries, compare your active quotations, and move approved offers into mutual agreements.'
+                : 'Manage your garden requests, compare incoming gardener offers side-by-side, and confirm mutual agreements.'}
+          </p>
         </div>
+
         {user?.role === 'client' && (
-          <div className="inline-actions">
-            <Link className="button" to="/inquiries/new?type=general">Post general service request</Link>
-            <Link className="button button-outline" to="/services">Browse services</Link>
+          <div className="inq-hub-actions">
+            <Link className="inq-hub-btn-primary" to="/inquiries/new?type=general">
+              <Plus size={16} />
+              Post general request
+            </Link>
+            <Link className="inq-hub-btn-soft" to="/assistant">
+              <Sparkles size={15} />
+              Plan with AI
+            </Link>
+            <Link className="inq-hub-btn-soft" to="/services">
+              Browse services
+            </Link>
           </div>
         )}
+
         {user?.role === 'gardener' && (
-          <div className="inline-actions">
+          <div className="inq-hub-actions">
             <button
-              className={activeTab === 'mine' ? 'button' : 'button button-outline'}
+              className={activeTab === 'mine' ? 'inq-hub-btn-primary' : 'inq-hub-btn-soft'}
               type="button"
-              onClick={() => setParams({})}
+              onClick={() => {
+                setStatusFilter('all')
+                setParams({})
+              }}
             >
               My inquiries & offers
             </button>
             <button
-              className={activeTab === 'open' ? 'button' : 'button button-outline'}
+              className={activeTab === 'open' ? 'inq-hub-btn-primary' : 'inq-hub-btn-soft'}
               type="button"
-              onClick={() => setParams({ tab: 'open' })}
+              onClick={() => {
+                setStatusFilter('all')
+                setParams({ tab: 'open' })
+              }}
             >
               Open requests board
             </button>
           </div>
         )}
+      </header>
+
+      <div className="inq-hub-stats" role="group" aria-label="Filter inquiries by stage">
+        <button
+          type="button"
+          className={`inq-hub-stat ${statusFilter === 'all' ? 'is-active' : ''}`}
+          onClick={() => setStatusFilter('all')}
+        >
+          <div>
+            <span className="inq-hub-stat-label">All {activeTab === 'open' ? 'open board' : 'requests'}</span>
+            <strong className="inq-hub-stat-value">{stats.all}</strong>
+          </div>
+          <span className="inq-hub-stat-icon"><Layers size={18} /></span>
+        </button>
+
+        <button
+          type="button"
+          className={`inq-hub-stat ${statusFilter === 'open' ? 'is-active' : ''}`}
+          onClick={() => setStatusFilter((prev) => (prev === 'open' ? 'all' : 'open'))}
+        >
+          <div>
+            <span className="inq-hub-stat-label">Open / Waiting</span>
+            <strong className="inq-hub-stat-value">{stats.open}</strong>
+          </div>
+          <span className="inq-hub-stat-icon"><Clock3 size={18} /></span>
+        </button>
+
+        <button
+          type="button"
+          className={`inq-hub-stat ${statusFilter === 'offers' ? 'is-active' : ''}`}
+          onClick={() => setStatusFilter((prev) => (prev === 'offers' ? 'all' : 'offers'))}
+        >
+          <div>
+            <span className="inq-hub-stat-label">With offers</span>
+            <strong className="inq-hub-stat-value">{stats.offers}</strong>
+          </div>
+          <span className="inq-hub-stat-icon"><MessageSquareText size={18} /></span>
+        </button>
+
+        <button
+          type="button"
+          className={`inq-hub-stat ${statusFilter === 'agreement' ? 'is-active' : ''}`}
+          onClick={() => setStatusFilter((prev) => (prev === 'agreement' ? 'all' : 'agreement'))}
+        >
+          <div>
+            <span className="inq-hub-stat-label">Agreement / Booked</span>
+            <strong className="inq-hub-stat-value">{stats.agreement}</strong>
+          </div>
+          <span className="inq-hub-stat-icon"><CheckCircle2 size={18} /></span>
+        </button>
       </div>
 
-      {activeTab === 'open' && user?.role === 'gardener' && (
-        <div className="dashboard-panel profile-form" style={{ marginTop: '14px', marginBottom: '16px' }}>
-          <div className="form-row">
-            <label>Filter by category
-              <select value={filters.categoryId} onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}>
+      <div className="inq-hub-toolbar">
+        <label className="inq-hub-search" aria-label="Search inquiries">
+          <Search size={16} />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={
+              activeTab === 'open'
+                ? 'Search open requests by title, barangay, or category...'
+                : 'Search by title, gardener, barangay, or notes...'
+            }
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              className="inq-hub-search-clear"
+              aria-label="Clear search"
+              onClick={() => setSearchTerm('')}
+            >
+              <X size={13} />
+            </button>
+          )}
+        </label>
+
+        <div className="inq-hub-filters">
+          {activeTab === 'mine' && (
+            <>
+              <button
+                type="button"
+                className={`inq-hub-chip ${typeFilter === 'all' ? 'is-active' : ''}`}
+                onClick={() => setTypeFilter('all')}
+              >
+                All types
+              </button>
+              <button
+                type="button"
+                className={`inq-hub-chip ${typeFilter === 'general' ? 'is-active' : ''}`}
+                onClick={() => setTypeFilter('general')}
+              >
+                General
+              </button>
+              <button
+                type="button"
+                className={`inq-hub-chip ${typeFilter === 'direct' ? 'is-active' : ''}`}
+                onClick={() => setTypeFilter('direct')}
+              >
+                Direct
+              </button>
+            </>
+          )}
+
+          {activeTab === 'open' && user?.role === 'gardener' && (
+            <>
+              <select
+                className="inq-hub-sort"
+                aria-label="Filter by category"
+                value={filters.categoryId}
+                onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
+              >
                 <option value="">All categories</option>
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-            </label>
-            <label>Filter by barangay / area
-              <select value={filters.area} onChange={(e) => setFilters({ ...filters, area: e.target.value })}>
+              <select
+                className="inq-hub-sort"
+                aria-label="Filter by barangay"
+                value={filters.area}
+                onChange={(e) => setFilters({ ...filters, area: e.target.value })}
+              >
                 <option value="">All barangays</option>
                 {ZAMBOANGA_BARANGAYS.map((brgy) => <option key={brgy} value={brgy}>{brgy}</option>)}
               </select>
-            </label>
+            </>
+          )}
+
+          <select
+            className="inq-hub-sort"
+            aria-label="Sort requests"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="newest">Newest first</option>
+            <option value="offers">Most offers</option>
+            <option value="estimate">Highest estimate</option>
+          </select>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="inq-hub-empty">
+          <p className="muted">Loading your requests and offers...</p>
+        </div>
+      )}
+      {error && <div className="form-error" role="alert">{error}</div>}
+
+      {!loading && !error && sourceList.length === 0 && (
+        <div className="inq-hub-empty">
+          <div className="inq-hub-empty-art">
+            <GardenPlanningIllustration />
+          </div>
+          <h2>
+            {activeTab === 'open'
+              ? 'No open client requests right now'
+              : user?.role === 'gardener'
+                ? 'No direct inquiries or offers yet'
+                : 'Start your first garden request'}
+          </h2>
+          <p>
+            {activeTab === 'open'
+              ? 'Check back soon or adjust your barangay/category filters to discover new client garden projects.'
+              : user?.role === 'gardener'
+                ? 'Browse open requests from Zamboanga City homeowners to send your first quotation, or update your service listings.'
+                : 'Pick a quick starter template below, ask the AI Garden Assistant to scope your yard, or message a local gardener directly.'}
+          </p>
+
+          <div className="inq-hub-starter-grid">
+            {user?.role === 'gardener' ? (
+              <>
+                <button
+                  type="button"
+                  className="inq-hub-starter-card"
+                  onClick={() => setParams({ tab: 'open' })}
+                >
+                  <span className="inq-hub-starter-icon"><Search size={16} /></span>
+                  <strong>Browse Open Requests</strong>
+                  <span>View local client garden photos and submit an indicative quotation.</span>
+                </button>
+                <Link className="inq-hub-starter-card" to="/dashboard?tab=services">
+                  <span className="inq-hub-starter-icon"><Leaf size={16} /></span>
+                  <strong>Publish a Service</strong>
+                  <span>List your lawn care, landscaping, or tree pruning packages.</span>
+                </Link>
+                <Link className="inq-hub-starter-card" to="/profile">
+                  <span className="inq-hub-starter-icon"><ClipboardCheck size={16} /></span>
+                  <strong>Update Profile & Schedule</strong>
+                  <span>Keep your working days and portfolio visible to clients.</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  className="inq-hub-starter-card"
+                  to="/inquiries/new?type=general&subject=Lawn%20Cleanup%20%26%20Weeding&description=Need%20overgrown%20grass%20trimmed%2C%20weeds%20cleared%2C%20and%20yard%20debris%20bagged."
+                >
+                  <span className="inq-hub-starter-icon"><Leaf size={16} /></span>
+                  <strong>Lawn Cleanup & Weeding</strong>
+                  <span>Pre-fill a general request for grass trimming and yard clearing.</span>
+                </Link>
+                <Link
+                  className="inq-hub-starter-card"
+                  to="/inquiries/new?type=general&subject=Tree%20%26%20Hedge%20Pruning&description=Looking%20for%20safe%20pruning%20and%20shaping%20for%20ornamental%20hedges%20and%20trees."
+                >
+                  <span className="inq-hub-starter-icon"><ScissorsIconFallback /></span>
+                  <strong>Tree & Hedge Pruning</strong>
+                  <span>Pre-fill a request for shaping hedges, palms, or backyard trees.</span>
+                </Link>
+                <Link className="inq-hub-starter-card" to="/assistant">
+                  <span className="inq-hub-starter-icon"><Sparkles size={16} /></span>
+                  <strong>Scope with AI Assistant</strong>
+                  <span>Describe your garden idea or upload a photo before posting a request.</span>
+                </Link>
+              </>
+            )}
+          </div>
+
+          <div className="inq-hub-guide">
+            <div className="inq-hub-guide-step">
+              <span className="inq-hub-guide-num">1</span>
+              <div>
+                <strong>Submit or Respond</strong>
+                <span>Share garden details, photos, and an indicative estimate.</span>
+              </div>
+            </div>
+            <div className="inq-hub-guide-step">
+              <span className="inq-hub-guide-num">2</span>
+              <div>
+                <strong>Compare Offers</strong>
+                <span>Review gardener quotations and discuss scope in chat.</span>
+              </div>
+            </div>
+            <div className="inq-hub-guide-step">
+              <span className="inq-hub-guide-num">3</span>
+              <div>
+                <strong>Mutual Agreement</strong>
+                <span>A booking is created only after both sides approve the same terms.</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {loading && <p>Loading requests...</p>}
-      {error && <div className="form-error" role="alert">{error}</div>}
-
-      {!loading && !error && activeTab === 'mine' && inquiries.length === 0 && (
-        <div className="empty-state">You do not have any inquiries yet.</div>
+      {!loading && !error && sourceList.length > 0 && filteredList.length === 0 && (
+        <div className="inq-hub-empty">
+          <h2>No matching requests</h2>
+          <p>No inquiries match your current search or stage filter.</p>
+          {hasActiveFilters && (
+            <button type="button" className="inq-hub-btn-primary" onClick={resetAllFilters}>
+              Reset filters
+            </button>
+          )}
+        </div>
       )}
 
-      {!loading && !error && activeTab === 'mine' && inquiries.length > 0 && (
-        <div className="marketplace-grid marketplace-card-grid" style={{ marginTop: '20px' }}>
-          {inquiries.map((inquiry) => {
+      {!loading && !error && activeTab === 'mine' && filteredList.length > 0 && (
+        <div className="marketplace-grid marketplace-card-grid">
+          {filteredList.map((inquiry) => {
             const coverUrl = inquiryCovers[inquiry.id] || null
             const partnerLabel = user?.role === 'gardener'
               ? `${inquiry.client_first_name || ''} ${inquiry.client_last_name || ''}`.trim() || 'Client'
               : inquiry.gardener_name || (inquiry.offer_count > 0 ? `${inquiry.offer_count} provider ${Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}` : 'Open to providers')
             return (
-              <article className="marketplace-card visual-market-card" key={inquiry.id}>
+              <article className="marketplace-card visual-market-card inq-hub-card" key={inquiry.id}>
                 <Link className="marketplace-card-media card-media-link" to={`/inquiries/${inquiry.id}`} aria-label={`View ${inquiry.subject}`}>
                   {coverUrl ? (
                     <img
@@ -2278,6 +2627,16 @@ function InquiryList() {
                   </span>
                 </Link>
                 <div className="marketplace-card-body">
+                  <div className="inq-hub-card-tags">
+                    <span className="inq-hub-tag">
+                      {inquiry.request_type === 'general' ? 'General request' : 'Direct inquiry'}
+                    </span>
+                    {Number(inquiry.offer_count || 0) > 0 && (
+                      <span className="inq-hub-tag is-accent">
+                        {inquiry.offer_count} {Number(inquiry.offer_count) === 1 ? 'offer' : 'offers'}
+                      </span>
+                    )}
+                  </div>
                   <h2><Link className="card-title-link" to={`/inquiries/${inquiry.id}`}>{inquiry.subject}</Link></h2>
                   <p>{inquiry.ai_summary || inquiry.description || 'Gardening service inquiry.'}</p>
                   <div className="service-meta">
@@ -2308,17 +2667,13 @@ function InquiryList() {
         </div>
       )}
 
-      {!loading && !error && activeTab === 'open' && openRequests.length === 0 && (
-        <div className="empty-state">No open general service requests match your filters right now.</div>
-      )}
-
-      {!loading && !error && activeTab === 'open' && openRequests.length > 0 && (
-        <div className="marketplace-grid marketplace-card-grid" style={{ marginTop: '20px' }}>
-          {openRequests.map((reqItem) => {
+      {!loading && !error && activeTab === 'open' && filteredList.length > 0 && (
+        <div className="marketplace-grid marketplace-card-grid">
+          {filteredList.map((reqItem) => {
             const firstImageId = Array.isArray(reqItem.images) && reqItem.images[0]?.id
             const coverUrl = firstImageId ? getRequestImageUrl(firstImageId) : null
             return (
-              <article className="marketplace-card visual-market-card" key={reqItem.id}>
+              <article className="marketplace-card visual-market-card inq-hub-card" key={reqItem.id}>
                 <Link className="marketplace-card-media card-media-link" to={`/inquiries/${reqItem.id}`} aria-label={`View ${reqItem.subject}`}>
                   {coverUrl ? (
                     <img
@@ -2338,6 +2693,14 @@ function InquiryList() {
                   </span>
                 </Link>
                 <div className="marketplace-card-body">
+                  <div className="inq-hub-card-tags">
+                    <span className="inq-hub-tag">{reqItem.category_name || 'General request'}</span>
+                    {Number(reqItem.offer_count || 0) > 0 && (
+                      <span className="inq-hub-tag is-accent">
+                        {reqItem.offer_count} {Number(reqItem.offer_count) === 1 ? 'offer' : 'offers'}
+                      </span>
+                    )}
+                  </div>
                   <h2><Link className="card-title-link" to={`/inquiries/${reqItem.id}`}>{reqItem.subject}</Link></h2>
                   <p>{reqItem.ai_summary || reqItem.description || 'Open client gardening request.'}</p>
                   <div className="service-meta">
@@ -2369,4 +2732,8 @@ function InquiryList() {
       )}
     </section>
   )
+}
+
+function ScissorsIconFallback() {
+  return <ClipboardCheck size={16} />
 }

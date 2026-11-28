@@ -2186,3 +2186,433 @@ textarea {
     padding: 12px 16px;
   }
 }
+
+/* 18. Inquiries Workspace (AI Assistant Palette) */
+.inq-hub-shell {
+  display: grid;
+  gap: 18px;
+}
+
+.inq-hub-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px;
+  border-radius: 22px;
+  border: 1px solid #D5E0CE;
+  background: linear-gradient(135deg, #EFF3EA 0%, #E4EDE0 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.inq-hub-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5B8266;
+}
+
+.inq-hub-hero h1 {
+  margin: 0;
+  font-size: clamp(22px, 2.6vw, 30px);
+  color: var(--forest);
+  line-height: 1.15;
+}
+
+.inq-hub-subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.inq-hub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.inq-hub-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--forest);
+  color: var(--cream);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.16s ease, transform 0.14s ease;
+}
+
+.inq-hub-btn-primary:hover {
+  background: var(--forest-deep);
+  transform: translateY(-1px);
+}
+
+.inq-hub-btn-soft {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: 1px solid #C8D9C1;
+  border-radius: var(--radius-pill);
+  background: var(--surface-white);
+  color: var(--forest);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.inq-hub-btn-soft:hover {
+  background: #DCE8D5;
+  border-color: var(--forest);
+}
+
+.inq-hub-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.inq-hub-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #D5E0CE;
+  border-radius: 16px;
+  background: var(--soft-offwhite);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.14s ease;
+}
+
+.inq-hub-stat:hover {
+  background: #EAEFE5;
+  border-color: #9BB894;
+  transform: translateY(-1px);
+}
+
+.inq-hub-stat.is-active {
+  background: #D6E4CF;
+  border-color: var(--forest);
+}
+
+.inq-hub-stat-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.inq-hub-stat.is-active .inq-hub-stat-label {
+  color: var(--forest);
+}
+
+.inq-hub-stat-value {
+  display: block;
+  margin-top: 2px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--forest);
+  line-height: 1.1;
+}
+
+.inq-hub-stat-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #E4EDE0;
+  color: var(--forest);
+  flex-shrink: 0;
+}
+
+.inq-hub-stat.is-active .inq-hub-stat-icon {
+  background: var(--forest);
+  color: var(--cream);
+}
+
+.inq-hub-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #D5E0CE;
+  border-radius: 18px;
+  background: #EFF3EA;
+}
+
+.inq-hub-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  padding: 8px 14px;
+  border: 1px solid #C8D9C1;
+  border-radius: var(--radius-pill);
+  background: var(--surface-white);
+}
+
+.inq-hub-search:focus-within {
+  border-color: var(--forest);
+  box-shadow: var(--shadow-sm);
+}
+
+.inq-hub-search svg {
+  color: #5B8266;
+  flex-shrink: 0;
+}
+
+.inq-hub-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 2px 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.inq-hub-search-clear {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #EAEFE5;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.inq-hub-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.inq-hub-chip {
+  padding: 7px 13px;
+  border: 1px solid #C8D9C1;
+  border-radius: var(--radius-pill);
+  background: var(--surface-white);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.inq-hub-chip:hover {
+  background: #E2EBDD;
+  color: var(--forest);
+}
+
+.inq-hub-chip.is-active {
+  background: #D6E4CF;
+  border-color: var(--forest);
+  color: var(--forest);
+}
+
+.inq-hub-sort {
+  padding: 7px 12px;
+  border: 1px solid #C8D9C1;
+  border-radius: var(--radius-pill);
+  background: var(--surface-white);
+  color: var(--forest);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.inq-hub-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 32px 22px;
+  border: 1px solid #D5E0CE;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #EFF3EA 0%, var(--soft-offwhite) 100%);
+}
+
+.inq-hub-empty-art {
+  width: 145px;
+}
+
+.inq-hub-empty h2 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--forest);
+}
+
+.inq-hub-empty > p {
+  margin: 0;
+  max-width: 54ch;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.inq-hub-starter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.inq-hub-starter-card {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid #D5E0CE;
+  border-radius: 18px;
+  background: var(--surface-white);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.inq-hub-starter-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--forest);
+  box-shadow: var(--shadow-sm);
+}
+
+.inq-hub-starter-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #E4EDE0;
+  color: var(--forest);
+}
+
+.inq-hub-starter-card strong {
+  font-size: 14px;
+  color: var(--forest);
+}
+
+.inq-hub-starter-card span {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.inq-hub-guide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #EAEFE5;
+  text-align: left;
+}
+
+.inq-hub-guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.inq-hub-guide-num {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--forest);
+  color: var(--cream);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.inq-hub-guide-step strong {
+  display: block;
+  font-size: 13px;
+  color: var(--forest);
+}
+
+.inq-hub-guide-step span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.inq-hub-card {
+  border-color: #D5E0CE;
+  background: var(--surface-white);
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.inq-hub-card:hover {
+  transform: translateY(-2px);
+  border-color: #9BB894;
+  box-shadow: var(--shadow-md);
+}
+
+.inq-hub-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.inq-hub-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: #E4EDE0;
+  color: var(--forest);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.inq-hub-tag.is-accent {
+  background: #F4E6D8;
+  color: #9A4E1C;
+}
+
+@media (max-width: 900px) {
+  .inq-hub-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .inq-hub-starter-grid,
+  .inq-hub-guide {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .inq-hub-stats {
+    grid-template-columns: 1fr;
+  }
+}
