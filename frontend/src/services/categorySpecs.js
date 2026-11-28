@@ -54,13 +54,6 @@ const TEMPLATES = {
         type: 'textarea',
         placeholder: 'e.g., 10 bougainvillea, 2 dwarf palms, carabao grass turf, ornamental border plants',
       },
-      {
-        key: 'estimated_plants_budget',
-        label: 'Estimated budget for plants & materials (PHP)',
-        type: 'number',
-        placeholder: 'e.g., 5000',
-        isCurrency: true,
-      },
     ],
   },
   lawn_care: {
@@ -276,13 +269,6 @@ const TEMPLATES = {
         type: 'textarea',
         placeholder: 'e.g., White pebbles, 15 sq.m carabao grass patch, colorful ornamental shrubs',
       },
-      {
-        key: 'estimated_materials_budget',
-        label: 'Estimated budget for plants & materials (PHP)',
-        type: 'number',
-        placeholder: 'e.g., 3500',
-        isCurrency: true,
-      },
     ],
   },
   general_default: {
@@ -299,13 +285,6 @@ const TEMPLATES = {
         label: 'Requested plants, soil, or materials (optional)',
         type: 'textarea',
         placeholder: 'List any specific plants, grass turf, gravel, soil, or pots you want included.',
-      },
-      {
-        key: 'estimated_materials_budget',
-        label: 'Estimated budget for plants & materials (PHP, optional)',
-        type: 'number',
-        placeholder: 'e.g., 2500',
-        isCurrency: true,
       },
       {
         key: 'site_access_notes',

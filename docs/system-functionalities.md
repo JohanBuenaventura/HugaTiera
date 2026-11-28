@@ -12,7 +12,7 @@ Use this guide for onboarding teammates, QA walkthroughs, user manuals, and Soft
 |---|---|---|
 | **Guest / Public Visitor** | No account needed | Browse landing page, public marketplace services, categories, approved gardener profiles, portfolios, reviews, and live availability previews. |
 | **Client** (`role = 'client'`) | Public 3-step `/register` wizard (**Find a gardener**) | Discover nearby gardeners, post Case 1 open requests or Case 2 direct inquiries with garden photos & AI help, compare offers, approve mutual agreements, pay deposits/balances, track bookings, message gardeners, and leave verified 1–5 star reviews. |
-| **Gardener / Service Provider** (`role = 'gardener'`) | Public 3-step `/register` wizard (**Offer services**) — requires Admin approval (`is_approved = TRUE`) for public visibility | Automatically includes **Client Mode** (1-click sidebar switch). Manage professional profile, service listings & cover photos, portfolio gallery, working schedule & daily crew capacity, calendar alerts, open leads & quotations, mutual agreements, payment verification, service execution, and **My Clerks** staff accounts. |
+| **Gardener / Service Provider** (`role = 'gardener'`) | Public 3-step `/register` wizard (**Offer services**) — requires Admin approval (`is_approved = TRUE`) for public visibility | Single-role Gardener by default (optional **Client Mode** opt-in & switching inside **Profile**). Manage professional profile, service listings & cover photos, portfolio gallery, working schedule & daily crew capacity, calendar alerts, open leads & quotations, mutual agreements, payment verification, service execution, and **My Staff** clerk accounts. |
 | **Assigned Clerk** (`role = 'clerk'`) | **Provider-managed only** — created inside **Gardener Dashboard → My Clerks** (or assigned by Admin); public Clerk self-registration is blocked | Strictly scoped operations assistant for assigned gardener(s): manages working days/hours, crew size, blocked dates, service listings, and manual payment proof verification without accessing unassigned gardeners or admin tools. |
 | **Administrator** (`role = 'administrator'`) | Seeded / promoted internally (public self-registration blocked) | Platform governance: KPI overview & analytics, gardener approval queue, category & itemized pricing/add-on configuration, service moderation, user account CRUD & activation toggles, clerk assignments, platform-wide activity monitoring, and user report resolution. |
 
@@ -34,7 +34,7 @@ Use this guide for onboarding teammates, QA walkthroughs, user manuals, and Soft
 ### 1.3 3-Step Public Registration Wizard (`/register`)
 - **2 Clean Public Role Cards Only:**
   - **Find a gardener** (`client`) — Hire & book gardening services.
-  - **Offer services** (`gardener`) — Automatically grants **both** Gardener capabilities and Client mode (`can_act_as_client = TRUE`, `can_act_as_gardener = TRUE`, plus `client_profiles` and `gardener_profiles` rows) and lets the provider manage Clerks inside **Dashboard → My Clerks**.
+  - **Offer services** (`gardener`) — Creates a Gardener-only account by default (`can_act_as_gardener = TRUE`, `can_act_as_client = FALSE`, plus `gardener_profiles` row) and lets the provider manage Clerks inside **Dashboard → My Staff**. Users who want both roles can opt in and switch inside **Profile → Account capabilities**.
   - Public registration strictly blocks `administrator` and `clerk` accounts (`400` on `POST /api/auth/register`).
 - **Step-by-Step Flow with Progress Stepper & Per-Step Validation:**
   - **Step 1 (`About you`):** Choose role card, enter First name, optional Middle name, Last name, and Birthday with **live auto-calculated Age** (18+ required).
@@ -45,8 +45,8 @@ Use this guide for onboarding teammates, QA walkthroughs, user manuals, and Soft
 ### 1.4 Login, Session Security & Role Switching (`/login`)
 - **Login UX:** Email & password sign-in with show/hide password toggle and browser-local **Recent Emails Quick Fill** chips (with individual forget buttons).
 - **Security Controls:** `bcryptjs` password hashing, `HttpOnly` `SameSite=Lax` JWT cookie (`auth_token`), sliding-window rate limiting on `/api/auth/login` and `/api/auth/register`, HTTP security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`), and live `users.is_active = TRUE` enforcement on every protected API request.
-- **Dual-Role Mode Switching (`AppSidebar.jsx`):**
-  - Every Gardener automatically has dual-role access (`Client Mode` ⇄ `Gardener Mode`) via a **1-click sidebar switcher** (`POST /api/auth/switch-role`), with inline error feedback if switching fails.
+- **Dual-Role Mode Switching (Profile Only — `DashboardPage.jsx`):**
+  - Both Clients and Gardeners start as single-role accounts by default so the sidebar stays clean and focused. Users who want both capabilities can opt in via **Enable Dual Role** (`POST /api/auth/enable-dual-role`) and switch between `Client Mode` ⇄ `Gardener Mode` (`POST /api/auth/switch-role`) exclusively inside **Profile → Account capabilities**.
   - Existing single-role Clients can opt into Gardener mode (`POST /api/auth/enable-dual-role`); their new gardener profile starts with `is_approved = FALSE` until approved by an Administrator.
   - **Self-Dealing Protection:** Dual-role accounts are blocked (`409`) from inquiring on, offering on, agreeing with, or booking their own listings/requests, and their own open requests are hidden from their Gardener Open Leads feed.
 
@@ -72,22 +72,23 @@ Use this guide for onboarding teammates, QA walkthroughs, user manuals, and Soft
 - **Secure Garden Photo Uploads (`POST /api/request-images`):**
   - Upload up to **5 garden photos** (`JPEG`, `PNG`, `WebP`, max 5 MB each). Every photo is validated, auto-oriented, resized within `1920×1920`, and re-encoded via `sharp` with **all EXIF/GPS metadata stripped**.
   - Unattached draft photos are automatically cleaned up after 24 hours. Photos are streamed only through authenticated endpoints (`GET /api/request-images/:imageId`).
-- **Dynamic Category Specs & Itemized Price Estimator (`POST /api/inquiries/estimate`):**
-  - Dynamic category-specific form fields (`inquiries.category_specs` JSON) tailored to each gardening category (Landscaping, Lawn Care, Tree & Plant Care, Potted & Terrace Gardens, Garden Maintenance, Garden Improvement).
-  - Live **Amount Predictor** calculates indicative labor + materials price ranges and estimated duration based on category per-sq.m rates, garden `areaSqm`, `workComplexity`, `materialsOption`, and optional itemized `pricing_addons` (plants, materials, equipment, disposal).
+- **Simplified 2-Step Request Flow & Auto-Priced Smart Material Bundles (`/inquiries/new`):**
+  - **Step 1 (`What you need & photos`):** Enter title, optional category, description, barangay, preferred date, and upload up to 5 original garden photos (with inline **Describe with AI** and **Preview changes with AI** concept editing).
+  - **Step 2 (`Size, smart estimate & send`):** Choose a **1-tap yard size preset** (`Small ~10 m²`, `Medium ~25 m²`, `Large ~50 m²`, `Extra Large ~100 m²`, or `Not sure yet — assess on site`), optionally tap an auto-scaled **Smart Plant & Material Package** (`Smart Pick`, `Cleanup & Hauling`, `Lawn Refresh`, `Plants & Border Makeover`) priced automatically from MySQL `pricing_addons`, or expand the optional customization drawer for individual add-on quantities and dynamic category specs (`inquiries.category_specs` JSON). General requests also show an advisory **Smart Match: Top Nearby Gardeners** preview strip.
   - Supports client budget/price comments and an **On-Site Ocular Inspection** flag (`requires_site_visit`).
-- **AI Requirement & Photo Assistance (Advisory Only):**
+- **AI Requirement, Material & Visual Photo Assistance (Advisory Only):**
   - Run Gemini photo analysis (`POST /api/ai/photo-analysis`) on uploaded photos to generate editable `ai_description` notes.
-  - Run Gemini requirement structuring (`POST /api/ai/requirements`) to draft a clean summary, description, category suggestion, and follow-up questions that the client reviews and edits before submitting.
+  - Run Gemini requirement structuring (`POST /api/ai/requirements`) to draft a clean summary, description, category suggestion, and validated `suggestedAddons` mapped strictly to active catalog items.
+  - When `AI_IMAGE_GEN_ENABLED=true`, generate Before/After **AI Concept Previews** (`POST /api/ai/garden-image`) via Cloudflare Workers AI (`@cf/black-forest-labs/flux-2-klein-4b`), always preserved separately from and displayed alongside the untouched original site photo.
 - **Comparing & Accepting Offers:**
   - On Case 1 requests, clients compare competing gardener offers side by side with ratings, review counts, completed bookings, years of experience, service area, and portfolio thumbnails.
   - Clients can accept or decline offers (`PATCH /api/inquiries/quotations/:quotationId/status`). Accepting locks the offer (`locked_at = NOW()`) and moves the inquiry to `provider_selected` — **never creating a booking automatically**.
 
 ### 2.3 Versioned Mutual Agreement (`/inquiries/:inquiryId` & `/services/:serviceId`)
 - **Mandatory Gate Before Booking:** Direct booking creation (`POST /api/bookings`) is retired (`409 MUTUAL_AGREEMENT_REQUIRED`). Even priced services start an inquiry + Version 1 Mutual Agreement (`POST /api/agreements/direct-service`).
-- **Agreement Negotiation & Versioning (`/api/agreements`):**
-  - Either client or gardener proposes Version 1 specifying `scope_of_work`, final `amount`, `price_basis`, `required_deposit_amount`, `estimated_working_days`, `scheduled_start`, `scheduled_end`, exact `location`, and `conditions`.
-  - Editing a proposed agreement marks Version $N$ as `superseded`, creates Version $N+1$ (`previous_agreement_id`), and clears the other party's approval.
+- **Agreement Negotiation, Deposit Presets & Versioning (`/api/agreements`):**
+  - Either client or gardener proposes Version 1 specifying `scope_of_work`, final `amount`, `price_basis`, `required_deposit_amount` (with 1-tap **`0% No deposit`**, **`30% standard`**, **`50% materials upfront`**, and **`100% full`** preset chips), `estimated_working_days`, `scheduled_start`, `scheduled_end`, exact `location`, and `conditions`.
+  - Editing a proposed agreement (including negotiating a new deposit amount) marks Version $N$ as `superseded`, creates Version $N+1$ (`previous_agreement_id`), and clears the other party's approval.
   - **Atomic Confirmation:** Only when **both** client and gardener approve the **exact same version** does the backend validate schedule & crew capacity, set `agreement.status = 'agreed'`, create the booking (`status = 'accepted'`, `booking_stage = 'reserved'`), mark `inquiry.status = 'confirmed'`, and auto-decline competing offers.
 
 ### 2.4 Reservations, Payments, Rescheduling, Completion & Reviews (`/bookings`, `/bookings/:bookingId`)
@@ -108,7 +109,7 @@ Use this guide for onboarding teammates, QA walkthroughs, user manuals, and Soft
 ## 3. Gardener / Service Provider Functionalities
 
 ### 3.1 Built-In Dual-Role Access & Professional Profile (`/dashboard`, `/profile`)
-- **Automatic Client Mode:** Every Gardener account automatically includes Client mode (`can_act_as_client = TRUE`), allowing gardeners to hire other gardeners with one click in the sidebar while preventing self-dealing.
+- **Optional Client Mode:** Gardeners who also want to hire other gardeners for their own yard can opt into Dual Role inside **Profile → Account capabilities** (`POST /api/auth/enable-dual-role`) and switch modes from Profile while self-dealing remains blocked.
 - **Profile & Approval Status:** Manage business/display name, service area, years of experience, bio/specialties, avatar photo, and view live Administrator approval status (`Pending Approval` vs `Approved`).
 
 ### 3.2 Service Listings & Portfolio Management (`/dashboard`)
@@ -124,7 +125,9 @@ Use this guide for onboarding teammates, QA walkthroughs, user manuals, and Soft
 
 ### 3.4 Open Requests Board, AI Lead Matching & Offers (`/inquiries`, `/inquiries/:inquiryId`)
 - **Open Service Requests Board (`GET /api/inquiries/open`):** Approved gardeners browse non-expired Case 1 open requests (excluding their own if dual-role), plus AI-ranked nearby leads on the Gardener Dashboard (`GET /api/ai/recommendations?mode=leads`, supporting category filtering).
-- **Provider Decision-Support View:** Displays client-reviewed garden photos, editable AI photo descriptions, structured category specs, price predictor breakdowns, and ocular inspection flags.
+- **Provider Decision-Support View & Single-View Quick Response:**
+  - Displays a top **At-a-Glance Strip** (`Area`, `Barangay`, `Target date`, `Estimate`, `Expires`, `Photos`) and a prominent **2-column Before/After photo showcase** (`Original site photo` vs. `AI Concept Preview`) above the structured category specs and price predictor breakdown.
+  - Single-view **Quick Response** quote card with response-type pills (`Send offer`, `Suggest changes`, `Feasible`, `Interested`, `Cannot fulfill`), **1-click `Auto-fill Low / Mid / High`** buttons populating labor, materials, total, and breakdown from the system estimate, quick duration chips (`Half day`, `1 day`, `2 days`, `3 days`), a **`Use client's date`** shortcut, and a collapsible drawer for optional labor/materials splits and validity dates.
 - **Submitting, Revising & Withdrawing Offers:**
   - Submit Case 1 offers (`offer`, `interest`) or Case 2 feasibility responses (`offer`, `feasible`, `modifications` with proposed changes, or `cannot_do`) with itemized labor/materials breakdowns and estimated working days/hours.
   - Revise (`PUT /api/inquiries/quotations/:quotationId`) or withdraw (`POST .../withdraw`) while `status = 'sent'` and unlocked; every revision is archived in `quotation_revisions`.
@@ -183,16 +186,19 @@ Administrators have a dedicated multi-tab governance workspace (and are intentio
 
 ## 6. AI Garden Planning Assistant (`/assistant` & `<AiAssistantWidget />`, `/api/ai/*`)
 
-- **Backend-Mediated Google Gemini Integration:** Uses `GEMINI_API_KEY` exclusively on the backend (`gemini-3.8-flash` primary with automatic 1-time fallback to `gemini-3.5-flash-lite` on transient `429`/`5xx`/timeout/network errors).
-- **Three Advisory Capabilities:**
-  1. **Standalone Tropical Garden Planner (`POST /api/ai/garden-plan`):** Interactive prompt-based planning tailored to Zamboanga City's climate (accessible via `/assistant` and the floating bottom-right `<AiAssistantWidget />`).
-  2. **Inquiry Requirement Structurer (`POST /api/ai/requirements`):** Turns rough client notes into structured scope summaries, suggested categories, gardening ideas, and clarifying questions.
-  3. **Multimodal Garden Photo Understanding (`POST /api/ai/photo-analysis`):** Analyzes sanitized client garden photos to produce editable space observations saved to `request_images.ai_description`.
-- **Smart Hybrid Matching (`GET /api/ai/recommendations`, `POST /api/ai/recommendations/summary`):** Ranks nearby services or open leads by Zamboanga City barangay proximity, category (`categoryId`), verified reviews, and service conduct.
+- **Backend-Mediated Hybrid AI Integration:**
+  - **Google Gemini (`GEMINI_API_KEY`):** Fast SSE streaming (`gemini-3.5-flash-lite` / `gemini-3.8-flash` with automatic fallback on transient `429`/`5xx`/8s timeout/network errors) and strict gardening-only `systemInstruction` domain guardrails that politely refuse off-topic prompts (such as code or homework).
+  - **Cloudflare Workers AI (`CF_ACCOUNT_ID` / `CF_API_TOKEN`, gated by `AI_IMAGE_GEN_ENABLED=true`):** Instruction-based photo editing (`@cf/black-forest-labs/flux-2-klein-4b`, 10,000 free Neurons/day) that keeps the client's real yard structure intact while removing/cleaning/adding requested garden elements.
+- **Four Advisory Capabilities:**
+  1. **Streaming Tropical Garden Planner (`POST /api/ai/garden-plan/stream` & `/garden-plan`):** Real-time formatted planning guidance tailored to Zamboanga City's climate (accessible via `/assistant` **Garden Ideas** tab and the floating bottom-right `<AiAssistantWidget />`).
+  2. **Visual Garden Preview (`POST /api/ai/garden-image`):** Available on `/assistant` (**Visual Garden Preview** tab with Before/After comparison, full-size zoom/save, single-upload re-edit reuse, and 1-click handoff to `/inquiries/new`) and inline per uploaded site photo on Inquiry Step 1. Gemini validates/refines gardening-only edit instructions before Cloudflare runs.
+  3. **Inquiry Requirement & Material Structurer (`POST /api/ai/requirements`):** Turns rough client notes into structured scope summaries, suggested categories, validated `suggestedAddons` from `pricing_addons`, gardening ideas, and clarifying questions.
+  4. **Multimodal Garden Photo Understanding (`POST /api/ai/photo-analysis`):** Analyzes sanitized client garden photos to produce editable space observations saved to `request_images.ai_description`.
+- **Smart Hybrid Matching (`GET /api/ai/recommendations`, `POST /api/ai/recommendations/summary`):** Ranks nearby services, offers, or open leads by Zamboanga City barangay proximity, category (`categoryId`), verified reviews, and service conduct.
 - **Strict Guardrails:**
-  - Concurrency-safe rolling 60-minute per-user quota (`AI_HOURLY_LIMIT`, default `10`/hr) backed by `SELECT ... FOR UPDATE` and `ai_usage_log` (`GET /api/ai/usage`).
-  - Paid AI image generation is intentionally disabled (`501 IMAGE_GENERATION_POSTPONED`).
-  - AI **never** approves requests, selects providers, confirms bookings, sets final prices, or guarantees outcomes.
+  - Separate concurrency-safe MySQL quotas in `ai_usage_log` (`SELECT ... FOR UPDATE`): **`10` calls/hour** (`AI_HOURLY_LIMIT`) for text & photo analysis, and **`3` edits/24 hours** (`AI_IMAGE_DAILY_LIMIT`) for AI photo previews (off-topic refusals return `400 OFF_TOPIC_EDIT` without consuming daily credits).
+  - When `AI_IMAGE_GEN_ENABLED=false`, image editing returns `501 IMAGE_GENERATION_POSTPONED`.
+  - AI **never** approves requests, selects providers, confirms bookings, sets binding prices, or guarantees outcomes.
 
 ---
 

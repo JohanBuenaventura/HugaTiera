@@ -2200,17 +2200,6 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
           </div>
           {activeTab === 'overview' && (
             <div className="inline-actions dashboard-hero-actions">
-              {user.isDualRole && (
-                <button
-                  className="button button-outline dual-role-switch-btn"
-                  type="button"
-                  disabled={roleBusy}
-                  onClick={handleQuickSwitchRole}
-                >
-                  <ArrowLeftRight size={15} />
-                  {roleBusy ? 'Switching...' : `Switch to ${role === 'client' ? 'Gardener' : 'Client'} Mode`}
-                </button>
-              )}
               {role === 'client' ? (
                 <>
                   <Link className="button" to="/services">Explore services</Link>
@@ -2277,8 +2266,10 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
               </div>
               <p className="field-note" style={{ margin: 0 }}>
                 {user.isDualRole
-                  ? `You are currently in ${roleLabel} Mode. Switch anytime from the sidebar or here. Your approved gardener services remain visible publicly even while browsing in Client Mode, and self-booking your own service is automatically prevented.`
-                  : 'Want to both hire gardeners for your own property and offer gardening services on one account? Enable Dual Role to unlock instant Client ⇄ Gardener switching (new gardener profiles still require administrator approval before appearing publicly).'}
+                  ? `You are currently in ${roleLabel} Mode. Switch modes anytime here in Profile. Your approved gardener services remain visible publicly even while browsing in Client Mode, and self-booking your own service is automatically prevented.`
+                  : role === 'gardener'
+                    ? 'Want to also hire other gardeners for your own yard on this same account? Enable Dual Role to switch between Gardener and Client modes here in Profile anytime.'
+                    : 'Want to also offer gardening services on this same account? Enable Dual Role to switch between Client and Gardener modes here in Profile anytime (new gardener profiles require administrator approval before appearing publicly).'}
               </p>
             </section>
             <section className="dashboard-panel profile-settings-panel">

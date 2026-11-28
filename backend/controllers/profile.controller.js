@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs')
 const { pool } = require('../config/database')
 const { createNotification } = require('../services/notification.service')
+const { buildNotificationRoleScope } = require('./notification.controller')
 const {
   avatarsDirectory,
   processAndSaveAvatar,
@@ -71,12 +72,13 @@ async function getProfile(req, res, next) {
     if (user.role === 'client') {
       const [profiles] = await pool.execute('SELECT address, city, bio FROM client_profiles WHERE user_id = ?', [user.id])
       profile = profiles[0] || null
+      const notifScope = buildNotificationRoleScope('client', user.id)
       const [result] = await pool.execute(`
         SELECT
           (SELECT COUNT(*) FROM inquiries WHERE client_id = ?) AS inquiries,
           (SELECT COUNT(*) FROM bookings WHERE client_id = ?) AS bookings,
-          (SELECT COUNT(*) FROM notifications WHERE user_id = ?) AS notifications
-      `, [user.id, user.id, user.id])
+          (SELECT COUNT(*) FROM notifications n WHERE n.user_id = ? ${notifScope.sql}) AS notifications
+      `, [user.id, user.id, user.id, ...notifScope.params])
       counts = result[0]
     } else if (user.role === 'gardener') {
       const [profiles] = await pool.execute(

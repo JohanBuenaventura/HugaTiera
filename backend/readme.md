@@ -10,7 +10,7 @@ The Node.js + Express 5 REST API backend for **HugaTiera** (`main`), providing 1
 - **MySQL2 (`^3.24.6`):** `mysql2/promise` connection pool, parameterized SQL, and ACID transactions
 - **Authentication:** `jsonwebtoken` (`^9.0.2`), `bcryptjs` (`^3.0.2`), `cookie-parser` (`^1.4.7`) (`auth_token` `HttpOnly` cookie)
 - **Image Processing:** `multer` (`^2.5.0`) + `sharp` (`^0.35.5`) for image decoding, resizing, and complete EXIF/GPS metadata removal across avatars, service covers, portfolios, receipts, and request photos
-- **AI Integration:** Google Gemini REST API (`gemini-3.8-flash` primary, `gemini-3.5-flash-lite` automatic fallback) + hybrid proximity/conduct ranking (`utils/smartMatching.js`)
+- **AI Integration:** Google Gemini REST API (`gemini-3.5-flash-lite` / `gemini-3.8-flash` with SSE streaming, automatic fallback, strict gardening-only `systemInstruction` guardrails, and `suggestedAddons`), optional free-tier **Cloudflare Workers AI** photo concept editing (`@cf/black-forest-labs/flux-2-klein-4b`, gated by `AI_IMAGE_GEN_ENABLED`), + hybrid proximity/conduct ranking (`utils/smartMatching.js`)
 - **Payment Gateway:** PayMongo Checkout REST integration + built-in Sandbox/Demo mode (`services/paymentGateway.service.js`)
 
 ---
@@ -30,10 +30,15 @@ DB_NAME=hugatiera_db
 JWT_SECRET=replace-with-a-long-random-secret
 JWT_EXPIRES_IN=1d
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.8-flash
-GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_FALLBACK_MODEL=gemini-3.8-flash
 GEMINI_THINKING_LEVEL=low
 AI_HOURLY_LIMIT=10
+AI_IMAGE_GEN_ENABLED=false
+CF_ACCOUNT_ID=
+CF_API_TOKEN=
+CF_IMAGE_TO_IMAGE_MODEL=@cf/black-forest-labs/flux-2-klein-4b
+AI_IMAGE_DAILY_LIMIT=3
 PAYMONGO_SECRET_KEY=
 ```
 
@@ -54,7 +59,8 @@ PAYMONGO_SECRET_KEY=
 | `npm run test:r5` | Run Step R5 Case 1 general service request tests |
 | `npm run test:r6` | Run Step R6/R7 Gemini AI assistance, fallback, & rate-limit tests |
 
-Additional feature test suites in `backend/tests/` (run via `node --test --test-concurrency=1 ...` with `DB_NAME=hugatiera_db_migration_test`):
+Additional feature test suites in `backend/tests/` (run via `node --test --test-concurrency=1 ...` with `DB_NAME=hugatiera_db_migration_test` — `16` suites / `83` tests total):
+- `aiImagePreview.test.js`
 - `avatarsServicesAdmin.test.js`
 - `registrationBasicInfo.test.js`
 - `inquiryPriceEstimator.test.js`
@@ -87,7 +93,7 @@ For full request/response schemas and authorization rules, see [docs/api-referen
 - `/api/reviews` — `/recent` discovery reviews, gardener reviews, and completion-gated client review creation (`review.routes.js`)
 - `/api/conversations` — 1-to-1 conversations (with Case 1 active-offer gating) and messages (`conversation.routes.js`)
 - `/api/notifications` — In-app notification list and mark-read endpoints (`notification.routes.js`)
-- `/api/ai` — `GET /usage`, `GET /recommendations`, `POST /recommendations/summary`, `POST /garden-plan`, `POST /requirements`, `POST /photo-analysis` (`ai.routes.js`)
+- `/api/ai` — `GET /usage`, `GET /recommendations`, `POST /recommendations/summary`, `POST /garden-plan`, `POST /garden-plan/stream` (SSE), `POST /requirements` (with `suggestedAddons`), `POST /photo-analysis`, `POST /garden-image` (Cloudflare Workers AI photo editing) (`ai.routes.js`)
 - `/api/admin` — Platform summary metrics, user CRUD/role/delete, clerk assignments, pending gardener approvals, category & pricing-addon management, service moderation, activity monitor, and report resolution (`admin.routes.js`)
 
 ---
@@ -141,6 +147,7 @@ backend/
 │   ├── notification.service.js
 │   └── paymentGateway.service.js
 ├── tests/
+│   ├── aiImagePreview.test.js
 │   ├── avatarsServicesAdmin.test.js
 │   ├── cancellationReschedule.test.js
 │   ├── dualRoleAndClerk.test.js

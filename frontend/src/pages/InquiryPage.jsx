@@ -42,17 +42,117 @@ function formatDate(value) {
 }
 
 const INQUIRY_STEPS = [
-  { id: 1, label: 'Basics' },
-  { id: 2, label: 'Size & estimate' },
-  { id: 3, label: 'Details & photos' },
-  { id: 4, label: 'Review & send' },
+  { id: 1, label: 'What you need & photos' },
+  { id: 2, label: 'Size, smart estimate & send' },
 ]
 
+const YARD_SIZE_PRESETS = [
+  { key: 'small', label: 'Small', hint: '~10 m² · Balcony / patch', sqm: '10' },
+  { key: 'medium', label: 'Medium', hint: '~25 m² · Typical front yard', sqm: '25' },
+  { key: 'large', label: 'Large', hint: '~50 m² · Full yard / lawn', sqm: '50' },
+  { key: 'xlarge', label: 'Extra Large', hint: '~100 m² · Spacious lot', sqm: '100' },
+  { key: 'unsure', label: 'Not sure yet', hint: 'Assess during site visit', sqm: '' },
+]
+
+function buildSmartMaterialBundles(pricingAddons, areaSqm, description = '', categoryName = '') {
+  if (!Array.isArray(pricingAddons) || pricingAddons.length === 0) return []
+  const area = Math.max(5, Number(areaSqm) || 25)
+  const findAddon = (regex, fallbackType = null) => (
+    pricingAddons.find((a) => regex.test(`${a.name} ${a.description || ''}`))
+    || (fallbackType ? pricingAddons.find((a) => a.item_type === fallbackType) : null)
+  )
+
+  const ornamental = findAddon(/ornamental|potted/i, 'plant')
+  const shrubs = findAddon(/shrub|hedge|flowering|bougainvillea/i)
+  const turf = findAddon(/turf|carabao|carpet|grass/i)
+  const soil = findAddon(/loam|soil|compost/i, 'material')
+  const fertilizer = findAddon(/fertilizer|vermicast/i)
+  const stones = findAddon(/stone|pebble|mulch|edging/i)
+  const hauling = findAddon(/hauling|disposal|debris|waste/i, 'disposal')
+  const equipment = findAddon(/brush|chainsaw|equipment/i, 'equipment')
+
+  const makeEntry = (addon, qty) => (addon ? { addon, qty: Math.max(1, Math.round(qty)) } : null)
+
+  // Dynamic smart bundle inferred from description & category text
+  const textBlob = `${description} ${categoryName}`.toLowerCase()
+  const smartItems = []
+  if (/weed|yellow|dry|clean|remove|overgrown|clear|branch|prune|trim|debris|pebble|cut/.test(textBlob)) {
+    if (hauling) smartItems.push(makeEntry(hauling, area >= 60 ? 2 : 1))
+    if (equipment) smartItems.push(makeEntry(equipment, 1))
+  }
+  if (/grass|lawn|turf|patch/.test(textBlob) && turf) {
+    smartItems.push(makeEntry(turf, Math.max(5, Math.round(area * 0.6))))
+  }
+  if (/plant|shrub|flower|bougainvillea|santan|hedge|visual|garden|landscap|makeover/.test(textBlob)) {
+    if (shrubs) smartItems.push(makeEntry(shrubs, Math.max(4, Math.round(area / 5))))
+    if (ornamental) smartItems.push(makeEntry(ornamental, Math.max(4, Math.round(area / 6))))
+    if (soil) smartItems.push(makeEntry(soil, Math.max(2, Math.ceil(area / 8))))
+  }
+  if (/stone|path|walkway|border|edging|mulch/.test(textBlob) && stones) {
+    smartItems.push(makeEntry(stones, Math.max(4, Math.round(area / 4))))
+  }
+
+  const bundles = []
+  if (smartItems.length > 0) {
+    bundles.push({
+      key: 'smart_pick',
+      badge: 'Recommended for your request',
+      title: 'Smart Pick (from your description)',
+      subtitle: 'Auto-matched items & quantities based on your yard details.',
+      items: smartItems,
+    })
+  }
+
+  const cleanupItems = [makeEntry(hauling, area >= 60 ? 2 : 1), makeEntry(equipment, 1)].filter(Boolean)
+  if (cleanupItems.length > 0) {
+    bundles.push({
+      key: 'cleanup',
+      title: 'Cleanup & Hauling',
+      subtitle: 'Clearing weeds/grass, brush cutter & debris hauling.',
+      items: cleanupItems,
+    })
+  }
+
+  const lawnItems = [
+    makeEntry(turf, area),
+    makeEntry(soil, Math.ceil(area / 5)),
+    makeEntry(fertilizer, Math.ceil(area / 15)),
+  ].filter(Boolean)
+  if (lawnItems.length > 0) {
+    bundles.push({
+      key: 'lawn_refresh',
+      title: 'Lawn Refresh (Turf + Soil)',
+      subtitle: `Auto-scaled for ~${area} m² of fresh turf & soil.`,
+      items: lawnItems,
+    })
+  }
+
+  const plantItems = [
+    makeEntry(shrubs, Math.max(4, Math.round(area / 4))),
+    makeEntry(ornamental, Math.max(4, Math.round(area / 5))),
+    makeEntry(soil, Math.ceil(area / 6)),
+    makeEntry(stones, Math.max(4, Math.round(area / 3))),
+  ].filter(Boolean)
+  if (plantItems.length > 0) {
+    bundles.push({
+      key: 'plant_makeover',
+      title: 'Plants & Border Makeover',
+      subtitle: `Flowering shrubs, ornamentals, soil & edging for ~${area} m².`,
+      items: plantItems,
+    })
+  }
+
+  return bundles.map((bundle) => {
+    const minTotal = bundle.items.reduce((sum, i) => sum + Number(i.addon.unit_price_min || 0) * i.qty, 0)
+    const maxTotal = bundle.items.reduce((sum, i) => sum + Number(i.addon.unit_price_max || 0) * i.qty, 0)
+    return { ...bundle, minTotal, maxTotal }
+  })
+}
+
 function InquiryForm() {
-  const { user, switchRole } = useAuth()
+  const { user } = useAuth()
   const [barangayChoice, setBarangayChoice] = useState('')
   const [customBarangay, setCustomBarangay] = useState('')
-  const [switchingToClient, setSwitchingToClient] = useState(false)
   const [params] = useSearchParams()
   const serviceId = params.get('serviceId')
   const gardenerId = params.get('gardenerId')
@@ -99,6 +199,8 @@ function InquiryForm() {
   const [generatingAiReq, setGeneratingAiReq] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState(null)
   const [aiNotice, setAiNotice] = useState('')
+  const [activeBundleKey, setActiveBundleKey] = useState('')
+  const [nearbyRecommendations, setNearbyRecommendations] = useState([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [inquiryStep, setInquiryStep] = useState(1)
@@ -113,6 +215,25 @@ function InquiryForm() {
       servicesApi.gardener(gardenerId).then((result) => setGardener(result.gardener)).catch((loadError) => setError(loadError.message))
     }
   }, [gardenerId, isGeneralRequest, serviceId, validGardenerId, validServiceId])
+
+  useEffect(() => {
+    if (!isGeneralRequest || inquiryStep !== 2) return undefined
+    let active = true
+    fetchSmartRecommendations({
+      mode: 'services',
+      categoryId: form.categoryId || undefined,
+      location: form.location || undefined,
+      keyword: form.subject || undefined,
+      limit: 3,
+    })
+      .then((res) => {
+        if (active) setNearbyRecommendations(Array.isArray(res?.recommendations) ? res.recommendations : [])
+      })
+      .catch(() => {
+        if (active) setNearbyRecommendations([])
+      })
+    return () => { active = false }
+  }, [isGeneralRequest, inquiryStep, form.categoryId, form.location, form.subject])
 
   const change = (field) => (event) => setForm({ ...form, [field]: event.target.value })
 
@@ -187,6 +308,67 @@ function InquiryForm() {
         [fieldKey]: exists ? current.filter((v) => v !== optionLabel) : [...current, optionLabel],
       }
     })
+  }
+
+  const smartBundles = buildSmartMaterialBundles(
+    pricingAddons,
+    form.areaSqm,
+    `${form.subject} ${form.description}`,
+    selectedCategory?.name || service?.category_name || '',
+  )
+
+  function selectYardSizePreset(preset) {
+    if (preset.key === 'unsure') {
+      setForm((current) => ({
+        ...current,
+        areaSqm: '',
+        lengthM: '',
+        widthM: '',
+        siteVisitRequested: true,
+      }))
+      return
+    }
+    setForm((current) => ({
+      ...current,
+      areaSqm: preset.sqm,
+      lengthM: '',
+      widthM: '',
+    }))
+  }
+
+  function applyMaterialBundle(bundle) {
+    if (activeBundleKey === bundle.key) {
+      setActiveBundleKey('')
+      setSelectedAddonsMap({})
+      return
+    }
+    const nextMap = {}
+    for (const entry of bundle.items) {
+      nextMap[entry.addon.id] = String(entry.qty)
+    }
+    setActiveBundleKey(bundle.key)
+    setSelectedAddonsMap(nextMap)
+    setForm((current) => ({
+      ...current,
+      areaSqm: current.areaSqm || '25',
+      materialsOption: 'gardener_provides',
+    }))
+  }
+
+  function applyAiSuggestedAddons(suggestedAddons = []) {
+    if (!Array.isArray(suggestedAddons) || suggestedAddons.length === 0) return
+    const nextMap = {}
+    for (const item of suggestedAddons) {
+      nextMap[item.addonId] = String(item.quantity || 1)
+    }
+    setActiveBundleKey('ai_suggested')
+    setSelectedAddonsMap(nextMap)
+    setForm((current) => ({
+      ...current,
+      areaSqm: current.areaSqm || '25',
+      materialsOption: 'gardener_provides',
+    }))
+    setAiNotice('AI-recommended plants and materials applied — prices are calculated automatically from the local catalog.')
   }
 
   const liveEstimate = computeLocalPriceEstimate({
@@ -318,6 +500,7 @@ function InquiryForm() {
         subject: form.subject,
         description: form.description,
         location: form.location,
+        areaSqm: form.areaSqm ? Number(form.areaSqm) : null,
         imageIds: uploadedImages.map((img) => img.id),
       })
       if (res?.suggestion) {
@@ -328,7 +511,7 @@ function InquiryForm() {
         })
         if (res.model) {
           setAiNotice(
-            `Suggestions generated with ${res.model}${res.fallbackUsed ? ' (automatic fallback)' : ''}. Review and edit before submitting.`,
+            `Suggestions generated with ${res.model}${res.fallbackUsed ? ' (automatic fallback)' : ''}. Review and apply what fits your yard.`,
           )
         }
         setForm((prev) => ({
@@ -338,6 +521,18 @@ function InquiryForm() {
             ? String(res.suggestion.suggestedCategoryId)
             : prev.categoryId,
         }))
+        if (
+          Object.keys(selectedAddonsMap).length === 0
+          && Array.isArray(res.suggestion.suggestedAddons)
+          && res.suggestion.suggestedAddons.length > 0
+        ) {
+          const autoMap = {}
+          for (const item of res.suggestion.suggestedAddons) {
+            autoMap[item.addonId] = String(item.quantity || 1)
+          }
+          setSelectedAddonsMap(autoMap)
+          setActiveBundleKey('ai_suggested')
+        }
       }
     } catch (aiErr) {
       setAiNotice(`${aiErr.message} You can continue filling out and submitting your request without AI assistance.`)
@@ -433,32 +628,14 @@ function InquiryForm() {
         </Link>
         <div className="dashboard-panel">
           <p className="eyebrow">Client action required</p>
-          <h1>Switch to Client Mode to submit a request.</h1>
+          <h1>Client Mode is required to submit a request.</h1>
           <p className="field-note">
-            You are currently signed in under Gardener Mode. Submitting a general service request or direct inquiry is available in Client Mode.
+            {user.isDualRole
+              ? 'You are currently in Gardener Mode. Go to Profile to switch to Client Mode before submitting a general request or direct inquiry.'
+              : 'You are signed in with a Gardener account. If you also want to hire gardeners for your own yard, you can enable Client Mode in Profile.'}
           </p>
-          {error && <div className="form-error" role="alert" style={{ marginTop: '12px' }}>{error}</div>}
           <div className="inline-actions" style={{ marginTop: '16px' }}>
-            {user.isDualRole && (
-              <button
-                type="button"
-                className="button"
-                disabled={switchingToClient}
-                onClick={async () => {
-                  setSwitchingToClient(true)
-                  setError('')
-                  try {
-                    await switchRole('client')
-                  } catch (switchErr) {
-                    setError(switchErr.message || 'Unable to switch to Client Mode right now.')
-                  } finally {
-                    setSwitchingToClient(false)
-                  }
-                }}
-              >
-                {switchingToClient ? 'Switching...' : 'Switch to Client Mode'}
-              </button>
-            )}
+            <Link className="button" to="/profile">Open Profile</Link>
             <Link className="button button-outline" to="/dashboard">Back to dashboard</Link>
           </div>
         </div>
@@ -521,532 +698,611 @@ function InquiryForm() {
         </p>
         {inquiryStep === 1 && (
           <div className="inquiry-step-panel">
-            <p className="auth-section-title">Step 1 of 4 · The basics</p>
-            <label>Subject <span className="required-mark" aria-hidden="true">*</span>
-              <input required maxLength="200" value={form.subject} onChange={change('subject')} placeholder="e.g. Small backyard garden improvement" />
+            <p className="auth-section-title">Step 1 of 2 · Tell us what you need &amp; attach photos</p>
+            <div className="form-row">
+              <label>Project title <span className="required-mark" aria-hidden="true">*</span>
+                <input required maxLength="200" value={form.subject} onChange={change('subject')} placeholder="e.g. Clean yard grass & add flowering plants" />
+              </label>
+              {(isGeneralRequest || !validServiceId) && (
+                <label>Service category <span className="label-note">(Optional)</span>
+                  <select value={form.categoryId} onChange={change('categoryId')}>
+                    <option value="">Any gardening category</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+
+            <label>Describe what you want done <span className="required-mark" aria-hidden="true">*</span>
+              <textarea required rows="4" maxLength="5000" value={form.description} onChange={change('description')} placeholder={activeCategoryTemplate.descriptionPlaceholder} />
             </label>
-        {isGeneralRequest ? (
-          <div className="form-row">
-            <label>Service category (helps compute per-m² estimate)
-              <select value={form.categoryId} onChange={change('categoryId')}>
-                <option value="">Any gardening category (₱60–₱120/m²)</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name} (₱{Number(cat.rate_per_sqm_min).toFixed(0)}–₱{Number(cat.rate_per_sqm_max).toFixed(0)}/m²)
-                  </option>
-                ))}
-              </select>
+
+            <div className="inline-actions" style={{ marginBottom: '6px' }}>
+              <button
+                className="button button-outline button-sm"
+                type="button"
+                disabled={generatingAiReq}
+                onClick={handleGenerateAiRequirements}
+              >
+                <Sparkles size={15} /> {generatingAiReq ? 'Organizing with AI...' : 'Organize & recommend materials with AI'}
+              </button>
+              {aiSuggestion?.refinedDescription && (
+                <button
+                  className="table-action"
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, description: aiSuggestion.refinedDescription }))}
+                >
+                  Use AI-refined description
+                </button>
+              )}
+            </div>
+            {aiNotice && (
+              <p className="form-note" role="status" style={{ marginBottom: '8px' }}>
+                {aiNotice}
+              </p>
+            )}
+            {aiSuggestion && (
+              <div className="ai-callout-box">
+                <p className="form-note" style={{ margin: '0 0 6px' }}>
+                  <strong>AI smart suggestions (review before submitting):</strong>
+                  {aiSuggestion.suggestedCategoryName ? ` Suggested category: ${aiSuggestion.suggestedCategoryName}.` : ''}
+                </p>
+                {Array.isArray(aiSuggestion.suggestedAddons) && aiSuggestion.suggestedAddons.length > 0 && (
+                  <div className="ai-suggested-addons-bar">
+                    <p className="form-note" style={{ margin: '0 0 6px' }}>
+                      <strong>Recommended catalog materials (priced automatically):</strong>
+                    </p>
+                    <ul className="ai-callout-list">
+                      {aiSuggestion.suggestedAddons.map((item) => (
+                        <li key={item.addonId}>
+                          <strong>{item.name}</strong> ({item.quantity} × {item.unit})
+                          {item.reason ? ` — ${item.reason}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      className="table-action"
+                      onClick={() => applyAiSuggestedAddons(aiSuggestion.suggestedAddons)}
+                    >
+                      <Sparkles size={13} /> Apply AI-recommended materials to estimate
+                    </button>
+                  </div>
+                )}
+                {Array.isArray(aiSuggestion.gardeningIdeas) && aiSuggestion.gardeningIdeas.length > 0 && (
+                  <ul className="ai-callout-list">
+                    {aiSuggestion.gardeningIdeas.map((idea) => (
+                      <li key={idea}>{idea}</li>
+                    ))}
+                  </ul>
+                )}
+                {Array.isArray(aiSuggestion.followUpQuestions) && aiSuggestion.followUpQuestions.length > 0 && (
+                  <p className="form-note" style={{ margin: 0 }}>
+                    <strong>Helpful details to mention:</strong> {aiSuggestion.followUpQuestions.join(' · ')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="form-row">
+              <label>Service area / barangay <span className="label-note">(Area-level only)</span>
+                <select value={barangayChoice} onChange={(event) => updateBarangayChoice(event.target.value)}>
+                  <option value="">Select barangay...</option>
+                  {ZAMBOANGA_BARANGAYS.map((brgy) => <option key={brgy} value={brgy}>{brgy}</option>)}
+                  <option value={OTHER_BARANGAY_VALUE}>Other (type manually)</option>
+                </select>
+              </label>
+              <label>Preferred date <span className="label-note">(Optional)</span>
+                <input type="date" value={form.requestedDate} onChange={change('requestedDate')} />
+              </label>
+            </div>
+            {barangayChoice === OTHER_BARANGAY_VALUE && (
+              <label>Specify barangay
+                <input maxLength="80" value={customBarangay} onChange={(event) => updateCustomBarangay(event.target.value)} placeholder="Enter barangay name" />
+              </label>
+            )}
+            {form.location && (
+              <p className="field-note">Shared with providers as: <strong>{form.location}</strong> — exact address is shared only after mutual agreement.</p>
+            )}
+
+            <label>Garden photos <span className="label-note">(Optional, up to 5 photos; GPS/EXIF stripped automatically)</span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto || originalPhotoCount >= 5} onChange={handlePhotoUpload} />
             </label>
-            <label>Request validity period
-              <select value={form.expiresInDays} onChange={change('expiresInDays')}>
-                <option value="7">7 days</option>
-                <option value="14">14 days (Recommended)</option>
-                <option value="30">30 days</option>
-              </select>
-            </label>
-          </div>
-        ) : (!validServiceId && (
-          <label>Service category (optional — improves per-m² estimate)
-            <select value={form.categoryId} onChange={change('categoryId')}>
-              <option value="">General gardening baseline (₱60–₱120/m²)</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name} (₱{Number(cat.rate_per_sqm_min).toFixed(0)}–₱{Number(cat.rate_per_sqm_max).toFixed(0)}/m²)
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
+            {uploadingPhoto && <p className="form-note">Processing and stripping metadata from photo...</p>}
+            {uploadedImages.length > 0 && (
+              <div className="request-photo-grid">
+                {uploadedImages.map((img) => {
+                  const isAiGenerated = img.kind === 'ai_generated'
+                  const isEditingThis = editingVisualPhotoId === img.id
+                  return (
+                    <figure className={`request-photo-card${isAiGenerated ? ' is-ai-concept' : ''}`} key={img.id}>
+                      <span className={`photo-kind-badge${isAiGenerated ? ' is-ai' : ''}`}>
+                        {isAiGenerated ? 'AI Concept Preview' : 'Original site photo'}
+                      </span>
+                      <img src={getRequestImageUrl(img.id)} alt={isAiGenerated ? 'AI garden concept preview' : 'Uploaded garden space'} />
+                      <figcaption className="request-photo-caption">
+                        <textarea
+                          rows="2"
+                          maxLength="2000"
+                          value={img.ai_description || ''}
+                          onChange={(e) => handleLocalPhotoDescriptionChange(img.id, e.target.value)}
+                          onBlur={(e) => handleSavePhotoDescription(img.id, e.target.value)}
+                          placeholder={isAiGenerated ? 'Notes on this AI concept preview' : "Optional note (click 'Describe with AI' or type manually)"}
+                        />
+                        <div className="request-photo-actions">
+                          {!isAiGenerated && (
+                            <button
+                              className="table-action"
+                              type="button"
+                              disabled={analyzingPhotoId === img.id || savingPhotoDescId === img.id}
+                              onClick={() => handleAnalyzePhoto(img.id)}
+                            >
+                              <Sparkles size={13} /> {analyzingPhotoId === img.id ? 'Analyzing...' : 'Describe with AI'}
+                            </button>
+                          )}
+                          {!isAiGenerated && aiUsage?.imageGenerationEnabled && (
+                            <button
+                              className="table-action"
+                              type="button"
+                              disabled={generatingVisualPhotoId === img.id || (aiUsage?.imageQuota && aiUsage.imageQuota.remaining <= 0)}
+                              onClick={() => {
+                                if (isEditingThis) {
+                                  setEditingVisualPhotoId(null)
+                                } else {
+                                  setEditingVisualPhotoId(img.id)
+                                  setVisualPromptDraft((prev) => prev || form.description || '')
+                                }
+                              }}
+                            >
+                              <Wand2 size={13} /> {isEditingThis ? 'Close AI preview' : 'Preview changes with AI'}
+                            </button>
+                          )}
+                          <button className="table-action" type="button" onClick={() => handleRemovePhoto(img.id)}>
+                            {isAiGenerated ? 'Remove preview' : 'Remove photo'}
+                          </button>
+                        </div>
+                        {isEditingThis && (
+                          <div className="inline-ai-edit-panel">
+                            <label>
+                              What should AI remove, clean, or add?
+                              <textarea
+                                rows="3"
+                                maxLength="1000"
+                                value={visualPromptDraft}
+                                onChange={(e) => setVisualPromptDraft(e.target.value)}
+                                placeholder="e.g., Remove yellowish grass and pebbles, trim lawn neatly, and add flowering tropical shrubs along the fence."
+                              />
+                            </label>
+                            <div className="inline-ai-edit-footer">
+                              <span className="field-note">
+                                {aiUsage?.imageQuota
+                                  ? `${aiUsage.imageQuota.remaining} of ${aiUsage.imageQuota.limit} daily AI previews left`
+                                  : 'Visual concept only'}
+                              </span>
+                              <button
+                                type="button"
+                                className="button button-sm"
+                                disabled={generatingVisualPhotoId === img.id}
+                                onClick={() => handleGenerateVisualEdit(img.id)}
+                              >
+                                <Wand2 size={13} /> {generatingVisualPhotoId === img.id ? 'Generating (~6–10s)...' : 'Generate preview'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </figcaption>
+                    </figure>
+                  )
+                })}
+              </div>
+            )}
+
             <div className="register-step-actions">
               <button className="button" type="submit">
-                <span>Continue to size &amp; estimate</span>
+                <span>Continue to size &amp; smart estimate</span>
                 <ArrowRight size={16} />
               </button>
             </div>
           </div>
         )}
+
         {inquiryStep === 2 && (
           <div className="inquiry-step-panel">
-            <p className="auth-section-title">Step 2 of 4 · Size &amp; indicative estimate</p>
-            <div className="category-specs-panel" role="region" aria-label={activeCategoryTemplate.title}>
-          <div className="category-specs-header">
-            <div>
-              <p className="eyebrow" style={{ margin: '0 0 2px' }}>
-                {selectedCategory ? `Tailored for ${selectedCategory.name}` : 'Project options'}
-              </p>
-              <strong>{activeCategoryTemplate.title}</strong>
-              <p className="field-note" style={{ margin: '2px 0 0' }}>{activeCategoryTemplate.subtitle}</p>
-            </div>
-          </div>
-          <div className="category-specs-grid">
-            {activeCategoryTemplate.fields.map((field) => {
-              const val = categorySpecs[field.key]
-              if (field.type === 'select') {
-                return (
-                  <label key={field.key}>
-                    {field.label}
-                    <select
-                      value={typeof val === 'string' ? val : ''}
-                      onChange={(e) => handleSpecChange(field.key, e.target.value)}
-                    >
-                      <option value="">Select an option (optional)</option>
-                      {field.options.map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </label>
-                )
-              }
-              if (field.type === 'multiselect') {
-                const selectedList = Array.isArray(val) ? val : []
-                return (
-                  <div className="category-spec-multiselect" key={field.key}>
-                    <span className="category-spec-label">{field.label}</span>
-                    <div className="category-spec-chips">
-                      {field.options.map((opt) => {
-                        const active = selectedList.includes(opt)
-                        return (
-                          <label className={`ai-toggle-chip${active ? ' is-checked' : ''}`} key={opt}>
-                            <input
-                              type="checkbox"
-                              checked={active}
-                              onChange={() => toggleSpecOption(field.key, opt)}
-                            />
-                            <span>{opt}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              }
-              if (field.type === 'textarea') {
-                return (
-                  <label className="category-spec-wide" key={field.key}>
-                    {field.label}
-                    <textarea
-                      rows="2"
-                      maxLength="500"
-                      placeholder={field.placeholder || ''}
-                      value={typeof val === 'string' ? val : ''}
-                      onChange={(e) => handleSpecChange(field.key, e.target.value)}
-                    />
-                  </label>
-                )
-              }
-              if (field.type === 'number') {
-                return (
-                  <label key={field.key}>
-                    {field.label}
-                    <input
-                      type="number"
-                      min="1"
-                      step={field.isCurrency ? '50' : '1'}
-                      placeholder={field.placeholder || ''}
-                      value={val ?? ''}
-                      onChange={(e) => handleSpecChange(field.key, e.target.value)}
-                    />
-                  </label>
-                )
-              }
-              return (
-                <label className="category-spec-wide" key={field.key}>
-                  {field.label}
-                  <input
-                    maxLength="500"
-                    placeholder={field.placeholder || ''}
-                    value={typeof val === 'string' ? val : ''}
-                    onChange={(e) => handleSpecChange(field.key, e.target.value)}
-                  />
-                </label>
-              )
-            })}
-          </div>
-        </div>
+            <p className="auth-section-title">Step 2 of 2 · Quick yard size, auto-priced materials &amp; send</p>
 
-        <div className="price-predictor-box">
-          <div className="price-predictor-header">
-            <Calculator size={18} />
-            <div>
-              <strong>Indicative Price Estimator (per sq. meter)</strong>
-              <p className="field-note">Enter your garden size and site condition so the system can predict a realistic indicative range for you and local gardeners.</p>
-            </div>
-          </div>
-
-          <div className="form-row form-row-3">
-            <label>
-              {activeCategoryTemplate.areaLabel} <span className="required-mark" aria-hidden="true">*</span>
-              <input
-                type="number"
-                required
-                min="0.5"
-                max="50000"
-                step="0.5"
-                placeholder={activeCategoryTemplate.areaPlaceholder}
-                value={form.areaSqm}
-                onChange={change('areaSqm')}
-              />
-            </label>
-            <label>
-              Length in m <span className="label-note">(Optional helper)</span>
-              <input
-                type="number"
-                min="0.1"
-                step="0.1"
-                placeholder="e.g., 5"
-                value={form.lengthM}
-                onChange={(e) => handleDimensionChange('lengthM', e.target.value)}
-              />
-            </label>
-            <label>
-              Width in m <span className="label-note">(Optional helper)</span>
-              <input
-                type="number"
-                min="0.1"
-                step="0.1"
-                placeholder="e.g., 5"
-                value={form.widthM}
-                onChange={(e) => handleDimensionChange('widthM', e.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="form-row">
-            <label>
-              Site condition / work complexity
-              <select value={form.workComplexity} onChange={change('workComplexity')}>
-                {WORK_COMPLEXITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Materials & plants
-              <select value={form.materialsOption} onChange={change('materialsOption')}>
-                {MATERIALS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {pricingAddons.length > 0 && (
-            <div className="addon-picker-section">
-              <div className="addon-picker-heading">
-                <strong>Plants, soil &amp; extra cost items <span className="label-note">(Optional — itemized separately from labor)</span></strong>
-                <span className="field-note">Select any plants, turf, soil, equipment, or hauling needed so the estimator prices them separately from per-sq.m labor.</span>
-              </div>
-              <div className="addon-picker-grid">
-                {orderedPricingAddons.map((addon) => {
-                  const isChecked = selectedAddonsMap[addon.id] !== undefined
-                  const isRecommendedForCat = Boolean(selectedCategory && activeCategoryTemplate.recommendedAddonTypes?.includes(addon.item_type))
+            <div className="size-preset-section">
+              <span className="category-spec-label">How big is the garden area? <span className="label-note">(Tap a size — no measuring needed)</span></span>
+              <div className="size-preset-grid" role="group" aria-label="Quick yard size presets">
+                {YARD_SIZE_PRESETS.map((preset) => {
+                  const isSelected = preset.key === 'unsure'
+                    ? !form.areaSqm
+                    : String(form.areaSqm) === preset.sqm
                   return (
-                    <div className={`addon-picker-item${isChecked ? ' is-selected' : ''}`} key={addon.id}>
-                      <label className="addon-picker-check">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => toggleAddonItem(addon.id, e.target.checked)}
-                        />
-                        <span>
-                          <strong>
-                            {addon.name}
-                            {isRecommendedForCat && <span className="addon-rec-tag">Common for {selectedCategory.name}</span>}
-                          </strong>
-                          <small>
-                            {ADDON_TYPE_LABELS[addon.item_type] || addon.item_type} · {formatEstimateRange(addon.unit_price_min, addon.unit_price_max)} {addon.unit}
-                          </small>
-                        </span>
-                      </label>
-                      {isChecked && (
-                        <div className="addon-qty-wrap">
-                          <label>
-                            Qty ({addon.unit.replace(/^per\s+/i, '')})
-                            <input
-                              type="number"
-                              min="0.5"
-                              max="10000"
-                              step="0.5"
-                              value={selectedAddonsMap[addon.id]}
-                              onChange={(e) => setAddonQuantity(addon.id, e.target.value)}
-                            />
-                          </label>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      key={preset.key}
+                      type="button"
+                      className={`size-preset-btn${isSelected ? ' is-selected' : ''}`}
+                      onClick={() => selectYardSizePreset(preset)}
+                    >
+                      <strong>{preset.label}</strong>
+                      <small>{preset.hint}</small>
+                    </button>
                   )
                 })}
               </div>
             </div>
-          )}
 
-          <div className={`price-predictor-result${liveEstimate ? ' has-estimate' : ''}`} aria-live="polite">
-            {liveEstimate ? (
-              <>
-                <div className="price-predictor-range-row">
-                  <span className="eyebrow" style={{ margin: 0 }}>Total predicted indicative range</span>
-                  <strong className="price-predictor-range">
-                    {formatEstimateRange(liveEstimate.estimatedMinAmount, liveEstimate.estimatedMaxAmount)}
-                  </strong>
-                </div>
-                <div className="estimate-breakdown-totals">
-                  <span>
-                    <strong>Labor subtotal:</strong> {formatEstimateRange(liveEstimate.estimatedLaborMin, liveEstimate.estimatedLaborMax)}
-                  </span>
-                  <span>
-                    <strong>Plants &amp; materials:</strong>{' '}
-                    {liveEstimate.estimatedMaterialsMax > 0
-                      ? formatEstimateRange(liveEstimate.estimatedMaterialsMin, liveEstimate.estimatedMaterialsMax)
-                      : '₱0 (Client provides)'}
-                  </span>
-                </div>
-                {liveEstimate.items.length > 0 && (
-                  <ul className="estimate-items-list">
-                    {liveEstimate.items.map((item) => (
-                      <li key={item.addonId}>
-                        <span>{item.itemName} ({item.quantity} × {item.unit})</span>
-                        <strong>{formatEstimateRange(item.subtotalMin, item.subtotalMax)}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="price-predictor-breakdown">
-                  Labor formula: {liveEstimate.areaSqm} m² × {liveEstimate.rateSourceLabel} × {liveEstimate.complexityFactor} (condition)
-                  {liveEstimate.materialsMode === 'allowance_multiplier' ? ` × ${liveEstimate.materialsFactor} (general materials allowance)` : ''}
-                  {liveEstimate.floorApplied ? ` · Minimum mobilization base fee of ₱${liveEstimate.minBaseFee.toLocaleString()} applied` : ''}.
-                  {liveEstimate.estimatedWorkingDays ? ` Estimated duration: ~${liveEstimate.estimatedHours} hrs (~${liveEstimate.estimatedWorkingDays} working ${liveEstimate.estimatedWorkingDays === 1 ? 'day' : 'days'}).` : ''}
-                </p>
-                <p className="field-note" style={{ margin: 0 }}>{liveEstimate.disclaimer}</p>
-              </>
-            ) : (
-              <p className="field-note" style={{ margin: 0 }}>
-                Enter your estimated area in square meters (or Length × Width) above to see the predicted indicative price range.
-              </p>
-            )}
-          </div>
-
-          <label className="site-visit-checkbox">
-            <input
-              type="checkbox"
-              checked={form.siteVisitRequested}
-              onChange={(e) => setForm((current) => ({ ...current, siteVisitRequested: e.target.checked }))}
-            />
-            <span>I am open to a quick on-site ocular inspection so the gardener can verify site conditions and give an accurate final quote.</span>
-          </label>
-
-          <label>
-            Your comment on the estimated price / budget <span className="label-note">(Optional)</span>
-            <textarea
-              rows="2"
-              maxLength="2000"
-              value={form.priceComment}
-              onChange={change('priceComment')}
-              placeholder="e.g., Target budget is around ₱2,500–₱3,500; area is roughly 25 sq.m with tall grass and sloped soil."
-            />
-          </label>
-        </div>
-            <div className="register-step-actions">
-              <button type="button" className="register-back-btn" onClick={handleBackStep}>
-                <ArrowLeft size={16} />
-                <span>Back</span>
-              </button>
-              <button className="button" type="submit">
-                <span>Continue to details &amp; photos</span>
-                <ArrowRight size={16} />
-              </button>
+            <div className="form-row form-row-3">
+              <label>
+                Exact area in m² <span className="label-note">(Optional)</span>
+                <input
+                  type="number"
+                  min="0.5"
+                  max="50000"
+                  step="0.5"
+                  placeholder="Optional (e.g., 25)"
+                  value={form.areaSqm}
+                  onChange={change('areaSqm')}
+                />
+              </label>
+              <label>
+                Yard condition
+                <select value={form.workComplexity} onChange={change('workComplexity')}>
+                  {WORK_COMPLEXITY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Plants &amp; materials
+                <select value={form.materialsOption} onChange={change('materialsOption')}>
+                  {MATERIALS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
             </div>
-          </div>
-        )}
-        {inquiryStep === 3 && (
-          <div className="inquiry-step-panel">
-            <p className="auth-section-title">Step 3 of 4 · Details &amp; garden photos</p>
-            <label>What are you looking for? <span className="required-mark" aria-hidden="true">*</span>
-              <textarea required rows="5" maxLength="5000" value={form.description} onChange={change('description')} placeholder={activeCategoryTemplate.descriptionPlaceholder} />
-            </label>
-        <div className="inline-actions" style={{ marginBottom: '6px' }}>
-          <button
-            className="button button-outline"
-            type="button"
-            disabled={generatingAiReq}
-            onClick={handleGenerateAiRequirements}
-          >
-            <Sparkles size={15} /> {generatingAiReq ? 'Organizing with AI...' : 'Organize requirements & get AI suggestions'}
-          </button>
-          {aiSuggestion?.refinedDescription && (
-            <button
-              className="table-action"
-              type="button"
-              onClick={() => setForm((prev) => ({ ...prev, description: aiSuggestion.refinedDescription }))}
-            >
-              Use AI-refined description
-            </button>
-          )}
-        </div>
-        {aiNotice && (
-          <p className="form-note" role="status" style={{ marginBottom: '8px' }}>
-            {aiNotice}
-          </p>
-        )}
-        {aiSuggestion && (
-          <div className="ai-callout-box">
-            <p className="form-note" style={{ margin: '0 0 6px' }}>
-              <strong>AI gardening suggestions (review &amp; edit before submitting):</strong>
-              {aiSuggestion.suggestedCategoryName ? ` Suggested category: ${aiSuggestion.suggestedCategoryName}.` : ''}
-            </p>
-            {Array.isArray(aiSuggestion.gardeningIdeas) && aiSuggestion.gardeningIdeas.length > 0 && (
-              <ul className="ai-callout-list">
-                {aiSuggestion.gardeningIdeas.map((idea) => (
-                  <li key={idea}>{idea}</li>
-                ))}
-              </ul>
-            )}
-            {Array.isArray(aiSuggestion.followUpQuestions) && aiSuggestion.followUpQuestions.length > 0 && (
-              <p className="form-note" style={{ margin: 0 }}>
-                <strong>Helpful details to mention:</strong> {aiSuggestion.followUpQuestions.join(' · ')}
-              </p>
-            )}
-          </div>
-        )}
-        <label>Reviewed requirement summary (editable AI-assisted summary shared with providers)
-          <textarea rows="3" maxLength="5000" value={form.aiSummary} onChange={change('aiSummary')} placeholder="Optional structured summary of your gardening requirements. You can generate this with AI above and edit it freely." />
-        </label>
-        <div className="form-row">
-          <label>Preferred date
-            <input type="date" value={form.requestedDate} onChange={change('requestedDate')} />
-          </label>
-          <label>Service area / barangay (area-level only)
-            <select value={barangayChoice} onChange={(event) => updateBarangayChoice(event.target.value)}>
-              <option value="">Select barangay...</option>
-              {ZAMBOANGA_BARANGAYS.map((brgy) => <option key={brgy} value={brgy}>{brgy}</option>)}
-              <option value={OTHER_BARANGAY_VALUE}>Other (type manually)</option>
-            </select>
-          </label>
-        </div>
-        {barangayChoice === OTHER_BARANGAY_VALUE && (
-          <label>Specify barangay
-            <input maxLength="80" value={customBarangay} onChange={(event) => updateCustomBarangay(event.target.value)} placeholder="Enter barangay name" />
-          </label>
-        )}
-        {form.location && (
-          <p className="field-note">Shared with providers as: <strong>{form.location}</strong> — exact address shared later.</p>
-        )}
-        <label>Garden photos (up to 5 original JPEG, PNG, or WebP images; GPS/EXIF stripped automatically)
-          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto || originalPhotoCount >= 5} onChange={handlePhotoUpload} />
-        </label>
-        {uploadingPhoto && <p className="form-note">Processing and stripping metadata from photo...</p>}
-        {uploadedImages.length > 0 && (
-          <div className="request-photo-grid">
-            {uploadedImages.map((img) => {
-              const isAiGenerated = img.kind === 'ai_generated'
-              const isEditingThis = editingVisualPhotoId === img.id
-              return (
-                <figure className={`request-photo-card${isAiGenerated ? ' is-ai-concept' : ''}`} key={img.id}>
-                  <span className={`photo-kind-badge${isAiGenerated ? ' is-ai' : ''}`}>
-                    {isAiGenerated ? 'AI Concept Preview' : 'Original site photo'}
-                  </span>
-                  <img src={getRequestImageUrl(img.id)} alt={isAiGenerated ? 'AI garden concept preview' : 'Uploaded garden space'} />
-                  <figcaption className="request-photo-caption">
-                    <textarea
-                      rows="3"
-                      maxLength="2000"
-                      value={img.ai_description || ''}
-                      onChange={(e) => handleLocalPhotoDescriptionChange(img.id, e.target.value)}
-                      onBlur={(e) => handleSavePhotoDescription(img.id, e.target.value)}
-                      placeholder={isAiGenerated ? 'Notes on this AI concept preview' : "Optional space description (click 'Describe with AI' or type manually)"}
-                    />
-                    <div className="request-photo-actions">
-                      {!isAiGenerated && (
-                        <button
-                          className="table-action"
-                          type="button"
-                          disabled={analyzingPhotoId === img.id || savingPhotoDescId === img.id}
-                          onClick={() => handleAnalyzePhoto(img.id)}
-                        >
-                          <Sparkles size={13} /> {analyzingPhotoId === img.id ? 'Analyzing...' : 'Describe with AI'}
-                        </button>
-                      )}
-                      {!isAiGenerated && aiUsage?.imageGenerationEnabled && (
-                        <button
-                          className="table-action"
-                          type="button"
-                          disabled={generatingVisualPhotoId === img.id || (aiUsage?.imageQuota && aiUsage.imageQuota.remaining <= 0)}
-                          onClick={() => {
-                            if (isEditingThis) {
-                              setEditingVisualPhotoId(null)
-                            } else {
-                              setEditingVisualPhotoId(img.id)
-                              setVisualPromptDraft((prev) => prev || form.description || '')
-                            }
-                          }}
-                        >
-                          <Wand2 size={13} /> {isEditingThis ? 'Close AI preview' : 'Preview changes with AI'}
-                        </button>
-                      )}
-                      <button className="table-action" type="button" onClick={() => handleRemovePhoto(img.id)}>
-                        {isAiGenerated ? 'Remove preview' : 'Remove photo'}
+
+            {smartBundles.length > 0 && (
+              <div className="smart-bundles-section">
+                <div className="smart-bundles-head">
+                  <strong><Sparkles size={15} /> Smart plant &amp; material packages <span className="label-note">(Auto-priced from local Zamboanga catalog)</span></strong>
+                  {Object.keys(selectedAddonsMap).length > 0 && (
+                    <button
+                      type="button"
+                      className="table-action"
+                      onClick={() => {
+                        setActiveBundleKey('')
+                        setSelectedAddonsMap({})
+                      }}
+                    >
+                      Clear materials
+                    </button>
+                  )}
+                </div>
+                <div className="smart-bundles-grid">
+                  {smartBundles.map((bundle) => {
+                    const isPicked = activeBundleKey === bundle.key
+                    return (
+                      <button
+                        key={bundle.key}
+                        type="button"
+                        className={`smart-bundle-card${isPicked ? ' is-selected' : ''}`}
+                        onClick={() => applyMaterialBundle(bundle)}
+                      >
+                        {bundle.badge && <span className="smart-bundle-tag">{bundle.badge}</span>}
+                        <strong>{bundle.title}</strong>
+                        <small>{bundle.subtitle}</small>
+                        <span className="smart-bundle-price">
+                          +{formatEstimateRange(bundle.minTotal, bundle.maxTotal)} est. materials
+                        </span>
                       </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className={`price-predictor-result${liveEstimate ? ' has-estimate' : ''}`} aria-live="polite">
+              {liveEstimate ? (
+                <>
+                  <div className="price-predictor-range-row">
+                    <div>
+                      <span className="eyebrow" style={{ margin: 0 }}>Automatic indicative estimate</span>
+                      <strong className="price-predictor-range">
+                        {formatEstimateRange(liveEstimate.estimatedMinAmount, liveEstimate.estimatedMaxAmount)}
+                      </strong>
                     </div>
-                    {isEditingThis && (
-                      <div className="inline-ai-edit-panel">
-                        <label>
-                          What should AI remove, clean, or add?
-                          <textarea
-                            rows="3"
-                            maxLength="1000"
-                            value={visualPromptDraft}
-                            onChange={(e) => setVisualPromptDraft(e.target.value)}
-                            placeholder="e.g., Remove yellowish grass and pebbles, trim lawn neatly, and add flowering tropical shrubs along the fence."
+                    {liveEstimate.estimatedWorkingDays && (
+                      <span className="site-visit-pill">
+                        <Calculator size={14} /> ~{liveEstimate.estimatedWorkingDays} working {liveEstimate.estimatedWorkingDays === 1 ? 'day' : 'days'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="estimate-breakdown-totals">
+                    <span>
+                      <strong>Labor:</strong> {formatEstimateRange(liveEstimate.estimatedLaborMin, liveEstimate.estimatedLaborMax)}
+                    </span>
+                    <span>
+                      <strong>Plants &amp; materials:</strong>{' '}
+                      {liveEstimate.estimatedMaterialsMax > 0
+                        ? formatEstimateRange(liveEstimate.estimatedMaterialsMin, liveEstimate.estimatedMaterialsMax)
+                        : '₱0 (Client provides)'}
+                    </span>
+                  </div>
+                  {liveEstimate.items.length > 0 && (
+                    <ul className="estimate-items-list">
+                      {liveEstimate.items.map((item) => (
+                        <li key={item.addonId}>
+                          <span>{item.itemName} ({item.quantity} × {item.unit})</span>
+                          <strong>{formatEstimateRange(item.subtotalMin, item.subtotalMax)}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="field-note" style={{ margin: 0 }}>{liveEstimate.disclaimer}</p>
+                </>
+              ) : (
+                <p className="field-note" style={{ margin: 0 }}>
+                  Not sure about your yard size? No problem — gardeners can review your photos and assess the space during a quick on-site ocular visit before giving a final quote.
+                </p>
+              )}
+            </div>
+
+            <label className="site-visit-checkbox">
+              <input
+                type="checkbox"
+                checked={form.siteVisitRequested}
+                onChange={(e) => setForm((current) => ({ ...current, siteVisitRequested: e.target.checked }))}
+              />
+              <span>I am open to a quick on-site ocular inspection so the gardener can confirm the exact quote.</span>
+            </label>
+
+            <details className="inquiry-optional-drawer">
+              <summary>Customize plants, materials, dimensions &amp; extra details (optional)</summary>
+              <div className="inquiry-optional-body">
+                <div className="form-row form-row-3">
+                  <label>
+                    Length in m <span className="label-note">(Auto-calculates m²)</span>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      placeholder="e.g., 5"
+                      value={form.lengthM}
+                      onChange={(e) => handleDimensionChange('lengthM', e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Width in m
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      placeholder="e.g., 5"
+                      value={form.widthM}
+                      onChange={(e) => handleDimensionChange('widthM', e.target.value)}
+                    />
+                  </label>
+                  {isGeneralRequest && (
+                    <label>
+                      Request open for
+                      <select value={form.expiresInDays} onChange={change('expiresInDays')}>
+                        <option value="7">7 days</option>
+                        <option value="14">14 days (Recommended)</option>
+                        <option value="30">30 days</option>
+                      </select>
+                    </label>
+                  )}
+                </div>
+
+                {pricingAddons.length > 0 && (
+                  <div className="addon-picker-section">
+                    <div className="addon-picker-heading">
+                      <strong>Individual plants, soil &amp; extra items</strong>
+                      <span className="field-note">Unit prices come automatically from HugaTiera&apos;s local catalog — just toggle items and quantities.</span>
+                    </div>
+                    <div className="addon-picker-grid">
+                      {orderedPricingAddons.map((addon) => {
+                        const isChecked = selectedAddonsMap[addon.id] !== undefined
+                        const isRecommendedForCat = Boolean(selectedCategory && activeCategoryTemplate.recommendedAddonTypes?.includes(addon.item_type))
+                        return (
+                          <div className={`addon-picker-item${isChecked ? ' is-selected' : ''}`} key={addon.id}>
+                            <label className="addon-picker-check">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  setActiveBundleKey('')
+                                  toggleAddonItem(addon.id, e.target.checked)
+                                }}
+                              />
+                              <span>
+                                <strong>
+                                  {addon.name}
+                                  {isRecommendedForCat && <span className="addon-rec-tag">Common for {selectedCategory.name}</span>}
+                                </strong>
+                                <small>
+                                  {ADDON_TYPE_LABELS[addon.item_type] || addon.item_type} · {formatEstimateRange(addon.unit_price_min, addon.unit_price_max)} {addon.unit}
+                                </small>
+                              </span>
+                            </label>
+                            {isChecked && (
+                              <div className="addon-qty-wrap">
+                                <label>
+                                  Qty ({addon.unit.replace(/^per\s+/i, '')})
+                                  <input
+                                    type="number"
+                                    min="0.5"
+                                    max="10000"
+                                    step="0.5"
+                                    value={selectedAddonsMap[addon.id]}
+                                    onChange={(e) => {
+                                      setActiveBundleKey('')
+                                      setAddonQuantity(addon.id, e.target.value)
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="category-specs-panel" role="region" aria-label={activeCategoryTemplate.title}>
+                  <div className="category-specs-header">
+                    <div>
+                      <strong>{activeCategoryTemplate.title}</strong>
+                      <p className="field-note" style={{ margin: '2px 0 0' }}>{activeCategoryTemplate.subtitle}</p>
+                    </div>
+                  </div>
+                  <div className="category-specs-grid">
+                    {activeCategoryTemplate.fields.map((field) => {
+                      const val = categorySpecs[field.key]
+                      if (field.type === 'select') {
+                        return (
+                          <label key={field.key}>
+                            {field.label}
+                            <select
+                              value={typeof val === 'string' ? val : ''}
+                              onChange={(e) => handleSpecChange(field.key, e.target.value)}
+                            >
+                              <option value="">Select an option (optional)</option>
+                              {field.options.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          </label>
+                        )
+                      }
+                      if (field.type === 'multiselect') {
+                        const selectedList = Array.isArray(val) ? val : []
+                        return (
+                          <div className="category-spec-multiselect" key={field.key}>
+                            <span className="category-spec-label">{field.label}</span>
+                            <div className="category-spec-chips">
+                              {field.options.map((opt) => {
+                                const active = selectedList.includes(opt)
+                                return (
+                                  <label className={`ai-toggle-chip${active ? ' is-checked' : ''}`} key={opt}>
+                                    <input
+                                      type="checkbox"
+                                      checked={active}
+                                      onChange={() => toggleSpecOption(field.key, opt)}
+                                    />
+                                    <span>{opt}</span>
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      }
+                      if (field.type === 'textarea') {
+                        return (
+                          <label className="category-spec-wide" key={field.key}>
+                            {field.label}
+                            <textarea
+                              rows="2"
+                              maxLength="500"
+                              placeholder={field.placeholder || ''}
+                              value={typeof val === 'string' ? val : ''}
+                              onChange={(e) => handleSpecChange(field.key, e.target.value)}
+                            />
+                          </label>
+                        )
+                      }
+                      if (field.type === 'number') {
+                        return (
+                          <label key={field.key}>
+                            {field.label}
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              placeholder={field.placeholder || ''}
+                              value={val ?? ''}
+                              onChange={(e) => handleSpecChange(field.key, e.target.value)}
+                            />
+                          </label>
+                        )
+                      }
+                      return (
+                        <label className="category-spec-wide" key={field.key}>
+                          {field.label}
+                          <input
+                            maxLength="500"
+                            placeholder={field.placeholder || ''}
+                            value={typeof val === 'string' ? val : ''}
+                            onChange={(e) => handleSpecChange(field.key, e.target.value)}
                           />
                         </label>
-                        <div className="inline-ai-edit-footer">
-                          <span className="field-note">
-                            {aiUsage?.imageQuota
-                              ? `${aiUsage.imageQuota.remaining} of ${aiUsage.imageQuota.limit} daily AI previews left`
-                              : 'Visual concept only'}
-                          </span>
-                          <button
-                            type="button"
-                            className="button button-sm"
-                            disabled={generatingVisualPhotoId === img.id}
-                            onClick={() => handleGenerateVisualEdit(img.id)}
-                          >
-                            <Wand2 size={13} /> {generatingVisualPhotoId === img.id ? 'Generating (~6–10s)...' : 'Generate preview'}
-                          </button>
-                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <label>
+                  Reviewed AI requirement summary <span className="label-note">(Optional)</span>
+                  <textarea rows="2" maxLength="5000" value={form.aiSummary} onChange={change('aiSummary')} placeholder="Structured summary shared with local gardeners." />
+                </label>
+
+                <label>
+                  Budget or pricing note <span className="label-note">(Optional)</span>
+                  <textarea
+                    rows="2"
+                    maxLength="2000"
+                    value={form.priceComment}
+                    onChange={change('priceComment')}
+                    placeholder="e.g., Flexible on materials if we can stay near the lower end of the range."
+                  />
+                </label>
+              </div>
+            </details>
+
+            {isGeneralRequest && nearbyRecommendations.length > 0 && (
+              <div className="smart-gardeners-strip" role="region" aria-label="Smart recommended gardeners nearby">
+                <div className="smart-gardeners-head">
+                  <strong><Sparkles size={14} /> Smart Match: Top nearby gardeners for this request</strong>
+                  <span className="field-note">Post open to all providers below, or pick one directly.</span>
+                </div>
+                <div className="smart-gardeners-grid">
+                  {nearbyRecommendations.map((rec) => (
+                    <div className="smart-gardener-mini-card" key={rec.id}>
+                      <div className="smart-gardener-mini-top">
+                        <strong>{rec.business_name || `${rec.first_name || ''} ${rec.last_name || ''}`.trim() || rec.title}</strong>
+                        <span className="ai-match-inline-pill">{rec.ai_match?.matchScore || 0}% match</span>
                       </div>
-                    )}
-                  </figcaption>
-                </figure>
-              )
-            })}
-          </div>
-        )}
-            <div className="register-step-actions">
-              <button type="button" className="register-back-btn" onClick={handleBackStep}>
-                <ArrowLeft size={16} />
-                <span>Back</span>
-              </button>
-              <button className="button" type="submit">
-                <span>Review your request</span>
-                <ArrowRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-        {inquiryStep === 4 && (
-          <div className="inquiry-step-panel">
-            <p className="auth-section-title">Step 4 of 4 · Review &amp; send</p>
+                      <small>{rec.title} · {rec.service_area || rec.gardener_service_area || 'Zamboanga City'}</small>
+                      <div className="smart-gardener-mini-meta">
+                        {rec.average_rating != null && (
+                          <span><Star size={12} fill="currentColor" /> {Number(rec.average_rating).toFixed(1)}</span>
+                        )}
+                        <Link className="text-link" to={`/inquiries/new?serviceId=${rec.id}`}>
+                          Send directly <ArrowRight size={12} />
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <dl className="inquiry-review-summary">
-              <div><dt>Subject</dt><dd>{form.subject || 'Not provided'}</dd></div>
-              <div><dt>Area</dt><dd>{form.areaSqm ? `${form.areaSqm} sq.m` : 'Not provided'}</dd></div>
-              <div><dt>Preferred date</dt><dd>{form.requestedDate ? formatDate(form.requestedDate) : 'Not specified'}</dd></div>
-              <div><dt>Service area</dt><dd>{form.location || 'Not specified'}</dd></div>
-              <div><dt>Garden photos</dt><dd>{uploadedImages.length > 0 ? `${uploadedImages.length} attached` : 'None attached'}</dd></div>
+              <div><dt>Project</dt><dd>{form.subject || 'Not provided'}</dd></div>
+              <div><dt>Area</dt><dd>{form.areaSqm ? `${form.areaSqm} m²` : 'Assess on site'}</dd></div>
+              <div><dt>Location</dt><dd>{form.location || 'Zamboanga City'}</dd></div>
+              <div><dt>Photos</dt><dd>{uploadedImages.length > 0 ? `${uploadedImages.length} attached` : 'None'}</dd></div>
             </dl>
             <p className="form-note">
               {isGeneralRequest
-                ? 'Your open request will be visible to approved gardeners on the Open Requests Board with area-level location only. Multiple gardeners can submit offers for you to compare before reaching a mutual agreement.'
-                : 'This is an inquiry, not a confirmed booking. The gardener will evaluate feasibility and respond with an offer or suggested modifications, followed by mutual agreement.'}
+                ? 'Your open request will be posted to approved gardeners so you can compare offers before reaching a mutual agreement.'
+                : 'This is an inquiry, not a confirmed booking. The gardener will respond with an offer before mutual agreement.'}
             </p>
             <div className="register-step-actions">
               <button type="button" className="register-back-btn" onClick={handleBackStep}>
@@ -1088,12 +1344,6 @@ const RESPONSE_TYPE_LABELS = {
   interest: 'Expression of interest',
 }
 
-const RESPONSE_STEPS = [
-  { id: 1, label: 'Response & price' },
-  { id: 2, label: 'Details & schedule' },
-  { id: 3, label: 'Review & send' },
-]
-
 function InquiryDetails({ id }) {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -1119,6 +1369,7 @@ function InquiryDetails({ id }) {
   const [agreementForm, setAgreementForm] = useState({
     scopeOfWork: '',
     amount: '',
+    requiredDepositAmount: '',
     priceBasis: '',
     scheduledStart: '',
     scheduledEnd: '',
@@ -1134,13 +1385,13 @@ function InquiryDetails({ id }) {
   const [offerNearbyOnly, setOfferNearbyOnly] = useState(false)
   const [offerGoodConductOnly, setOfferGoodConductOnly] = useState(false)
   const [offerAiRanking, setOfferAiRanking] = useState(null)
-  const [responseStep, setResponseStep] = useState(1)
   const load = useCallback(() => inquiriesApi.get(id).then((res) => {
     setData(res)
     if (res?.activeAgreement) {
       setAgreementForm({
         scopeOfWork: res.activeAgreement.scope_of_work || '',
         amount: res.activeAgreement.amount ?? '',
+        requiredDepositAmount: res.activeAgreement.required_deposit_amount ?? '',
         priceBasis: res.activeAgreement.price_basis || '',
         scheduledStart: formatDateTimeInput(res.activeAgreement.scheduled_start),
         scheduledEnd: formatDateTimeInput(res.activeAgreement.scheduled_end),
@@ -1174,7 +1425,6 @@ function InquiryDetails({ id }) {
   }, [user.role, data?.inquiry?.id, data?.quotations, offerSortBy, offerNearbyOnly, offerGoodConductOnly])
   function startReviseQuote(quote) {
     setEditingQuoteId(quote.id)
-    setResponseStep(1)
     setForm({
       responseType: quote.response_type || 'offer',
       amount: quote.amount ?? '',
@@ -1193,7 +1443,6 @@ function InquiryDetails({ id }) {
   }
   function cancelReviseQuote() {
     setEditingQuoteId(null)
-    setResponseStep(1)
     setForm({
       responseType: 'offer',
       amount: '',
@@ -1221,31 +1470,46 @@ function InquiryDetails({ id }) {
       return next
     })
   }
-  function validateResponseStep(formEl) {
-    const panel = formEl?.querySelector('.response-step-panel')
-    if (!panel) return true
-    const fields = Array.from(panel.querySelectorAll('[required]'))
-    const invalid = fields.find((field) => !field.checkValidity())
-    if (invalid) {
-      invalid.reportValidity()
-      return false
-    }
-    return true
-  }
 
-  function handleResponseBackStep() {
-    setError('')
-    setResponseStep((current) => Math.max(1, current - 1))
+  function autoFillQuoteFromEstimate(tier) {
+    const inq = data?.inquiry
+    if (!inq) return
+    const pick = (minVal, maxVal) => {
+      const lo = Number(minVal)
+      const hi = Number(maxVal)
+      if (!Number.isFinite(lo) && !Number.isFinite(hi)) return null
+      const safeLo = Number.isFinite(lo) ? lo : hi
+      const safeHi = Number.isFinite(hi) ? hi : lo
+      if (tier === 'low') return Math.round(safeLo / 10) * 10
+      if (tier === 'high') return Math.round(safeHi / 10) * 10
+      return Math.round(((safeLo + safeHi) / 2) / 10) * 10
+    }
+    const laborVal = pick(inq.estimated_labor_min, inq.estimated_labor_max)
+    const matVal = Number(inq.estimated_materials_max) > 0
+      ? pick(inq.estimated_materials_min, inq.estimated_materials_max)
+      : 0
+    const totalVal = (laborVal !== null)
+      ? laborVal + (matVal || 0)
+      : pick(inq.estimated_min_amount, inq.estimated_max_amount)
+
+    const items = Array.isArray(data?.estimateItems) ? data.estimateItems : []
+    const breakdownText = items.length > 0
+      ? items.map((item) => `${Number(item.quantity)} × ${item.item_name} (${formatEstimateRange(item.subtotal_min, item.subtotal_max)})`).join('; ')
+      : ''
+
+    setForm((current) => ({
+      ...current,
+      responseType: current.responseType === 'cannot_do' ? 'offer' : current.responseType,
+      laborAmount: laborVal !== null ? String(laborVal) : current.laborAmount,
+      materialsAmount: matVal > 0 ? String(matVal) : '',
+      amount: totalVal !== null ? String(totalVal) : current.amount,
+      materialsBreakdown: breakdownText || current.materialsBreakdown,
+      availabilityStart: current.availabilityStart || formatDateInput(inq.requested_date) || '',
+    }))
   }
 
   async function sendQuote(event) {
     event.preventDefault()
-    if (responseStep < RESPONSE_STEPS.length) {
-      if (!validateResponseStep(event.currentTarget)) return
-      setError('')
-      setResponseStep((current) => Math.min(RESPONSE_STEPS.length, current + 1))
-      return
-    }
     setError(''); setMessage(''); setSubmittingQuote(true)
     try {
       if (editingQuoteId) {
@@ -1271,7 +1535,6 @@ function InquiryDetails({ id }) {
         estimatedHours: '',
         validUntil: '',
       })
-      setResponseStep(1)
       await load()
     } catch (quoteError) {
       setError(quoteError.message)
@@ -1318,7 +1581,7 @@ function InquiryDetails({ id }) {
     try {
       const res = await agreementsApi.approve(agreement.id, agreement.version)
       if (res.confirmed && res.booking?.id) {
-        setMessage(`Both parties approved agreement v${agreement.version}. Booking #${res.booking.id} is now confirmed!`)
+        setMessage(`Both parties approved agreement v${agreement.version}. Your booking reservation is now created!`)
       } else {
         setMessage(`You approved agreement v${agreement.version}. Waiting for the other party to approve v${agreement.version}.`)
       }
@@ -1334,6 +1597,9 @@ function InquiryDetails({ id }) {
     try {
       const res = await agreementsApi.edit(agreement.id, {
         ...agreementForm,
+        requiredDepositAmount: agreementForm.requiredDepositAmount === ''
+          ? undefined
+          : Number(agreementForm.requiredDepositAmount),
         expectedVersion: agreement.version,
       })
       setEditingAgreement(false)
@@ -1507,9 +1773,9 @@ function InquiryDetails({ id }) {
       <Link className="back-link" to="/inquiries"><ArrowLeft size={15} /> Back to inquiries</Link>
       <h1>{inquiry.subject}</h1>
       <div className="inquiry-status-row">
-        <span className="category-pill">Inquiry #{inquiry.id} · {inquiry.request_type === 'general' ? 'General request' : 'Direct inquiry'}</span>
+        <span className="category-pill">{inquiry.request_type === 'general' ? 'Open request' : 'Direct inquiry'}</span>
         <span className={getStatusBadgeClass(inquiry.status)}>{formatStatusLabel(inquiry.status)}</span>
-        <span>{inquiry.service_title || inquiry.category_name || (inquiry.request_type === 'general' ? 'Open gardening request' : 'Direct gardener inquiry')}</span>
+        <span>{inquiry.service_title || inquiry.category_name || (inquiry.request_type === 'general' ? 'General gardening' : 'Direct gardener inquiry')}</span>
         {inquiry.gardener_name && <span>Provider: {inquiry.gardener_name}</span>}
         {(inquiry.request_type !== 'general' || inquiry.gardener_id) && (user.role === 'client' || canGardenerMessage) && (
           <button className="table-action" type="button" onClick={() => openConversation(inquiry.gardener_id || null)}>Open conversation</button>
@@ -1574,6 +1840,14 @@ function InquiryDetails({ id }) {
         <article className="dashboard-panel">
           <p className="eyebrow">{user.role === 'gardener' ? 'Provider decision-support view' : 'Request & AI-assisted scope'}</p>
           <h2>Project details</h2>
+          <div className="inquiry-glance-strip" aria-label="Request quick summary">
+            <span><strong>Area</strong>{inquiry.area_sqm ? `${Number(inquiry.area_sqm)} m²` : 'Assess on site'}</span>
+            <span><strong>Barangay</strong>{inquiry.location || 'Zamboanga City'}</span>
+            <span><strong>Target date</strong>{formatDate(inquiry.requested_date) || 'Flexible'}</span>
+            <span><strong>Estimate</strong>{inquiry.estimated_min_amount && inquiry.estimated_max_amount ? formatEstimateRange(inquiry.estimated_min_amount, inquiry.estimated_max_amount) : 'To be quoted'}</span>
+            {inquiry.expires_at && <span><strong>Expires</strong>{formatDate(inquiry.expires_at)}</span>}
+            <span><strong>Photos</strong>{images.length}</span>
+          </div>
           <p className="inquiry-description">{inquiry.description}</p>
           {inquiry.ai_summary && (
             <div className="ai-callout-box" style={{ marginTop: '10px' }}>
@@ -1582,14 +1856,46 @@ function InquiryDetails({ id }) {
               </p>
             </div>
           )}
-          <div className="detail-facts">
-            <span><strong>Requested date</strong>{formatDate(inquiry.requested_date) || 'Not specified'}</span>
-            <span><strong>Location</strong>{inquiry.location || 'Not specified'}</span>
-            {inquiry.area_sqm !== null && inquiry.area_sqm !== undefined && (
-              <span><strong>Garden area</strong>{Number(inquiry.area_sqm)} sq. meters</span>
-            )}
-            {inquiry.expires_at && <span><strong>Expires</strong>{formatDate(inquiry.expires_at)}</span>}
-          </div>
+          {images.length > 0 && (
+            <div className="inquiry-photos-section">
+              <h3>Garden photos &amp; concept previews ({images.length})</h3>
+              <div className="inquiry-photo-showcase">
+                {images.map((img) => {
+                  const isAiConcept = img.kind === 'ai_generated'
+                  return (
+                    <figure className={`inquiry-photo-showcase-card${isAiConcept ? ' is-ai-concept' : ''}`} key={img.id}>
+                      <a className="inquiry-photo-thumb" href={getRequestImageUrl(img.id)} target="_blank" rel="noreferrer" title="Click to open full-size photo">
+                        <span className={`photo-kind-badge${isAiConcept ? ' is-ai' : ''}`}>
+                          {isAiConcept ? 'AI Concept Preview' : 'Original site photo'}
+                        </span>
+                        <img
+                          src={getRequestImageUrl(img.id)}
+                          alt={isAiConcept ? 'AI garden concept preview' : 'Uploaded garden site photo'}
+                          onError={(event) => {
+                            event.currentTarget.style.display = 'none'
+                            const fallback = event.currentTarget.nextElementSibling
+                            if (fallback) fallback.style.display = 'grid'
+                          }}
+                        />
+                        <span className="inquiry-photo-fallback" style={{ display: 'none' }}>Photo unavailable</span>
+                      </a>
+                      {(img.ai_description || isAiConcept) && (
+                        <figcaption className="inquiry-photo-notes">
+                          <strong>{isAiConcept ? 'AI Concept Preview (Visual Inspiration Only)' : 'Space notes'}</strong>
+                          {img.ai_description && <p>{img.ai_description}</p>}
+                          {isAiConcept && (
+                            <p className="field-note" style={{ marginTop: '4px' }}>
+                              Reference visual only — base final quotes on the original site photo and agreed scope.
+                            </p>
+                          )}
+                        </figcaption>
+                      )}
+                    </figure>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {(() => {
             const specRows = formatCategorySpecsForDisplay(inquiry.category_specs, inquiry.category_name)
             if (specRows.length === 0) return null
@@ -1666,46 +1972,6 @@ function InquiryDetails({ id }) {
                 </p>
               )}
               <p className="field-note" style={{ margin: 0 }}>{ESTIMATE_DISCLAIMER}</p>
-            </div>
-          )}
-          {images.length > 0 && (
-            <div className="inquiry-photos-section">
-              <h3>Garden photos &amp; concept previews ({images.length})</h3>
-              <div className="inquiry-photo-list">
-                {images.map((img) => {
-                  const isAiConcept = img.kind === 'ai_generated'
-                  return (
-                    <figure className={`inquiry-photo-card${img.ai_description ? ' has-notes' : ''}${isAiConcept ? ' is-ai-concept' : ''}`} key={img.id}>
-                      <a className="inquiry-photo-thumb" href={getRequestImageUrl(img.id)} target="_blank" rel="noreferrer">
-                        <span className={`photo-kind-badge${isAiConcept ? ' is-ai' : ''}`}>
-                          {isAiConcept ? 'AI Concept Preview' : 'Original site photo'}
-                        </span>
-                        <img
-                          src={getRequestImageUrl(img.id)}
-                          alt={isAiConcept ? `AI garden concept preview #${img.id}` : `Garden photo #${img.id}`}
-                          onError={(event) => {
-                            event.currentTarget.style.display = 'none'
-                            const fallback = event.currentTarget.nextElementSibling
-                            if (fallback) fallback.style.display = 'grid'
-                          }}
-                        />
-                        <span className="inquiry-photo-fallback" style={{ display: 'none' }}>Photo unavailable</span>
-                      </a>
-                      {(img.ai_description || isAiConcept) && (
-                        <figcaption className="inquiry-photo-notes">
-                          <strong>{isAiConcept ? 'AI Concept Preview (Visual Inspiration Only)' : 'Space notes'}</strong>
-                          {img.ai_description && <p>{img.ai_description}</p>}
-                          {isAiConcept && (
-                            <p className="field-note" style={{ marginTop: '4px' }}>
-                              Generated preview for reference only — base final quotes on the original site photo and agreed scope.
-                            </p>
-                          )}
-                        </figcaption>
-                      )}
-                    </figure>
-                  )
-                })}
-              </div>
             </div>
           )}
           <h2>Quotations and provider responses</h2>
@@ -1925,6 +2191,10 @@ function InquiryDetails({ id }) {
               </div>
               <p>{activeAgreement.scope_of_work}</p>
               <small>
+                Required deposit: {Number(activeAgreement.required_deposit_amount || 0) > 0
+                  ? formatPHP(activeAgreement.required_deposit_amount, { decimals: 2 })
+                  : '₱0.00 (No upfront deposit required)'}
+                {' · '}
                 Schedule: {new Date(activeAgreement.scheduled_start).toLocaleString()} to {new Date(activeAgreement.scheduled_end).toLocaleString()} · Location: {activeAgreement.location}
               </small>
               <div className="agreement-approval-row" aria-label="Approval status">
@@ -1952,7 +2222,7 @@ function InquiryDetails({ id }) {
               )}
               {activeAgreement.booking_id && (
                 <div className="inline-actions" style={{ marginTop: '10px' }}>
-                  <Link className="button" to={`/bookings/${activeAgreement.booking_id}`}>View confirmed booking #{activeAgreement.booking_id}</Link>
+                  <Link className="button" to={`/bookings/${activeAgreement.booking_id}`}>View booking</Link>
                 </div>
               )}
               {editingAgreement && activeAgreement.status === 'proposed' && (
@@ -1984,14 +2254,50 @@ function InquiryDetails({ id }) {
                       <label>Scope of work
                         <textarea required rows="3" value={agreementForm.scopeOfWork} onChange={(e) => setAgreementForm({ ...agreementForm, scopeOfWork: e.target.value })} />
                       </label>
-                      <div className="form-row">
+                      <div className="form-row form-row-3">
                         <label>Agreed price (PHP)
                           <input required type="number" min="0" step="0.01" value={agreementForm.amount} onChange={(e) => setAgreementForm({ ...agreementForm, amount: e.target.value })} />
+                        </label>
+                        <label>Required deposit (PHP) <span className="label-note">(0 = no deposit)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max={agreementForm.amount || undefined}
+                            step="0.01"
+                            value={agreementForm.requiredDepositAmount}
+                            onChange={(e) => setAgreementForm({ ...agreementForm, requiredDepositAmount: e.target.value })}
+                            placeholder={agreementForm.amount ? `Default 30%: ${(Number(agreementForm.amount) * 0.3).toFixed(2)}` : '30% default'}
+                          />
                         </label>
                         <label>Price basis
                           <input value={agreementForm.priceBasis} onChange={(e) => setAgreementForm({ ...agreementForm, priceBasis: e.target.value })} />
                         </label>
                       </div>
+                      {Number(agreementForm.amount) > 0 && (
+                        <div className="quick-duration-row" role="group" aria-label="Quick deposit percentage presets">
+                          <span className="field-note" style={{ margin: 0 }}>Quick deposit:</span>
+                          {[
+                            { pct: 0, label: 'No deposit (0%)' },
+                            { pct: 0.3, label: '30% standard' },
+                            { pct: 0.5, label: '50% materials upfront' },
+                            { pct: 1, label: '100% full' },
+                          ].map((preset) => {
+                            const targetVal = (Number(agreementForm.amount) * preset.pct).toFixed(2)
+                            const active = agreementForm.requiredDepositAmount !== ''
+                              && Number(agreementForm.requiredDepositAmount) === Number(targetVal)
+                            return (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                className={`booking-filter-pill${active ? ' is-active' : ''}`}
+                                onClick={() => setAgreementForm((current) => ({ ...current, requiredDepositAmount: targetVal }))}
+                              >
+                                {preset.label} ({formatPHP(targetVal, { decimals: 0 })})
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
                       <div className="form-row">
                         <label>Start date and time
                           <input required type="datetime-local" value={agreementForm.scheduledStart} onChange={(e) => setAgreementForm({ ...agreementForm, scheduledStart: e.target.value })} />
@@ -2003,8 +2309,8 @@ function InquiryDetails({ id }) {
                       <label>Location
                         <input required maxLength="255" value={agreementForm.location} onChange={(e) => setAgreementForm({ ...agreementForm, location: e.target.value })} />
                       </label>
-                      <label>Conditions
-                        <textarea rows="2" value={agreementForm.conditions} onChange={(e) => setAgreementForm({ ...agreementForm, conditions: e.target.value })} />
+                      <label>Conditions &amp; payment notes
+                        <textarea rows="2" value={agreementForm.conditions} onChange={(e) => setAgreementForm({ ...agreementForm, conditions: e.target.value })} placeholder="Materials, access instructions, or preferred GCash/Maya/cash payment arrangement." />
                       </label>
                       <div className="register-step-actions">
                         <button className="button" type="submit">
@@ -2019,7 +2325,8 @@ function InquiryDetails({ id }) {
                       <p className="auth-section-title">Step 2 of 2 · Review &amp; save</p>
                       <dl className="inquiry-review-summary">
                         <div><dt>Scope of work</dt><dd>{agreementForm.scopeOfWork || 'Not provided'}</dd></div>
-                        <div><dt>Agreed price</dt><dd>{agreementForm.amount ? `₱${Number(agreementForm.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Not provided'}</dd></div>
+                        <div><dt>Agreed price</dt><dd>{agreementForm.amount ? formatPHP(agreementForm.amount, { decimals: 2 }) : 'Not provided'}</dd></div>
+                        <div><dt>Required deposit</dt><dd>{agreementForm.requiredDepositAmount !== '' ? (Number(agreementForm.requiredDepositAmount) > 0 ? formatPHP(agreementForm.requiredDepositAmount, { decimals: 2 }) : '₱0.00 (No upfront deposit)') : 'Default (30%)'}</dd></div>
                         <div><dt>Schedule</dt><dd>{agreementForm.scheduledStart && agreementForm.scheduledEnd ? `${agreementForm.scheduledStart} to ${agreementForm.scheduledEnd}` : 'Not provided'}</dd></div>
                         <div><dt>Location</dt><dd>{agreementForm.location || 'Not provided'}</dd></div>
                       </dl>
@@ -2052,11 +2359,11 @@ function InquiryDetails({ id }) {
           )}
         </article>
         {canGardenerRespond && (
-          <form className="dashboard-panel profile-form" onSubmit={sendQuote}>
+          <form className="dashboard-panel profile-form gardener-fast-quote-form" onSubmit={sendQuote}>
             <div className="activity-heading">
               <div>
-                <p className="eyebrow">{editingQuoteId ? 'Revise active offer' : 'Respond to client'}</p>
-                <h2>{editingQuoteId ? 'Update your offer before acceptance.' : 'Evaluate feasibility and send an offer.'}</h2>
+                <p className="eyebrow">{editingQuoteId ? 'Revise active offer' : 'Quick response'}</p>
+                <h2>{editingQuoteId ? 'Update your offer before acceptance.' : 'Send your quote or response.'}</h2>
               </div>
               {editingQuoteId && (
                 <button className="table-action" type="button" onClick={cancelReviseQuote}>
@@ -2064,164 +2371,185 @@ function InquiryDetails({ id }) {
                 </button>
               )}
             </div>
+
             {inquiry.estimated_min_amount && inquiry.estimated_max_amount && (
               <div className="gardener-estimate-ref">
-                <strong>System predicted range: {formatEstimateRange(inquiry.estimated_min_amount, inquiry.estimated_max_amount)}</strong>
-                {inquiry.area_sqm ? ` (${Number(inquiry.area_sqm)} m²)` : ''}
+                <div className="gardener-autofill-row">
+                  <div>
+                    <strong>System range: {formatEstimateRange(inquiry.estimated_min_amount, inquiry.estimated_max_amount)}</strong>
+                    {inquiry.area_sqm ? ` (${Number(inquiry.area_sqm)} m²)` : ''}
+                  </div>
+                  <div className="gardener-autofill-chips" role="group" aria-label="Auto-fill quote from system estimate">
+                    <span className="field-note" style={{ margin: 0 }}>Auto-fill:</span>
+                    <button type="button" className="table-action" onClick={() => autoFillQuoteFromEstimate('low')}>Low</button>
+                    <button type="button" className="table-action" onClick={() => autoFillQuoteFromEstimate('mid')}>Mid</button>
+                    <button type="button" className="table-action" onClick={() => autoFillQuoteFromEstimate('high')}>High</button>
+                  </div>
+                </div>
                 {inquiry.price_comment && <p className="field-note" style={{ margin: '4px 0 0' }}>Client note: &ldquo;{inquiry.price_comment}&rdquo;</p>}
               </div>
             )}
-            <nav className="register-stepper response-stepper" aria-label="Response steps">
-              {RESPONSE_STEPS.map((item) => {
-                const isActive = responseStep === item.id
-                const isDone = responseStep > item.id
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`register-step-pill${isActive ? ' is-active' : ''}${isDone ? ' is-done is-clickable' : ''}`}
-                    disabled={!isDone}
-                    aria-current={isActive ? 'step' : undefined}
-                    onClick={() => {
-                      if (isDone) {
-                        setError('')
-                        setResponseStep(item.id)
-                      }
-                    }}
-                  >
-                    <span className="register-step-num" aria-hidden="true">
-                      {isDone ? <Check size={12} strokeWidth={3} /> : item.id}
-                    </span>
-                    <span>{item.label}</span>
-                  </button>
-                )
-              })}
-            </nav>
-            {responseStep === 1 && (
-              <div className="response-step-panel">
-                <p className="auth-section-title">Step 1 of 3 · Response &amp; price</p>
-                <label>Response type
-                  <select value={form.responseType} onChange={change('responseType')}>
-                <option value="offer">Standard offer</option>
-                {inquiry.request_type === 'general' && <option value="interest">Expression of interest</option>}
-                <option value="feasible">Feasible as requested</option>
-                <option value="modifications">Feasible with modifications</option>
-                <option value="cannot_do">Cannot fulfill request</option>
-              </select>
-            </label>
+
+            <div className="quote-response-pills" role="group" aria-label="Response type">
+              {[
+                { value: 'offer', label: 'Send offer' },
+                { value: 'modifications', label: 'Suggest changes' },
+                { value: 'feasible', label: 'Feasible' },
+                ...(inquiry.request_type === 'general' ? [{ value: 'interest', label: 'Interested' }] : []),
+                { value: 'cannot_do', label: 'Cannot fulfill' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`booking-filter-pill${form.responseType === opt.value ? ' is-active' : ''}`}
+                  onClick={() => setForm((current) => ({ ...current, responseType: opt.value }))}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             {form.responseType !== 'cannot_do' && (
-              <>
-                <div className="form-row form-row-3">
-                  <label>Labor cost (PHP) <span className="label-note">(Optional split)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="e.g. 1500"
-                      value={form.laborAmount}
-                      onChange={(e) => handleQuoteSplitChange('laborAmount', e.target.value)}
-                    />
-                  </label>
-                  <label>Plants &amp; materials (PHP) <span className="label-note">(Optional split)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="e.g. 1200"
-                      value={form.materialsAmount}
-                      onChange={(e) => handleQuoteSplitChange('materialsAmount', e.target.value)}
-                    />
-                  </label>
-                  <label>Total indicative amount (PHP)
-                    <input type="number" min="0" step="0.01" value={form.amount} onChange={change('amount')} />
-                  </label>
-                </div>
-                <label>Plants &amp; materials breakdown note <span className="label-note">(Optional — e.g., 10 bougainvilleas ₱1,500 + 4 bags soil ₱400)</span>
-                  <textarea
-                    rows="2"
-                    maxLength="2000"
-                    value={form.materialsBreakdown}
-                    onChange={change('materialsBreakdown')}
-                    placeholder="Itemize plant varieties, soil, fertilizer, turf, or hauling included in your materials estimate."
+              <div className="form-row">
+                <label>Total indicative amount (PHP)
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g., 2500"
+                    value={form.amount}
+                    onChange={change('amount')}
                   />
                 </label>
+                <label>
+                  Available start date <span className="label-note">(Optional)</span>
+                  <div className="inline-date-shortcut">
+                    <input type="date" value={form.availabilityStart} onChange={change('availabilityStart')} />
+                    {inquiry.requested_date && (
+                      <button
+                        type="button"
+                        className="table-action"
+                        onClick={() => setForm((current) => ({ ...current, availabilityStart: formatDateInput(inquiry.requested_date) }))}
+                      >
+                        Use client&apos;s date
+                      </button>
+                    )}
+                  </div>
+                </label>
+              </div>
+            )}
+
+            <label>
+              {form.responseType === 'cannot_do' ? 'Reason you cannot fulfill this request' : 'What is included / message to client'}{' '}
+              <span className="required-mark" aria-hidden="true">*</span>
+              <textarea
+                required
+                rows="3"
+                value={form.details}
+                onChange={change('details')}
+                placeholder={form.responseType === 'cannot_do'
+                  ? 'Briefly explain why (e.g., fully booked on that date or outside service area).'
+                  : 'Explain what is included, materials/plants covered, and any site notes.'}
+              />
+            </label>
+
+            {form.responseType === 'modifications' && (
+              <label>Proposed modifications <span className="required-mark" aria-hidden="true">*</span>
+                <textarea required rows="2" value={form.proposedChanges} onChange={change('proposedChanges')} placeholder="Describe suggested adjustments to scope, schedule, or materials." />
+              </label>
+            )}
+
+            {form.responseType !== 'cannot_do' && (
+              <>
+                <div className="quick-duration-row">
+                  <span className="field-note" style={{ margin: 0 }}>Est. duration:</span>
+                  {[
+                    { days: '0.5', label: 'Half day' },
+                    { days: '1', label: '1 day' },
+                    { days: '2', label: '2 days' },
+                    { days: '3', label: '3 days' },
+                  ].map((chip) => (
+                    <button
+                      key={chip.days}
+                      type="button"
+                      className={`booking-filter-pill${String(form.estimatedWorkingDays) === chip.days ? ' is-active' : ''}`}
+                      onClick={() => setForm((current) => ({
+                        ...current,
+                        estimatedWorkingDays: String(current.estimatedWorkingDays) === chip.days ? '' : chip.days,
+                      }))}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+
                 <label className="site-visit-checkbox">
                   <input
                     type="checkbox"
                     checked={form.requiresSiteVisit}
                     onChange={(e) => setForm((current) => ({ ...current, requiresSiteVisit: e.target.checked }))}
                   />
-                  <span>Requires an on-site ocular inspection before giving or finalizing the exact price</span>
+                  <span>Requires an on-site ocular inspection before finalizing the exact price</span>
                 </label>
+
+                <details className="inquiry-optional-drawer">
+                  <summary>Add labor/materials split, breakdown &amp; quote validity (optional)</summary>
+                  <div className="inquiry-optional-body">
+                    <div className="form-row">
+                      <label>Labor cost (PHP)
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="e.g. 1500"
+                          value={form.laborAmount}
+                          onChange={(e) => handleQuoteSplitChange('laborAmount', e.target.value)}
+                        />
+                      </label>
+                      <label>Plants &amp; materials (PHP)
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="e.g. 1200"
+                          value={form.materialsAmount}
+                          onChange={(e) => handleQuoteSplitChange('materialsAmount', e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label>Plants &amp; materials breakdown note
+                      <textarea
+                        rows="2"
+                        maxLength="2000"
+                        value={form.materialsBreakdown}
+                        onChange={change('materialsBreakdown')}
+                        placeholder="e.g., 6 bougainvillea shrubs, 3 bags loam soil, 1 debris hauling load"
+                      />
+                    </label>
+                    <div className="form-row form-row-3">
+                      <label>Est. working days
+                        <input type="number" min="0.5" max="90" step="0.5" placeholder="e.g., 1.5" value={form.estimatedWorkingDays} onChange={change('estimatedWorkingDays')} />
+                      </label>
+                      <label>Est. hours
+                        <input type="number" min="0.5" max="500" step="0.5" placeholder="e.g., 4" value={form.estimatedHours} onChange={change('estimatedHours')} />
+                      </label>
+                      <label>Quotation valid until
+                        <input type="date" value={form.validUntil} onChange={change('validUntil')} />
+                      </label>
+                    </div>
+                    <label>Available until
+                      <input type="date" value={form.availabilityEnd} onChange={change('availabilityEnd')} />
+                    </label>
+                  </div>
+                </details>
               </>
             )}
-                <div className="register-step-actions">
-                  <button className="button" type="submit">
-                    <span>Continue to details &amp; schedule</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
-            {responseStep === 2 && (
-              <div className="response-step-panel">
-                <p className="auth-section-title">Step 2 of 3 · Details &amp; schedule</p>
-                <label>Details <span className="required-mark" aria-hidden="true">*</span>
-                  <textarea required rows="4" value={form.details} onChange={change('details')} placeholder="Explain what is included, feasibility assessment, and any conditions." />
-                </label>
-            {form.responseType === 'modifications' && (
-              <label>Proposed modifications
-                <textarea required rows="3" value={form.proposedChanges} onChange={change('proposedChanges')} placeholder="Describe suggested adjustments to scope, schedule, or materials." />
-              </label>
-            )}
-            {form.responseType !== 'cannot_do' && (
-              <>
-                <div className="form-row">
-                  <label>Estimated working days <span className="label-note">(Optional)</span>
-                    <input type="number" min="0.5" max="90" step="0.5" placeholder="e.g., 1.5" value={form.estimatedWorkingDays} onChange={change('estimatedWorkingDays')} />
-                  </label>
-                  <label>Estimated hours <span className="label-note">(Optional)</span>
-                    <input type="number" min="0.5" max="500" step="0.5" placeholder="e.g., 4" value={form.estimatedHours} onChange={change('estimatedHours')} />
-                  </label>
-                </div>
-                <div className="form-row">
-                  <label>Available from<input type="date" value={form.availabilityStart} onChange={change('availabilityStart')} /></label>
-                  <label>Available until<input type="date" value={form.availabilityEnd} onChange={change('availabilityEnd')} /></label>
-                </div>
-                <label>Quotation valid until<input type="date" value={form.validUntil} onChange={change('validUntil')} /></label>
-              </>
-            )}
-                <div className="register-step-actions">
-                  <button type="button" className="register-back-btn" onClick={handleResponseBackStep}>
-                    <ArrowLeft size={16} />
-                    <span>Back</span>
-                  </button>
-                  <button className="button" type="submit">
-                    <span>Review response</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
-            {responseStep === 3 && (
-              <div className="response-step-panel">
-                <p className="auth-section-title">Step 3 of 3 · Review &amp; send</p>
-                <dl className="inquiry-review-summary">
-                  <div><dt>Response</dt><dd>{RESPONSE_TYPE_LABELS[form.responseType] || form.responseType}</dd></div>
-                  <div><dt>Total indicative amount</dt><dd>{form.amount ? `₱${Number(form.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Not specified'}</dd></div>
-                  <div><dt>Availability</dt><dd>{form.availabilityStart || form.availabilityEnd ? `${form.availabilityStart || 'Not set'} to ${form.availabilityEnd || 'Not set'}` : 'Not specified'}</dd></div>
-                </dl>
-                <div className="register-step-actions">
-                  <button type="button" className="register-back-btn" onClick={handleResponseBackStep}>
-                    <ArrowLeft size={16} />
-                    <span>Back</span>
-                  </button>
-                  <button className="button" type="submit" disabled={submittingQuote}>
-                    {submittingQuote ? 'Saving...' : editingQuoteId ? 'Save revised offer' : 'Send response'}
-                  </button>
-                </div>
-              </div>
-            )}
+
+            <div className="register-step-actions">
+              <button className="button" type="submit" disabled={submittingQuote}>
+                {submittingQuote ? 'Sending...' : editingQuoteId ? 'Save revised offer' : 'Send response'}
+              </button>
+            </div>
           </form>
         )}
       </div>

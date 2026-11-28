@@ -5,19 +5,38 @@ function messageText(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-async function getConversationAccess(conversationId, userId) {
+async function getConversationAccess(conversationId, userId, userRole = null) {
+  let scopeClause = '(client_id = ? OR gardener_id = ?)'
+  let scopeParams = [userId, userId]
+  if (userRole === 'client') {
+    scopeClause = 'client_id = ?'
+    scopeParams = [userId]
+  } else if (userRole === 'gardener') {
+    scopeClause = 'gardener_id = ?'
+    scopeParams = [userId]
+  }
   const [rows] = await pool.execute(
     `SELECT id, client_id, gardener_id, inquiry_id
      FROM conversations
-     WHERE id = ? AND (client_id = ? OR gardener_id = ?)
+     WHERE id = ? AND ${scopeClause}
      LIMIT 1`,
-    [conversationId, userId, userId],
+    [conversationId, ...scopeParams],
   )
   return rows[0]
 }
 
 async function listConversations(req, res, next) {
   try {
+    let whereClause = 'WHERE c.client_id = ? OR c.gardener_id = ?'
+    let whereParams = [req.user.id, req.user.id]
+    if (req.user.role === 'client') {
+      whereClause = 'WHERE c.client_id = ?'
+      whereParams = [req.user.id]
+    } else if (req.user.role === 'gardener') {
+      whereClause = 'WHERE c.gardener_id = ?'
+      whereParams = [req.user.id]
+    }
+
     const [conversations] = await pool.execute(
       `SELECT c.id, c.client_id, c.gardener_id, c.inquiry_id, c.created_at,
               CASE WHEN c.client_id = ? THEN c.gardener_id ELSE c.client_id END AS other_party_id,
@@ -73,9 +92,9 @@ async function listConversations(req, res, next) {
          WHERE sender_id <> ? AND read_at IS NULL
          GROUP BY conversation_id
        ) unread ON unread.conversation_id = c.id
-       WHERE c.client_id = ? OR c.gardener_id = ?
+       ${whereClause}
        ORDER BY COALESCE(latest.sent_at, c.created_at) DESC`,
-      [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id],
+      [req.user.id, req.user.id, req.user.id, req.user.id, ...whereParams],
     )
     return res.json({ conversations })
   } catch (error) {
@@ -151,7 +170,12 @@ async function createConversation(req, res, next) {
           return res.status(404).json({ message: 'Inquiry was not found.' })
         }
       } else {
-        if (req.user.id !== inquiry.client_id && req.user.id !== inquiry.gardener_id) {
+        const canAccessDirect = req.user.role === 'client'
+          ? req.user.id === inquiry.client_id
+          : req.user.role === 'gardener'
+            ? req.user.id === inquiry.gardener_id
+            : (req.user.id === inquiry.client_id || req.user.id === inquiry.gardener_id)
+        if (!canAccessDirect) {
           return res.status(404).json({ message: 'Inquiry was not found.' })
         }
         clientId = inquiry.client_id
@@ -159,12 +183,17 @@ async function createConversation(req, res, next) {
         linkedInquiryId = inquiry.id
       }
     } else {
+      const bookingScope = req.user.role === 'client'
+        ? { sql: 'client_id = ?', params: [req.user.id] }
+        : req.user.role === 'gardener'
+          ? { sql: 'gardener_id = ?', params: [req.user.id] }
+          : { sql: '(client_id = ? OR gardener_id = ?)', params: [req.user.id, req.user.id] }
       const [bookings] = await pool.execute(
         `SELECT id, client_id, gardener_id, inquiry_id
          FROM bookings
-         WHERE id = ? AND (client_id = ? OR gardener_id = ?)
+         WHERE id = ? AND ${bookingScope.sql}
          LIMIT 1`,
-        [bookingId, req.user.id, req.user.id],
+        [bookingId, ...bookingScope.params],
       )
       if (!bookings[0]) return res.status(404).json({ message: 'Booking was not found.' })
       clientId = bookings[0].client_id
@@ -205,7 +234,7 @@ async function createConversation(req, res, next) {
 async function listMessages(req, res, next) {
   const conversationId = Number(req.params.conversationId)
   try {
-    const conversation = await getConversationAccess(conversationId, req.user.id)
+    const conversation = await getConversationAccess(conversationId, req.user.id, req.user.role)
     if (!conversation) return res.status(404).json({ message: 'Conversation was not found.' })
 
     await pool.execute(
@@ -233,7 +262,7 @@ async function sendMessage(req, res, next) {
   }
 
   try {
-    const conversation = await getConversationAccess(conversationId, req.user.id)
+    const conversation = await getConversationAccess(conversationId, req.user.id, req.user.role)
     if (!conversation) return res.status(404).json({ message: 'Conversation was not found.' })
 
     if (conversation.inquiry_id && req.user.id === conversation.gardener_id) {

@@ -1481,9 +1481,26 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
+}
+.app-sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-bottom: 10px;
+}
+.app-sidebar-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
 .app-sidebar-nav a {
-  min-height: 42px;
+  min-height: 40px;
   color: var(--muted);
   font-size: 13px;
 }
@@ -1508,8 +1525,15 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   background: var(--amber);
 }
 .app-sidebar-role {
-  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+  margin: 0;
+  padding: 2px 4px 4px;
+  border-top: 0;
   color: var(--forest);
+}
+.app-sidebar-logout {
+  flex-shrink: 0;
+  margin: 0;
 }
 .app-sidebar-role small {
   color: var(--muted);
@@ -1583,6 +1607,7 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
   .app-sidebar-drawer {
     display: none;
     width: 100%;
+    overflow-y: auto;
     padding-top: 12px;
     margin-top: 12px;
     border-top: 1px solid var(--line);
@@ -1591,10 +1616,17 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
     display: flex;
   }
   .app-sidebar-nav {
+    flex: 0 0 auto;
     flex-direction: column;
-    overflow-x: visible;
+    overflow: visible;
     padding-top: 0;
+    padding-bottom: 6px;
     gap: 4px;
+  }
+  .app-sidebar-footer {
+    width: 100%;
+    margin-top: 6px;
+    padding-top: 10px;
   }
   .app-sidebar-nav a,
   .app-sidebar.is-collapsed .app-sidebar-nav a,
@@ -1727,6 +1759,10 @@ tbody tr:first-child td:last-child { border-radius: 0 10px 10px 0; }
     align-items: center;
   }
   .app-sidebar.is-collapsed .app-sidebar-nav {
+    width: 100%;
+    align-items: center;
+  }
+  .app-sidebar.is-collapsed .app-sidebar-footer {
     width: 100%;
     align-items: center;
   }
@@ -5177,11 +5213,12 @@ tbody tr:hover {
 }
 
 .app-sidebar-switch-role {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  margin-bottom: 8px;
+  margin: 0;
   padding: 9px 12px;
   border: 1px solid rgba(217, 154, 54, .48);
   border-radius: 10px;

@@ -1,6 +1,6 @@
 # HugaTiera — Frontend Application (`frontend/`)
 
-The React 19 + Vite 8 single-page application for **HugaTiera** (`main`), providing public service discovery, a 2-card 3-step registration wizard, role-specific Client, Gardener (with built-in Client mode switcher, Schedule Calendar, and **My Clerks** panel), Assigned Clerk (`ClerkDashboard`), and Administrator dashboards, Smart AI recommendations with live category dropdown filtering, Case 1 & Case 2 service request wizards with dynamic category specs and itemized price estimation, offer comparison, versioned mutual agreement workspaces, reservation/deposit/PayMongo/Sandbox booking tracking, messaging, notifications, and AI garden planning tools.
+The React 19 + Vite 8 single-page application for **HugaTiera**, providing public service discovery, a 2-card 3-step registration wizard, role-specific Client, Gardener (with built-in Client mode switcher, Schedule Calendar, and **My Clerks** panel), Assigned Clerk (`ClerkDashboard`), and Administrator dashboards, Smart AI recommendations with live category dropdown filtering, a simplified **2-step Case 1 & Case 2 service request flow** with 1-tap yard size presets & auto-priced smart material bundles, a single-view **Gardener Quick Response** quote card with 1-click estimate auto-fill, versioned mutual agreements with 1-tap deposit presets (`0%` / `30%` / `50%` / `100%`), a 2-column sticky booking & payment workspace (PayMongo / Sandbox / manual proof), redesigned messaging & notifications, and the AI Garden Planning Assistant (streaming chat + Cloudflare Visual Garden Preview photo editing).
 
 ---
 
@@ -52,10 +52,14 @@ frontend/
 │   │   ├── AiAssistantWidget.jsx
 │   │   ├── AppSidebar.jsx
 │   │   ├── ClerkDashboard.jsx
+│   │   ├── ErrorBoundary.jsx
 │   │   ├── GardenerClerksPanel.jsx
 │   │   ├── GardenerScheduleCalendar.jsx
+│   │   ├── Modal.jsx
 │   │   ├── ProtectedRoute.jsx
-│   │   └── StructuredAddressFields.jsx
+│   │   ├── StarRating.jsx
+│   │   ├── StructuredAddressFields.jsx
+│   │   └── TransientSuccess.jsx
 │   ├── context/
 │   │   ├── AuthContext.jsx
 │   │   └── auth-context.js
@@ -86,9 +90,11 @@ frontend/
 │   │   ├── reviews.js
 │   │   └── services.js
 │   ├── utils/
+│   │   ├── currency.js
 │   │   └── zamboangaAddress.js
 │   ├── App.css
 │   ├── App.jsx
+│   ├── ClientGardener.css
 │   ├── index.css
 │   └── main.jsx
 ├── .env.example

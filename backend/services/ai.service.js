@@ -443,9 +443,13 @@ function buildGardenPlanPrompt(input) {
   return `User gardening question:\n${input}`
 }
 
-function buildRequirementsPrompt({ subject, description, location, categories = [], photoDescriptions = [] }) {
+function buildRequirementsPrompt({ subject, description, location, areaSqm = null, categories = [], addons = [], photoDescriptions = [] }) {
   const categoryListText = categories.length > 0
     ? categories.map((c) => `- ID ${c.id}: ${c.name}${c.description ? ` (${c.description})` : ''}`).join('\n')
+    : '- None provided'
+
+  const addonListText = addons.length > 0
+    ? addons.map((a) => `- ID ${a.id}: ${a.name} (${a.item_type}, ${a.unit})`).join('\n')
     : '- None provided'
 
   const photoContextText = photoDescriptions.length > 0
@@ -453,14 +457,18 @@ function buildRequirementsPrompt({ subject, description, location, categories = 
     : 'No photo descriptions provided.'
 
   return `You are HugaTiera's Gardening Requirement Assistant for Zamboanga City, Philippines.
-Your job is to help a client organize their gardening request into a clear, structured summary for local gardeners, suggest the best matching service category from the provided list, and offer practical gardening ideas.
-Do NOT approve requests, select a provider, set a final price, diagnose plant diseases, or guarantee outcomes.
+Your job is to help a client organize their gardening request into a clear, structured summary for local gardeners, suggest the best matching service category from the provided list, recommend relevant plant/material/equipment catalog items (with sensible quantities based on the description and yard size), and offer practical gardening ideas.
+Do NOT approve requests, select a provider, invent or quote final prices, diagnose plant diseases, or guarantee outcomes.
 
 Available Service Categories:
 ${categoryListText}
 
+Available Plant/Material Catalog Items (pick only items clearly relevant to the client's request, or return [] if labor-only):
+${addonListText}
+
 Client Subject: ${subject || 'Not specified'}
 Client Area/Location: ${location || 'Zamboanga City'}
+Estimated Yard Size: ${areaSqm ? `${areaSqm} sq. meters` : 'Not specified yet'}
 Client Raw Description:
 ${description}
 
@@ -473,6 +481,9 @@ Respond ONLY with a valid JSON object matching this exact structure:
   "refinedDescription": "A clear, well-organized version of the client's project description.",
   "suggestedCategoryId": null,
   "suggestedCategoryName": null,
+  "suggestedAddons": [
+    { "addonId": 1, "quantity": 4, "reason": "Short reason why this item fits" }
+  ],
   "gardeningIdeas": ["Practical suggestion 1 for Zamboanga City climate", "Practical suggestion 2"],
   "followUpQuestions": ["Useful detail the client might want to clarify 1", "Question 2"]
 }`
@@ -663,7 +674,7 @@ async function callCloudflareImageEdit({ imageBuffer, prompt, model = getImageEd
   }
 }
 
-function parseRequirementsJson(rawText, categories = []) {
+function parseRequirementsJson(rawText, categories = [], addons = []) {
   let cleaned = String(rawText || '').trim()
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
@@ -690,6 +701,7 @@ function parseRequirementsJson(rawText, categories = []) {
       refinedDescription: '',
       suggestedCategoryId: null,
       suggestedCategoryName: null,
+      suggestedAddons: [],
       gardeningIdeas: [],
       followUpQuestions: [],
     }
@@ -704,6 +716,28 @@ function parseRequirementsJson(rawText, categories = []) {
     matchedCategory = categories.find((c) => String(c.name).toLowerCase() === targetName) || null
   }
 
+  const addonById = new Map((Array.isArray(addons) ? addons : []).map((a) => [Number(a.id), a]))
+  const seenAddonIds = new Set()
+  const suggestedAddons = []
+  if (Array.isArray(parsed.suggestedAddons)) {
+    for (const item of parsed.suggestedAddons) {
+      const id = Number(item?.addonId ?? item?.id)
+      const catalogAddon = addonById.get(id)
+      if (!catalogAddon || seenAddonIds.has(id)) continue
+      const qtyRaw = Number(item?.quantity)
+      const quantity = Number.isFinite(qtyRaw) && qtyRaw > 0 ? Math.min(500, Math.round(qtyRaw * 10) / 10) : 1
+      seenAddonIds.add(id)
+      suggestedAddons.push({
+        addonId: id,
+        name: catalogAddon.name,
+        unit: catalogAddon.unit,
+        quantity,
+        reason: typeof item?.reason === 'string' ? item.reason.trim().slice(0, 160) : '',
+      })
+      if (suggestedAddons.length >= 6) break
+    }
+  }
+
   const normalizeStringList = (arr, maxItems = 5) => (
     Array.isArray(arr)
       ? arr.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean).slice(0, maxItems)
@@ -715,6 +749,7 @@ function parseRequirementsJson(rawText, categories = []) {
     refinedDescription: typeof parsed.refinedDescription === 'string' ? parsed.refinedDescription.trim().slice(0, 4000) : '',
     suggestedCategoryId: matchedCategory ? Number(matchedCategory.id) : null,
     suggestedCategoryName: matchedCategory ? matchedCategory.name : null,
+    suggestedAddons,
     gardeningIdeas: normalizeStringList(parsed.gardeningIdeas, 5),
     followUpQuestions: normalizeStringList(parsed.followUpQuestions, 4),
   }
@@ -761,12 +796,14 @@ function createGeminiProvider() {
       })
       return text
     },
-    async generateRequirementAssistance({ subject, description, location, categories = [], photoDescriptions = [] }, options = {}) {
+    async generateRequirementAssistance({ subject, description, location, areaSqm = null, categories = [], addons = [], photoDescriptions = [] }, options = {}) {
       const prompt = buildRequirementsPrompt({
         subject,
         description,
         location,
+        areaSqm,
         categories,
+        addons,
         photoDescriptions,
       })
       const { text } = await callGeminiGenerateContent({
@@ -775,7 +812,7 @@ function createGeminiProvider() {
         temperature: 0.3,
         responseMimeType: 'application/json',
       })
-      return parseRequirementsJson(text, categories)
+      return parseRequirementsJson(text, categories, addons)
     },
     async analyzeGardenPhoto({ imageBuffer, mimeType, clientNotes = '' }, options = {}) {
       if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {

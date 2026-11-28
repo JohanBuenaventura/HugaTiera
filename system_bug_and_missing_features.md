@@ -1,13 +1,13 @@
 # HugaTiera — System Bug, Post-Migration Audit & Scope Status
 
-Last Updated: 2026-11-12
+Last Updated: 2026-11-28
 
-This document tracks the resolved Phase 15 bug fixes (`BUG-01` through `BUG-07`), the resolved Post-Migration System Alignment & UI/UX Audit findings (`ISS-01` through `ISS-10`), intentional academic scope boundaries, and optional post-MVP enhancements.
+This document tracks the resolved Phase 15 bug fixes (`BUG-01` through `BUG-07`), the resolved Post-Migration System Alignment & UI/UX Audit findings (`ISS-01` through `ISS-10`), post-audit UX/AI upgrades (`mobile-res`), intentional academic scope boundaries, and optional post-MVP enhancements.
 
 ---
 
 ## Status Legend
-- **Resolved & Verified:** Fixed in source and verified by ESLint, Vite production build, and the 53 automated backend integration/revision tests (`integration`, `r2`, `r3`, `r4`, `r5`, `r6`).
+- **Resolved & Verified:** Fixed in source and verified by ESLint, Vite production build, and **`83/83` automated backend tests across 16 suites** against `hugatiera_db_migration_test`.
 - **Intentional Scope Boundary:** Behavior that follows approved project rules in `prompt/masterprompt.md` and `AGENTS.md`.
 - **Optional Post-MVP Enhancement:** Not required for the academic Software Engineering MVP.
 
@@ -60,8 +60,8 @@ All ten audit findings identified after Production Migration 001 (November 12, 2
 
 1. **Mutual Agreement Required Before Booking (`Step R3`):** Neither an inquiry, offer, nor offer acceptance creates a booking. Direct `POST /api/bookings` returns `409 MUTUAL_AGREEMENT_REQUIRED`. All bookings are created by the second approval on `POST /api/agreements/:agreementId/approve`.
 2. **Priced-Service Direct Agreements:** Only active services from approved gardeners with a positive `indicative_price` expose the direct agreement proposal action (`POST /api/agreements/direct-service`). Unpriced/flexible services use the Case 2 inquiry flow.
-3. **Paid AI Image Generation Postponed:** Text and uploaded-photo understanding are active (`gemini-3.8-flash` / `gemini-3.5-flash-lite`). Paid image generation is intentionally blocked with `501 IMAGE_GENERATION_POSTPONED`, while `request_images.kind` (`'original'` vs `'ai_generated'`) and `ai_usage_log` keep the schema ready for future expansion.
-4. **No Online Payments or E-Commerce:** Wallets, escrow, payment gateways, and physical product sales are excluded per `prompt/masterprompt.md`.
+3. **Paid AI Image Generation Postponed (Optional Free-Tier Cloudflare Preview Flagged):** Text SSE streaming (`gemini-3.5-flash-lite` / `gemini-3.8-flash`) and uploaded-photo understanding are active. Paid AI image APIs remain excluded, while optional free-tier Cloudflare Workers AI instruction-based photo editing (`@cf/black-forest-labs/flux-2-klein-4b`, 10,000 free Neurons/day, `POST /api/ai/garden-image`) is gated behind `AI_IMAGE_GEN_ENABLED` (`501 IMAGE_GENERATION_POSTPONED` when disabled) and tracks a separate 3/day quota in `ai_usage_log` (Migration `014`).
+4. **Verified Payment Tracking vs. Excluded Scope:** Reservation deposits, manual receipt verification, and optional PayMongo Checkout / Sandbox Demo checkout tracking (`TXN-...`) are implemented without holding escrow funds or taking commissions. Physical gardening product e-commerce, live GPS tracking, payroll, and native mobile apps remain excluded per `prompt/masterprompt.md`.
 
 ---
 

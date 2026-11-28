@@ -537,12 +537,20 @@ async function createRequirementAssistance(req, res, next) {
     const [categories] = await pool.execute(
       'SELECT id, name, description FROM service_categories WHERE is_active = TRUE ORDER BY name ASC',
     )
+    const [addons] = await pool.execute(
+      'SELECT id, name, item_type, unit, unit_price_min, unit_price_max FROM pricing_addons WHERE is_active = TRUE ORDER BY id ASC',
+    )
+
+    const rawArea = Number(req.body?.areaSqm ?? req.body?.area_sqm)
+    const areaSqm = Number.isFinite(rawArea) && rawArea > 0 ? rawArea : null
 
     const execution = await executeWithModelFallback('generateRequirementAssistance', {
       subject,
       description,
       location,
+      areaSqm,
       categories,
+      addons,
       photoDescriptions,
     })
 

@@ -17,7 +17,7 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
 ## 2. Implemented Features
 
 - **Role-Based Authentication, 3-Step Registration & Security:**
-  - Guided **3-step registration wizard** (`1. About you` → `2. Details` → `3. Account`) with **2 public role cards** (**Find a gardener** for Client, and **Offer services** for Gardener — which automatically includes Client mode and sidebar 1-click switching), optional middle name, 18+ birthday/age validation, and mobile validation.
+  - Guided **3-step registration wizard** (`1. About you` → `2. Details` → `3. Account`) with **2 public role cards** (**Find a gardener** for Client, and **Offer services** for Gardener — both start as single-role accounts by default, with optional Dual Role opt-in and mode switching inside **Profile → Account capabilities**), optional middle name, 18+ birthday/age validation, and mobile validation.
   - **Provider-Managed Clerks:** Public `administrator` and `clerk` self-registration are strictly blocked (`400`); Gardeners create, link, and revoke Assigned Clerk staff inside **Dashboard → My Clerks** (`GardenerClerksPanel.jsx`).
   - `bcryptjs` password hashing, `HttpOnly` JWT cookies (`auth_token`), sliding-window auth rate limiting, security headers, and live account status verification (`users.is_active = TRUE`) on every protected request.
 - **Public Marketplace & Gardener Portfolios:**
@@ -100,18 +100,18 @@ flowchart LR
 | `/services` | Public | `pages/ServicesPage.jsx` | Marketplace search, category/area filter, sort, and pagination. |
 | `/services/:serviceId` | Public | `pages/ServiceDetailPage.jsx` | Service details, gardener summary, direct inquiry link, priced-service agreement modal, and report form. |
 | `/gardeners/:gardenerId` | Public | `pages/GardenerPage.jsx` | Approved gardener profile, active services, portfolio gallery, reviews, direct inquiry action, and report form. |
-| `/login`, `/register` | Public | `pages/AuthPage.jsx` | Sign-in (with password visibility toggle and smart recent-email quick fill) and a **2-card, 3-step registration wizard** (**Find a gardener** for Client, **Offer services** for Gardener with built-in Client mode; Clerk accounts are provider-managed inside **My Clerks**). |
+| `/login`, `/register` | Public | `pages/AuthPage.jsx` | Sign-in (with password visibility toggle and smart recent-email quick fill) and a **2-card, 3-step registration wizard** (**Find a gardener** for Client, **Offer services** for Gardener; optional Dual Role switching lives inside **Profile**; Clerk accounts are provider-managed inside **My Staff**). |
 | `/dashboard` | Protected (`client`, `gardener`, `clerk`, `administrator`) | `pages/DashboardPage.jsx` | Role-specific dashboard: Client discovery showcase with live category dropdown & Smart AI matching, Gardener schedule calendar, service covers, portfolios & **My Clerks** staff management, Assigned Clerk operations desk (`ClerkDashboard`), and separated Administrator tabs (`Overview`, `Analytics`, `Approvals`, `Activity`, `Reports`, `Accounts`). |
 | `/inquiries` | Protected (`client`, `gardener`) | `pages/InquiryPage.jsx` (`InquiriesPage`) | Client request list or Gardener assigned inquiries + Open Service Requests Board tab. |
-| `/inquiries/new` | Protected (`client`) | `pages/InquiryPage.jsx` (`InquiryFormPage`) | Case 1 / Case 2 request creation wizard with garden photo upload, AI photo analysis, and AI requirement assistant. |
-| `/inquiries/:inquiryId` | Protected (`client`, `gardener`, `administrator`) | `pages/InquiryPage.jsx` (`InquiryDetailPage`) | Provider Decision-Support View, offer submission/revision/comparison, R3 Mutual Agreement workspace, and event timeline. |
+| `/inquiries/new` | Protected (`client`) | `pages/InquiryPage.jsx` (`InquiryFormPage`) | Simplified **2-step** Case 1 / Case 2 request flow with garden photo uploads, inline AI photo analysis & concept editing, 1-tap yard size presets, auto-priced Smart Material Packages, AI `suggestedAddons`, and Smart Nearby Gardeners preview. |
+| `/inquiries/:inquiryId` | Protected (`client`, `gardener`, `administrator`) | `pages/InquiryPage.jsx` (`InquiryDetailPage`) | Provider Decision-Support View with top At-a-Glance strip & 2-column Before/After photo showcase, single-view Gardener Quick Response card (`Auto-fill Low/Mid/High`), offer comparison, R3 Mutual Agreement workspace (with 1-tap deposit presets), and event timeline. |
 | `/bookings` | Protected (`client`, `gardener`) | `pages/BookingPage.jsx` (`BookingsPage`) | Confirmed and historical bookings list with agreement version badges. |
-| `/bookings/new` | Protected (`client`) | `pages/BookingPage.jsx` (`BookingFormPage`) | Redirects/guides users to the R3 Mutual Agreement workflow on the inquiry or service page. |
-| `/bookings/:bookingId` | Protected (`client`, `gardener`) | `pages/BookingPage.jsx` (`BookingDetailPage`) | Booking execution controls, read-only **Mutual Agreement Summary** (`ISS-09`), conversation launcher, and post-completion review form. |
-| `/profile` | Protected (`client`, `gardener`) | `pages/DashboardPage.jsx` (`profileView`) | Account profile, structured billing-style address, working schedule/crew settings, and avatar upload. |
-| `/messages` | Protected (`client`, `gardener`) | `pages/CommunicationPage.jsx` | 1-to-1 conversation inbox and message threads. |
-| `/notifications` | Protected (`client`, `gardener`, `clerk`, `administrator`) | `pages/CommunicationPage.jsx` | Compact activity notifications feed with `All`/`Unread` filters and role-aware deep-link routing. |
-| `/assistant` | Protected (All roles) | `pages/AssistantPage.jsx` | Standalone AI Garden Planning Assistant with quota display and safety disclaimer. |
+| `/bookings/new` | Protected (`client`) | `pages/BookingPage.jsx` (`BookingFormPage`) | Proposes Version 1 of a Mutual Agreement (scope, agreed price, 1-tap deposit presets `0%/30%/50%/100%`, schedule availability check, exact address). |
+| `/bookings/:bookingId` | Protected (`client`, `gardener`) | `pages/BookingPage.jsx` (`BookingDetailPage`) | 2-column sticky booking workspace with deposit/balance payments (Online PayMongo/Sandbox + Manual Proof), read-only **Mutual Agreement Summary** (`ISS-09`), reschedules/cancellations, mutual completion closure, and post-closure review form. |
+| `/profile` | Protected (`client`, `gardener`, `clerk`) | `pages/DashboardPage.jsx` (`profileView`) | Account profile, structured billing-style address, working schedule/crew settings, and avatar upload. |
+| `/messages` | Protected (`client`, `gardener`) | `pages/CommunicationPage.jsx` | Context-rich 1-to-1 conversation inbox and auto-scrolling message threads. |
+| `/notifications` | Protected (`client`, `gardener`, `clerk`, `administrator`) | `pages/CommunicationPage.jsx` | Compact activity notifications feed with category tabs, `Unread only` toggle, and role-aware deep-link routing. |
+| `/assistant` | Protected (All roles) | `pages/AssistantPage.jsx` | Standalone AI Garden Planning Assistant with **Garden Ideas (Streaming Chat)** and **Visual Garden Preview (Cloudflare Photo Editing)** tabs, quotas, and disclaimers. |
 
 ---
 
@@ -240,7 +240,7 @@ node --test --test-concurrency=1 `
 
 - **Photo Privacy:** Client garden photos, avatars, service cover photos, portfolios, and payment receipts are validated with magic-byte checks and `sharp` EXIF/GPS stripping before disk storage and are never served from an unrestricted public static directory. The Open Service Requests Board exposes only area-level location and client first name; exact street addresses are shared inside the mutual agreement.
 - **SQL Injection, Rate Limiting & Access Control:** Every database query uses parameterized `mysql2` placeholders (`?`), auth endpoints enforce rate limits, and every protected endpoint verifies authentication, live `users.is_active = TRUE`, role permissions (`client`, `gardener`, `clerk`, `administrator`), and resource ownership.
-- **Payments & Postponed Scope:** Reservation deposit gating, manual payment proofs, and PayMongo Checkout (with automatic Sandbox/Demo fallback when `PAYMONGO_SECRET_KEY` is blank) are implemented on `main`. Physical gardening product e-commerce, live GPS tracking, payroll, native mobile apps, and paid AI image generation (`501 IMAGE_GENERATION_POSTPONED`) remain out of scope.
+- **Payments & Postponed Scope:** Reservation deposit gating, manual payment proofs, and PayMongo Checkout (with automatic Sandbox/Demo fallback when `PAYMONGO_SECRET_KEY` is blank) track agreed transactions without holding escrow. Optional free-tier Cloudflare Workers AI photo editing is feature-flagged (`AI_IMAGE_GEN_ENABLED=false` by default → `501 IMAGE_GENERATION_POSTPONED`). Physical gardening product e-commerce, live GPS tracking, payroll, native mobile apps, and paid AI image APIs remain out of scope.
 
 ---
 
@@ -251,7 +251,7 @@ node --test --test-concurrency=1 `
 | [README.md](file:///c:/xampp/htdocs/HugaTiera/README.md) | Main project overview, setup, testing, and quick reference (this file). |
 | [docs/system-functionalities.md](file:///c:/xampp/htdocs/HugaTiera/docs/system-functionalities.md) | Complete role-by-role catalog of every implemented feature across Public, Client, Gardener (including **My Clerks**), Assigned Clerk, Administrator, and AI modules. |
 | [TEAM_SYNC_GUIDE.md](file:///c:/xampp/htdocs/HugaTiera/TEAM_SYNC_GUIDE.md) | Teammate & AI agent sync checklist (branch rules, DB migration checks, `.env` sync, and common error fixes). |
-| [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) | Authoritative 25-table schema reference, 59 FKs, and Migrations `001`–`013` record. |
+| [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) | Authoritative 25-table schema reference, 59 FKs, and Migrations `001`–`014` record. |
 | [docs/erd-and-dfd.md](file:///c:/xampp/htdocs/HugaTiera/docs/erd-and-dfd.md) | Full 25-table Mermaid ERD and Level 0 / Level 1 / Level 2 DFDs. |
 | [docs/architecture-and-workflows.md](file:///c:/xampp/htdocs/HugaTiera/docs/architecture-and-workflows.md) | System architecture, Client/Gardener/Clerk/Admin workflows, Case 1 vs Case 2 + Agreement/Payment flows, and Gemini AI fallback design. |
 | [docs/api-reference.md](file:///c:/xampp/htdocs/HugaTiera/docs/api-reference.md) | Complete REST API endpoint documentation across all 16 route modules. |

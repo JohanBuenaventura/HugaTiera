@@ -1,6 +1,6 @@
 # HugaTiera — Entity-Relationship Diagram (ERD) and Data Flow Diagrams (DFD)
 
-This document describes the database structure and data flows of **HugaTiera**, grounded directly in the **25-table, 59-foreign-key** MySQL schema ([hugatiera_schema.sql](../database/schema/hugatiera_schema.sql), updated through **Migrations `001`–`013`** on `main`).
+This document describes the database structure and data flows of **HugaTiera**, grounded directly in the **25-table, 59-foreign-key** MySQL schema ([hugatiera_schema.sql](../database/schema/hugatiera_schema.sql), updated through **Migrations `001`–`014`**).
 
 ---
 
@@ -466,7 +466,7 @@ erDiagram
 | **Marketplace, Pricing & Portfolios** | `service_categories`, `pricing_addons`, `services`, `portfolios` | `service_categories` stores per-sq.m baseline rates (`rate_per_sqm_min/max`, `min_base_fee`). `pricing_addons` provides configurable plant/material/equipment/disposal rates. `services` includes `workers_required` and optional cover photo `image_path`. |
 | **Unified Request & Estimator Engine** | `inquiries`, `inquiry_estimate_items`, `quotations`, `quotation_revisions`, `request_images`, `request_events` | Supports Case 1 (`general`) and Case 2 (`direct`) requests, per-sq.m price prediction (`area_sqm`, `work_complexity`, `materials_option`, `estimated_min/max_amount`, `price_comment`), dynamic `category_specs` JSON, itemized add-on snapshots, labor vs. materials quotation splits, and `estimated_working_days`/`estimated_hours`. |
 | **Agreements, Payments, Reschedules & Bookings** | `agreements`, `bookings`, `booking_payments`, `booking_reschedule_requests`, `reviews` | Two-party agreement approval creates a **Reservation** (`booking_stage = 'reserved'`, `required_deposit_amount`). Verified partial/full deposit via PayMongo Checkout, Sandbox/Demo, or manual proof transitions to **Confirmed Paid Booking** (`booking_stage = 'booked'`). `booking_payments` issues unique `TXN-...` codes. `booking_reschedule_requests` tracks event-based date moves. Reviews require `status = 'completed'`, `payment_status = 'fully_paid'`, and `transaction_status = 'closed'`. |
-| **Communication, AI & Governance** | `conversations`, `messages`, `notifications`, `reports`, `ai_usage_log` | `uq_conversation_inquiry_provider` enforces one thread per inquiry-provider pair. `ai_usage_log` enforces concurrency-safe 10/hour per-user rate limits across Gemini features. |
+| **Communication, AI & Governance** | `conversations`, `messages`, `notifications`, `reports`, `ai_usage_log` | `uq_conversation_inquiry_provider` enforces one thread per inquiry-provider pair. `ai_usage_log` enforces concurrency-safe `10`/hour per-user rate limits across Gemini features plus a separate `3`/24-hour quota for `'image_generation'` (Cloudflare Workers AI photo editing, added in Migration `014`). |
 
 ---
 
@@ -487,7 +487,7 @@ flowchart LR
   Client -->|"3-step registration (18+, structured address), dual-role opt-in, requests & category specs, garden photos, agreements, payments, cancel/reschedule, completion sign-off, reviews"| System
   System -->|"Smart AI ranked services (by category & barangay), price estimates, offers, agreements, checkout URLs & receipts, reschedule updates, notifications"| Client
 
-  Gardener -->|"3-step registration (with built-in Client mode), schedule & crew size, blocked dates, My Clerks management, services & covers, portfolios, itemized offers, payment verification, completion sign-off"| System
+  Gardener -->|"3-step registration, schedule & crew size, blocked dates, My Staff management, services & covers, portfolios, itemized offers, payment verification, completion sign-off"| System
   System -->|"AI-filtered open leads, direct inquiries, schedule calendar & urgency alerts, bookings, reviews, notifications"| Gardener
 
   Clerk -->|"Assigned gardener schedule/crew/blocked-date updates, service CRUD/toggles, manual payment proof verification"| System

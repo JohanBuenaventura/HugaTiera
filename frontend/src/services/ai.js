@@ -96,6 +96,7 @@ export async function requestRequirementAssistance({
   subject = '',
   description = '',
   location = '',
+  areaSqm = null,
   imageIds = [],
   inquiryId = null,
 }) {
@@ -105,6 +106,7 @@ export async function requestRequirementAssistance({
       subject,
       description,
       location,
+      ...(areaSqm ? { areaSqm: Number(areaSqm) } : {}),
       imageIds,
       ...(inquiryId ? { inquiryId } : {}),
     }),

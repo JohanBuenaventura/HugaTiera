@@ -6,7 +6,7 @@ This document describes the implemented architecture, role responsibilities, end
 
 ## 1. System Architecture
 
-HugaTiera uses a three-tier client–server architecture separating the **React + Vite Frontend**, the **Node.js + Express REST API Backend**, and the **MySQL (`InnoDB`) Relational Database** (`25` tables, `59` foreign keys), with backend-mediated integration to the **Google Gemini API**, **PayMongo Checkout / Sandbox Gateway**, and local file storage for `sharp`-sanitized images.
+HugaTiera uses a three-tier client–server architecture separating the **React + Vite Frontend**, the **Node.js + Express REST API Backend**, and the **MySQL (`InnoDB`) Relational Database** (`25` tables, `59` foreign keys, Migrations `001`–`014`), with backend-mediated integration to the **Google Gemini API** (SSE streaming text, vision & prompt guard), optional free-tier **Cloudflare Workers AI** (`@cf/black-forest-labs/flux-2-klein-4b` photo concept editing), **PayMongo Checkout / Sandbox Gateway**, and local file storage for `sharp`-sanitized images.
 
 ```mermaid
 flowchart TB
@@ -22,9 +22,9 @@ flowchart TB
     AuthMW["Auth & RBAC Middleware (requireAuth verifies users.is_active=TRUE, requireRole)"]
     UploadMW["Upload Middleware (multer + sharp) (5 MB limit, magic-byte check, resize, EXIF/GPS strip)"]
     Controllers["REST Controllers (14 Modules: auth, profile, service, portfolio, inquiry, agreement, booking, clerk, review, conversation, notification, requestImage, ai, admin)"]
-    AIService["AI & Matching Layer (ai.service.js + smartMatching.js) (Primary: gemini-3.8-flash | Fallback: gemini-3.5-flash-lite | FOR UPDATE rate limit)"]
+    AIService["AI & Matching Layer (ai.service.js + smartMatching.js) (Gemini SSE/Vision + Cloudflare FLUX.2 Klein 4B + FOR UPDATE quotas)"]
     PayService["Payment Gateway Layer (paymentGateway.service.js) (PayMongo Checkout API + Sandbox/Demo Mode)"]
-    ApiClients <-->|"HTTP / JSON + Multipart"| CORS
+    ApiClients <-->|"HTTP / JSON + SSE + Multipart"| CORS
     CORS --> AuthMW --> Controllers
     Controllers --> UploadMW
     Controllers --> AIService
@@ -34,7 +34,7 @@ flowchart TB
   subgraph DataTier["Persistence & External Tier"]
     MySQL[("MySQL / MariaDB (InnoDB) hugatiera_db (25 Tables, 59 FKs)")]
     FileStore[("Local File Storage (backend/uploads/) avatars/, services/, portfolios/, payment-receipts/, request-images/")]
-    GeminiAPI["Google Gemini REST API (Text & Multimodal Photo Analysis)"]
+    GeminiAPI["Google Gemini + Cloudflare Workers AI (Text/Vision SSE + Optional Photo Editing)"]
     PayMongoAPI["PayMongo Checkout API (or Built-in Sandbox/Demo)"]
     Controllers <-->|"mysql2/promise Pool & Transactions"| MySQL
     UploadMW --> FileStore
@@ -68,8 +68,8 @@ flowchart TB
 - **Price Estimator, Category Specs & AI Planning:** Use the per-sq.m **Amount Predictor** (`POST /api/inquiries/estimate`), select itemized plant/material/equipment/disposal add-ons, add client price comments, fill dynamic category-specific specs (`category_specs`), and run Gemini photo analysis / requirement structuring before submission.
 - **Case 1 & Case 2 Requests, Mutual Agreements, Reservations & Payments:** Submit open general requests or direct inquiries, compare offers, approve versioned **Mutual Agreements** (which create a **Reservation** with a required deposit), settle deposits/balances via **PayMongo Checkout**, **Sandbox/Demo Checkout**, or manual receipt proof (`TXN-...`), request or approve **event-based cancellations / reschedules**, confirm the **mutual Transaction Completion Agreement**, and submit a verified 1–5 star review once `completed` + `fully_paid` + `closed`.
 
-### 2.2 Gardener (`role = 'gardener'` — includes Automatic Client Mode)
-- **Built-In Dual Role, Schedule, Crew Capacity & My Clerks:** Registers via the 3-step `/register` wizard (**Offer services** card), automatically receiving Client mode (`can_act_as_client = TRUE` + `client_profiles` row) with 1-click sidebar switching. Maintain profile details, avatar, working days/hours, blocked dates (`gardener_unavailable_dates`), simultaneous job limit (`max_concurrent_jobs`), daily **crew size** (`crew_size`), and provider-managed **My Clerks** (`GardenerClerksPanel.jsx`). New gardeners start with `is_approved = FALSE` until approved by an administrator.
+### 2.2 Gardener (`role = 'gardener'`)
+- **Profile, Optional Dual Role, Schedule, Crew Capacity & My Staff:** Registers via the 3-step `/register` wizard (**Offer services** card) as a Gardener-only account by default (`can_act_as_gardener = TRUE`, `can_act_as_client = FALSE`), with optional Dual Role opt-in and mode switching inside **Profile → Account capabilities**. Maintain profile details, avatar, working days/hours, blocked dates (`gardener_unavailable_dates`), simultaneous job limit (`max_concurrent_jobs`), daily **crew size** (`crew_size`), and provider-managed **My Staff** (`GardenerClerksPanel.jsx`). New gardeners start with `is_approved = FALSE` until approved by an administrator.
 - **Service Listings & Portfolio:** Create, update, upload cover/design photos (`services.image_path`), set `workers_required`, and manage portfolio project galleries (`/api/portfolios`).
 - **Schedule Calendar Dropdown & Urgency Alerts:** Manage schedules via `<GardenerScheduleCalendar />` with **Overdue / Urgent Today / Due Tomorrow / Action Needed** reminders and automatic "Fully Booked" day detection.
 - **Open Requests Board, Itemized Offers & Payment Verification:** Browse AI-ranked open leads (`GET /api/inquiries/open`, supporting `categoryId` filtering), submit itemized labor + materials offers with `estimated_working_days`/`estimated_hours`, verify manual payment proofs, execute confirmed paid bookings (`in_progress` → `completed`), handle event cancellations/reschedules, and sign off on the Transaction Completion Agreement.
@@ -182,21 +182,25 @@ flowchart TD
 
 ### 4.1 Supported AI Features
 All AI capabilities are mediated exclusively through `backend/services/ai.service.js` and `backend/controllers/ai.controller.js`:
-1. **Standalone Garden Planning (`POST /api/ai/garden-plan`):** Generates structured tropical/Zamboanga-appropriate garden planning guidance from a user prompt (up to `3,000` characters).
-2. **Inquiry Requirement Structuring (`POST /api/ai/requirements`):** Takes a client's draft notes, location, and optional photo descriptions and returns structured JSON (`structuredSummary`, `refinedDescription`, `suggestedCategoryId`, `suggestedCategoryName`, `gardeningIdeas`, `followUpQuestions`) that the client can edit and apply to their request.
+1. **Standalone Tropical Garden Planning (`POST /api/ai/garden-plan` & `POST /api/ai/garden-plan/stream`):** Generates or streams (SSE) concise Zamboanga City garden planning guidance from a user prompt (up to `3,000` characters) under strict gardening-only `systemInstruction` domain guardrails (`GARDEN_PLAN_SYSTEM_INSTRUCTION`) that decline off-topic prompts.
+2. **Inquiry Requirement & Material Structuring (`POST /api/ai/requirements`):** Takes a client's draft notes, location, optional `areaSqm`, active `pricing_addons`, and photo descriptions and returns structured JSON (`structuredSummary`, `refinedDescription`, `suggestedCategoryId`, `suggestedCategoryName`, validated `suggestedAddons` mapped strictly to real DB catalog items, `gardeningIdeas`, `followUpQuestions`). Pricing is always computed deterministically by `priceEstimator.js`—AI never sets binding prices.
 3. **Multimodal Garden Photo Analysis (`POST /api/ai/photo-analysis`):** Sends a client's `sharp`-sanitized `request_images` file (`inline_data` base64) to Gemini and saves an editable 2–4 sentence space observation to `request_images.ai_description`.
-4. **Smart Hybrid Proximity & Conduct Matching (`GET /api/ai/recommendations`, `POST /api/ai/recommendations/summary`):** Scores approved services, competing offers, and open leads using Zamboanga City barangay proximity, live `categoryId` filtering, verified review ratings, and good-conduct metrics (`smartMatching.js`), with optional Gemini explanation summaries.
-5. **Postponed Image Generation Guard:** `generateGardenImage` explicitly throws HTTP `501` (`IMAGE_GENERATION_POSTPONED`) so paid image generation cannot be triggered without future scope approval.
+4. **Optional Free-Tier Instruction-Based Photo Concept Editing (`POST /api/ai/garden-image`):** Gated behind `AI_IMAGE_GEN_ENABLED=true` (`501 IMAGE_GENERATION_POSTPONED` when disabled). Uses Gemini (`refineGardenImageEditPrompt`) as a gardening-only prompt guard/refiner (`400 OFF_TOPIC_EDIT` for unrelated edits), then calls **Cloudflare Workers AI** (`@cf/black-forest-labs/flux-2-klein-4b`, `multipart/form-data` `input_image_0`) to edit the client's actual yard photo while keeping physical structures intact. Returned bytes are re-encoded via `sharp`, stored separately in `uploads/request-images/generated/`, linked via `request_images.kind = 'ai_generated'` and `parent_image_id`, and metered under a separate 24-hour quota (`AI_IMAGE_DAILY_LIMIT`, default `3`/day).
+5. **Smart Hybrid Proximity & Conduct Matching (`GET /api/ai/recommendations`, `POST /api/ai/recommendations/summary`):** Scores approved services, competing offers, and open leads using Zamboanga City barangay proximity, live `categoryId` filtering, verified review ratings, and good-conduct metrics (`smartMatching.js`), with optional Gemini explanation summaries.
 
-### 4.2 Model Configuration & Automatic Fallback (`R6 / R7`)
+### 4.2 Model Configuration & Automatic Fallback (`R6 / R7` & Migration `014`)
 
-| Environment Variable | Default Value | Purpose |
+| Environment Variable | Default / Recommended Value | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | *(Required in `backend/.env`)* | Backend-only Google Gemini API key (never exposed to frontend) |
-| `GEMINI_MODEL` | `gemini-3.8-flash` | Primary model for text and multimodal photo understanding |
-| `GEMINI_FALLBACK_MODEL` | `gemini-3.5-flash-lite` | Automatic fallback model on transient primary failure |
-| `GEMINI_THINKING_LEVEL` | `low` | Passed in `thinkingConfig: { thinkingLevel: 'low' }` for Gemini 3.x models |
-| `AI_HOURLY_LIMIT` | `10` | Per-user rolling 60-minute call limit across all 3 AI features |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` *(fast)* / `gemini-3.8-flash` | Primary model for SSE streaming text, requirements, photo analysis & edit guard |
+| `GEMINI_FALLBACK_MODEL` | `gemini-3.8-flash` / `gemini-3.5-flash-lite` | Automatic fallback model on transient primary failure or 8s first-chunk timeout |
+| `GEMINI_THINKING_LEVEL` | `low` *(auto `minimal` for `-lite` chat)* | Model-aware `thinkingConfig` for Gemini 3.x models |
+| `AI_HOURLY_LIMIT` | `10` | Per-user rolling 60-minute call limit across text & photo-analysis features |
+| `AI_IMAGE_GEN_ENABLED` | `false` *(set `true` to enable)* | Feature flag for free-tier Cloudflare Workers AI photo concept editing (`501` when `false`) |
+| `CF_ACCOUNT_ID` / `CF_API_TOKEN` | *(Optional in `backend/.env`)* | Backend-only Cloudflare Workers AI credentials (10,000 free Neurons/day) |
+| `CF_IMAGE_TO_IMAGE_MODEL` | `@cf/black-forest-labs/flux-2-klein-4b` | Instruction-based photo-editing model (`multipart/form-data` `input_image_0`) |
+| `AI_IMAGE_DAILY_LIMIT` | `3` | Separate per-user rolling 24-hour cap for `image_generation` in `ai_usage_log` |
 
 #### Automatic Fallback Rules (`executeWithModelFallback`):
 - **Trigger Conditions (`isEligibleForFallback`):** Retries **once** using `GEMINI_FALLBACK_MODEL` (`gemini-3.5-flash-lite`) only when the primary model (`gemini-3.8-flash`) fails with a transient upstream error:

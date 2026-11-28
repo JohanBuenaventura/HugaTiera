@@ -173,6 +173,8 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
         const uPh = createdUserIds.map(() => '?').join(', ')
         await pool.query(`DELETE FROM clerk_gardener_assignments WHERE clerk_id IN (${uPh}) OR gardener_id IN (${uPh})`, [...createdUserIds, ...createdUserIds])
         await pool.query(`DELETE FROM notifications WHERE user_id IN (${uPh})`, createdUserIds)
+        await pool.query(`DELETE FROM messages WHERE sender_id IN (${uPh}) OR conversation_id IN (SELECT id FROM conversations WHERE client_id IN (${uPh}) OR gardener_id IN (${uPh}))`, [...createdUserIds, ...createdUserIds, ...createdUserIds])
+        await pool.query(`DELETE FROM conversations WHERE client_id IN (${uPh}) OR gardener_id IN (${uPh})`, [...createdUserIds, ...createdUserIds])
         await pool.query(`DELETE FROM gardener_unavailable_dates WHERE gardener_id IN (${uPh})`, createdUserIds)
         const [bRows2] = await pool.query(`SELECT id FROM bookings WHERE client_id IN (${uPh}) OR gardener_id IN (${uPh})`, [...createdUserIds, ...createdUserIds])
         if (bRows2.length > 0) {
@@ -281,6 +283,10 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
       },
     })
     assert.equal(goodGardenerReg.status, 201, `Expected 201 got ${goodGardenerReg.status}: ${JSON.stringify(goodGardenerReg.data)}`)
+    assert.equal(goodGardenerReg.data.user.role, 'gardener')
+    assert.equal(goodGardenerReg.data.user.canActAsGardener, true)
+    assert.equal(goodGardenerReg.data.user.canActAsClient, false)
+    assert.equal(goodGardenerReg.data.user.isDualRole, false)
     createdUserIds.push(goodGardenerReg.data.user.id)
 
     const linkedWs = await api('/clerk/workspace', { headers: { Cookie: seededClerk.cookie } })
@@ -438,6 +444,81 @@ describe('Step 2 (Migration 012): Dual Role (Client + Gardener) & Assigned Clerk
     })
     assert.equal(selfOffer.status, 409)
     assert.equal(selfOffer.data.code, 'SELF_OFFER_FORBIDDEN')
+
+    // Role isolation check: singleClient sends a direct inquiry + message to dualUser (as Gardener)
+    const clientToDualInq = await api('/inquiries', {
+      method: 'POST',
+      headers: { Cookie: singleClientCookie },
+      body: {
+        requestType: 'direct',
+        gardenerId: dualUserId,
+        serviceId: dualServiceId,
+        categoryId,
+        subject: 'Front yard cleanup quote',
+        description: 'Need a quote for my front yard.',
+        location: 'Tetuan, Zamboanga City',
+      },
+    })
+    assert.equal(clientToDualInq.status, 201)
+    createdInquiryIds.push(clientToDualInq.data.id)
+
+    const convRes = await api('/conversations', {
+      method: 'POST',
+      headers: { Cookie: singleClientCookie },
+      body: { inquiryId: clientToDualInq.data.id },
+    })
+    assert.equal(convRes.status, 201)
+    const gardenerConvId = convRes.data.id
+
+    const sendMsg = await api(`/conversations/${gardenerConvId}/messages`, {
+      method: 'POST',
+      headers: { Cookie: singleClientCookie },
+      body: { message: 'Hello gardener, are you free next week?' },
+    })
+    assert.equal(sendMsg.status, 201)
+
+    // In Gardener Mode, dualUser sees the conversation and its notification
+    const gardenerConvs = await api('/conversations', { headers: { Cookie: dualCookie } })
+    assert.equal(gardenerConvs.status, 200)
+    assert.ok(gardenerConvs.data.conversations.some((c) => c.id === gardenerConvId))
+    const gardenerNotifs = await api('/notifications', { headers: { Cookie: dualCookie } })
+    assert.equal(gardenerNotifs.status, 200)
+    assert.ok(
+      gardenerNotifs.data.notifications.some((n) => n.related_entity_type === 'conversation' && n.related_entity_id === gardenerConvId),
+      'Gardener mode should include notifications for gardener conversations',
+    )
+
+    // Switch dualUser to Client Mode -> Gardener conversation & notifications must NOT leak into Client Mode
+    const backToClient = await api('/auth/switch-role', {
+      method: 'POST',
+      headers: { Cookie: dualCookie },
+      body: { targetRole: 'client' },
+    })
+    assert.equal(backToClient.status, 200)
+    dualCookie = backToClient.cookie || dualCookie
+
+    const clientConvs = await api('/conversations', { headers: { Cookie: dualCookie } })
+    assert.equal(clientConvs.status, 200)
+    assert.equal(
+      clientConvs.data.conversations.some((c) => c.id === gardenerConvId),
+      false,
+      'Client mode must not show Gardener conversations',
+    )
+    const blockedMsgs = await api(`/conversations/${gardenerConvId}/messages`, { headers: { Cookie: dualCookie } })
+    assert.equal(blockedMsgs.status, 404, 'Client mode must not open Gardener conversation by ID')
+
+    const clientNotifs = await api('/notifications', { headers: { Cookie: dualCookie } })
+    assert.equal(clientNotifs.status, 200)
+    assert.equal(
+      clientNotifs.data.notifications.some((n) => n.related_entity_type === 'conversation' && n.related_entity_id === gardenerConvId),
+      false,
+      'Client mode must not show Gardener conversation notifications',
+    )
+    assert.equal(
+      clientNotifs.data.notifications.some((n) => n.related_entity_type === 'inquiry' && n.related_entity_id === clientToDualInq.data.id),
+      false,
+      'Client mode must not show Gardener inquiry notifications',
+    )
   })
 
   it('allows an existing single-role client to opt into dual role and switch to gardener mode', async () => {

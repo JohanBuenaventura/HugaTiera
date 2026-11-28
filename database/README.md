@@ -15,13 +15,13 @@ This directory contains the authoritative relational schema, migration scripts, 
 | **Total Tables** | `25` |
 | **Total Foreign Key Constraints** | `59` |
 | **Fresh-Install Schema** | `database/schema/hugatiera_schema.sql` |
-| **Migrations Directory** | `database/migrations/` (`001` through `013`, each with a `_rollback.sql` script) |
+| **Migrations Directory** | `database/migrations/` (`001` through `014`, each with a `_rollback.sql` script) |
 | **Optional Local Demo Seed** | `database/seeds/zamboanga_demo_data.sql` (idempotent Zamboanga City providers/services/bookings/reviews for `hugatiera_db` only; keep `hugatiera_db_migration_test` clean) |
 | **Full 25-Table ERD & DFDs** | [docs/erd-and-dfd.md](../docs/erd-and-dfd.md) |
 | **Local Backups Directory** | `database/backups/` (git-ignored) |
 
 > [!CAUTION]
-> **Database Migration Status (`main`):** Migrations `001`–`013` have been backed up (`hugatiera_db_pre_migrations003_013_20261124_1950.sql`), applied, and verified on both `hugatiera_db_migration_test` and local `hugatiera_db` (`25` tables, `59` foreign keys). **Do NOT rerun already-applied migrations.** For brand-new installations, import `database/schema/hugatiera_schema.sql` directly.
+> **Database Migration Status:** Migrations `001`–`014` have been backed up (latest: `hugatiera_db_pre_migration014_20261128.sql`), applied, and verified on both `hugatiera_db_migration_test` and local `hugatiera_db` (`25` tables, `59` foreign keys). **Do NOT rerun already-applied migrations.** For brand-new installations, import `database/schema/hugatiera_schema.sql` directly.
 
 ---
 
@@ -483,7 +483,7 @@ erDiagram
   ai_usage_log {
     int_unsigned id PK
     int_unsigned user_id FK
-    enum feature "requirements | photo_analysis | garden_plan"
+    enum feature "requirements | photo_analysis | garden_plan | image_generation"
     int_unsigned inquiry_id
     int_unsigned request_image_id
     varchar model
@@ -1203,22 +1203,22 @@ erDiagram
 ---
 
 ### 3.25 `ai_usage_log`
-- **Purpose:** Concurrency-safe per-user AI rate limiting (`10` calls per rolling hour) and model/fallback audit logging without storing raw user prompt text.
+- **Purpose:** Concurrency-safe per-user AI rate limiting (`10` calls/hour for text & photo analysis via `AI_HOURLY_LIMIT`, plus a separate `3` edits/24 hours for Cloudflare photo concept previews via `AI_IMAGE_DAILY_LIMIT`) and model/fallback audit logging without storing raw user prompt text.
 - **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 - **Foreign Keys:**
   - `user_id` → `users(id)` `ON DELETE CASCADE`
 - **Indexes:**
   - `idx_ai_usage_user (user_id, created_at)`
 - **Business Rules:**
-  - Before calling Gemini, the backend locks the user row (`SELECT id FROM users WHERE id = ? FOR UPDATE`), counts `ai_usage_log` rows in the last 60 minutes with `outcome IN ('success', 'error')`, and inserts an in-flight reservation (`model = 'RESERVED_IN_FLIGHT'`).
-  - On completion, the row is updated with the actual model used (`gemini-3.8-flash` or fallback `gemini-3.5-flash-lite`), `outcome` (`'success'` or `'error'`), and `error_code` (`NULL` on primary success, `'FALLBACK_FROM_<PRIMARY_CODE>'` on fallback success, or `'FALLBACK_FAILED:<PRIMARY>-><FALLBACK>'` if both fail).
-  - If the user has already reached `AI_HOURLY_LIMIT`, a row with `outcome = 'rate_limited'` and `error_code = 'RATE_LIMITED'` is logged and `429` is returned.
+  - Before calling Gemini or Cloudflare Workers AI, the backend locks the user row (`SELECT id FROM users WHERE id = ? FOR UPDATE`), counts active usage rows in the feature's rolling window (`1 hour` for text/photo analysis excluding `'image_generation'`; `24 hours` for `'image_generation'` excluding `'OFF_TOPIC_EDIT'`), and inserts an in-flight reservation (`error_code = 'RESERVED_IN_FLIGHT'`).
+  - On completion, the row is updated with the actual model used (`gemini-3.5-flash-lite`, `gemini-3.8-flash`, or `@cf/black-forest-labs/flux-2-klein-4b`), `outcome` (`'success'` or `'error'`), and `error_code`.
+  - If the user has already reached their limit, a row with `outcome = 'rate_limited'` is logged and `429` is returned.
 
 | Column | Data Type | Nullability | Default | Notes |
 |---|---|---|---|---|
 | `id` | `INT UNSIGNED` | `NOT NULL` | `AUTO_INCREMENT` | Primary key |
 | `user_id` | `INT UNSIGNED` | `NOT NULL` | — | FK to requesting user (`users.id`) |
-| `feature` | `ENUM('requirements', 'photo_analysis', 'garden_plan')` | `NOT NULL` | — | AI feature invoked |
+| `feature` | `ENUM('requirements', 'photo_analysis', 'garden_plan', 'image_generation')` | `NOT NULL` | — | AI feature invoked (extended in Migration 014) |
 | `inquiry_id` | `INT UNSIGNED` | `NULL` | `NULL` | Optional related inquiry ID |
 | `request_image_id` | `INT UNSIGNED` | `NULL` | `NULL` | Optional related `request_images.id` |
 | `model` | `VARCHAR(100)` | `NOT NULL` | — | Model identifier executed |
@@ -1307,9 +1307,9 @@ Migration 001 (`database/migrations/001_unified_requests_and_agreements.sql`) up
 
 ---
 
-## 6. Migrations `002`–`013` Summary (`mergedbranchv1`)
+## 6. Migrations `002`–`014` Summary
 
-All 12 incremental migrations after Migration 001 include matching `_rollback.sql` scripts and are already reflected in [hugatiera_schema.sql](schema/hugatiera_schema.sql) and [docs/erd-and-dfd.md](../docs/erd-and-dfd.md):
+All 13 incremental migrations after Migration 001 include matching `_rollback.sql` scripts and are already reflected in [hugatiera_schema.sql](schema/hugatiera_schema.sql) and [docs/erd-and-dfd.md](../docs/erd-and-dfd.md):
 
 | Migration | Script | Key Schema Additions |
 |---|---|---|
@@ -1325,3 +1325,4 @@ All 12 incremental migrations after Migration 001 include matching `_rollback.sq
 | `011` | `011_crew_capacity_workers.sql` | Adds `gardener_profiles.crew_size` and `services.workers_required` for worker-level daily capacity and "Fully Booked" detection. |
 | `012` | `012_dual_role_and_assigned_clerk.sql` | Extends `users.role` ENUM with `'clerk'`; adds `can_act_as_client` and `can_act_as_gardener` flags; creates `clerk_gardener_assignments`. |
 | `013` | `013_payment_gateway_sessions.sql` | Extends `booking_payments.payment_method` (`gcash`, `maya`, `grab_pay`, `card`, `bank_transfer`, `cash`, `other`) and adds `gateway_provider` (`manual` \| `paymongo` \| `sandbox_demo`), `gateway_session_id`, `gateway_checkout_url`, `gateway_status`, and `gateway_paid_at`. |
+| `014` | `014_ai_image_generation_log.sql` | Extends `ai_usage_log.feature` ENUM with `'image_generation'` for separate 24-hour Cloudflare Workers AI photo-editing quota tracking. |

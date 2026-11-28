@@ -29,8 +29,8 @@ Read ONLY TEAM_SYNC_GUIDE.md and AGENTS.md (do NOT edit application code). Sync 
   - All user-facing features from `feature/registration-profile-details` (optional middle name, 18+ birthday, mobile number, dual-role switching) are already integrated in `main`.
   - Merging it directly causes **20 file conflicts** and **duplicate `003` / `004` migration numbering**.
 - **Adding new migrations in the future:**
-  - Migrations **`001` through `013`** are already used in `database/migrations/`.
-  - Any new database change **must** start at **`014_<descriptive_name>.sql`** with a matching **`014_<descriptive_name>_rollback.sql`**, and must also update `database/schema/hugatiera_schema.sql`.
+  - Migrations **`001` through `014`** are already used in `database/migrations/`.
+  - Any new database change **must** start at **`015_<descriptive_name>.sql`** with a matching **`015_<descriptive_name>_rollback.sql`**, and must also update `database/schema/hugatiera_schema.sql`.
   - Always commit your `.sql` migration file in the **same branch/PR** as the backend code that queries the new columns.
 
 ---
@@ -94,6 +94,7 @@ Use this checklist to see which migrations you still need, and apply **only** th
 | `011_crew_capacity_workers.sql` | Column `gardener_profiles.crew_size` exists |
 | `012_dual_role_and_assigned_clerk.sql` | Table `clerk_gardener_assignments` exists |
 | `013_payment_gateway_sessions.sql` | Column `booking_payments.gateway_provider` exists |
+| `014_ai_image_generation_log.sql` | `ai_usage_log.feature` ENUM includes `'image_generation'` |
 
 Example (upgrading a database currently at Migration `002` with `19` tables):
 
@@ -143,7 +144,8 @@ Get-Content -Raw database\seeds\zamboanga_demo_data.sql | c:\xampp\mysql\bin\mys
 2. **Check `backend/.env` against `backend/.env.example`:**
    - Ensure `DB_NAME=hugatiera_db`, `JWT_SECRET` is set, and `FRONTEND_URL=http://localhost:5173`.
    - `PAYMONGO_SECRET_KEY=` is **optional** (leaving it blank automatically enables built-in Sandbox/Demo Checkout mode).
-   - `GEMINI_API_KEY=` is optional for local non-AI testing; keep `GEMINI_MODEL=gemini-3.8-flash` and `GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite`.
+   - `GEMINI_API_KEY=` is optional for local non-AI testing; recommended fast setup is `GEMINI_MODEL=gemini-3.5-flash-lite` and `GEMINI_FALLBACK_MODEL=gemini-3.8-flash`.
+   - For free-tier Cloudflare Workers AI photo editing (`@cf/black-forest-labs/flux-2-klein-4b`), set `AI_IMAGE_GEN_ENABLED=true`, `CF_ACCOUNT_ID=...`, `CF_API_TOKEN=...`, and `AI_IMAGE_DAILY_LIMIT=3` (keep `AI_IMAGE_GEN_ENABLED=false` when disabled).
 3. **Restart both servers** so Express loads all new routes and Vite picks up all updated components:
    ```powershell
    # Terminal 1
@@ -163,8 +165,8 @@ Get-Content -Raw database\seeds\zamboanga_demo_data.sql | c:\xampp\mysql\bin\mys
    npm --prefix frontend run lint
    npm --prefix frontend run build
    ```
-3. **Automated Backend Tests (against `hugatiera_db_migration_test`):**
-   - Run feature & core suites with `$env:DB_NAME="hugatiera_db_migration_test"` (`integration.test.js`, `avatarsServicesAdmin.test.js`, `registrationBasicInfo.test.js`, `inquiryPriceEstimator.test.js`, `schedulingAvailability.test.js`, `reservationPayments.test.js`, `cancellationReschedule.test.js`, `smartAiRecommendations.test.js`, `dualRoleAndClerk.test.js`, `paymentGateway.test.js`).
+3. **Automated Backend Tests (against `hugatiera_db_migration_test` — 16 Suites / 83 Tests):**
+   - Run feature & core suites with `$env:DB_NAME="hugatiera_db_migration_test"` (`integration.test.js`, `avatarsServicesAdmin.test.js`, `registrationBasicInfo.test.js`, `inquiryPriceEstimator.test.js`, `schedulingAvailability.test.js`, `reservationPayments.test.js`, `cancellationReschedule.test.js`, `smartAiRecommendations.test.js`, `dualRoleAndClerk.test.js`, `paymentGateway.test.js`, `aiImagePreview.test.js`).
    - Run Revision Track suites `r2`–`r6` **with `DB_NAME` unset** (`Remove-Item Env:DB_NAME -ErrorAction SilentlyContinue`), because they switch to `hugatiera_db_migration_test` automatically and assert `ORIGINAL_DB !== 'hugatiera_db_migration_test'`.
 
 ---

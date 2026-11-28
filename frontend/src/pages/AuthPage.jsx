@@ -421,13 +421,13 @@ export function RegisterPage() {
                   />
                   <span className="role-option-copy">
                     <strong>Offer services</strong>
-                    <small>Gardener (includes Client mode &amp; staff clerks)</small>
+                    <small>List services, send offers &amp; manage bookings</small>
                   </span>
                 </label>
               </div>
               {form.role === 'gardener' && (
                 <p className="field-note" style={{ marginTop: '6px' }}>
-                  Gardener accounts include Client mode (switch anytime in your sidebar) and let you add Clerk staff under Dashboard → My Clerks.
+                  New gardener profiles require administrator approval before appearing publicly. You can also add staff clerks under Dashboard → My Staff, or opt into Client mode later in Profile.
                 </p>
               )}
             </fieldset>

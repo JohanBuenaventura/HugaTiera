@@ -669,7 +669,9 @@ describe('Step R6 – Gemini Requirements Assistant, Photo Understanding, Provid
   })
 
   test('R6-08: Automatic Gemini Model Fallback (Scenarios A–G across all 3 AI features & single-slot quota accounting)', async () => {
+    const originalPrimaryEnv = process.env.GEMINI_MODEL
     const originalFallbackEnv = process.env.GEMINI_FALLBACK_MODEL
+    process.env.GEMINI_MODEL = 'gemini-3.8-flash'
     process.env.GEMINI_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
     await pool.execute('DELETE FROM ai_usage_log WHERE user_id = ?', [clientAId])
 
@@ -925,6 +927,11 @@ describe('Step R6 – Gemini Requirements Assistant, Photo Understanding, Provid
       assert.equal(usageFinal.data.used, 8)
       assert.equal(usageFinal.data.remaining, 2)
     } finally {
+      if (originalPrimaryEnv === undefined) {
+        delete process.env.GEMINI_MODEL
+      } else {
+        process.env.GEMINI_MODEL = originalPrimaryEnv
+      }
       if (originalFallbackEnv === undefined) {
         delete process.env.GEMINI_FALLBACK_MODEL
       } else {
@@ -936,7 +943,9 @@ describe('Step R6 – Gemini Requirements Assistant, Photo Understanding, Provid
   })
 
   test('R6-09: Concurrent Fallback Verification (Scenario H) — 15 simultaneous requests with primary 503 -> fallback never exceed 10 quota slots', async () => {
+    const originalPrimaryEnv = process.env.GEMINI_MODEL
     const originalFallbackEnv = process.env.GEMINI_FALLBACK_MODEL
+    process.env.GEMINI_MODEL = 'gemini-3.8-flash'
     process.env.GEMINI_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
     await pool.execute('DELETE FROM ai_usage_log WHERE user_id = ?', [clientAId])
 
@@ -991,6 +1000,11 @@ describe('Step R6 – Gemini Requirements Assistant, Photo Understanding, Provid
       assert.equal(fallbackSuccessRows.length, 10)
       assert.equal(rateLimitedRows.length, 5)
     } finally {
+      if (originalPrimaryEnv === undefined) {
+        delete process.env.GEMINI_MODEL
+      } else {
+        process.env.GEMINI_MODEL = originalPrimaryEnv
+      }
       if (originalFallbackEnv === undefined) {
         delete process.env.GEMINI_FALLBACK_MODEL
       } else {

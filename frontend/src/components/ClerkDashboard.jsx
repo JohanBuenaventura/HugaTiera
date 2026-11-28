@@ -431,7 +431,7 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                               )}
                             </div>
                             <small>
-                              Booking #{payment.booking_id} ({payment.service_title || 'Gardening service'}) · Client: {payment.client_name} · Method: {formatStatusLabel(payment.payment_method)} · Type: {formatStatusLabel(payment.payment_type)}
+                              {payment.service_title || 'Gardening service'} · Client: {payment.client_name} · Method: {formatStatusLabel(payment.payment_method)} · Type: {formatStatusLabel(payment.payment_type)}
                             </small>
                             {payment.reference_number && (
                               <small>Ref #: {payment.reference_number}</small>
@@ -777,7 +777,7 @@ export default function ClerkDashboard({ activeTab = 'overview' }) {
                         {gardenerBookings.slice(0, 15).map((b) => (
                           <tr key={b.id}>
                             <td>
-                              <strong>#{b.id} · {b.service_title || 'Gardening service'}</strong>
+                              <strong>{b.service_title || 'Gardening service'}</strong>
                               <small>{b.workers_required || 1} worker(s) · {b.location || 'Zamboanga City'}</small>
                             </td>
                             <td>{b.client_name}</td>

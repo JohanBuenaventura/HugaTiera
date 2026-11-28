@@ -289,6 +289,30 @@ function BookingForm() {
             <input maxLength="100" value={form.priceBasis} onChange={change('priceBasis')} placeholder="e.g. per visit, fixed project" />
           </label>
         </div>
+        {Number(form.amount) > 0 && (
+          <div className="quick-duration-row" role="group" aria-label="Quick deposit percentage presets">
+            <span className="field-note" style={{ margin: 0 }}>Quick deposit:</span>
+            {[
+              { pct: 0, label: 'No deposit (0%)' },
+              { pct: 0.3, label: '30% standard' },
+              { pct: 0.5, label: '50% materials upfront' },
+              { pct: 1, label: '100% full' },
+            ].map((preset) => {
+              const targetVal = (Number(form.amount) * preset.pct).toFixed(2)
+              const active = form.requiredDepositAmount !== '' && Number(form.requiredDepositAmount) === Number(targetVal)
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className={`booking-filter-pill${active ? ' is-active' : ''}`}
+                  onClick={() => setForm((current) => ({ ...current, requiredDepositAmount: targetVal }))}
+                >
+                  {preset.label} ({formatPHP(targetVal, { decimals: 0 })})
+                </button>
+              )
+            })}
+          </div>
+        )}
             <div className="register-step-actions">
               <button className="button" type="submit">
                 <span>Continue to schedule &amp; location</span>
@@ -336,8 +360,8 @@ function BookingForm() {
         <label>Exact service location <span className="required-mark" aria-hidden="true">*</span>
           <input required maxLength="255" value={form.location} onChange={change('location')} placeholder="Complete address or barangay location in Zamboanga City" />
         </label>
-        <label>Special conditions or notes (optional)
-          <textarea rows="3" maxLength="5000" value={form.conditions} onChange={change('conditions')} placeholder="Materials, access instructions, or weather conditions." />
+        <label>Special conditions or payment notes (optional)
+          <textarea rows="3" maxLength="5000" value={form.conditions} onChange={change('conditions')} placeholder="Materials, gate/water access, weather notes, or preferred GCash/Maya/cash payment arrangement." />
         </label>
             <div className="register-step-actions">
               <button type="button" className="register-back-btn" onClick={handleAgreementBackStep}>
@@ -967,7 +991,6 @@ function BookingDetails({ id }) {
       <Link className="back-link" to="/bookings"><ArrowLeft size={15} /> Back to bookings</Link>
       <h1>{booking.service_title || 'Gardening service'}</h1>
       <div className="booking-status-row">
-        <span className="category-pill">Booking #{booking.id}</span>
         <span className={getStatusBadgeClass(booking.booking_stage)}>{formatStatusLabel(booking.booking_stage)}</span>
         <span className={getStatusBadgeClass(booking.payment_status)}>{formatStatusLabel(booking.payment_status)}</span>
         <span className={getStatusBadgeClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
@@ -979,7 +1002,7 @@ function BookingDetails({ id }) {
         <span>{gardener ? booking.client_name : booking.gardener_name}</span>
         {agreementSummary.inquiryPath && (
           <Link className="text-link" to={agreementSummary.inquiryPath}>
-            View source inquiry #{booking.inquiry_id}
+            View original request
           </Link>
         )}
         <button className="table-action" type="button" onClick={openConversation}>Open conversation</button>
@@ -991,7 +1014,7 @@ function BookingDetails({ id }) {
         <div className="booking-next-banner tone-warning no-print" role="status">
           <strong>Viewing in opposite workspace mode</strong>
           <p>
-            You are the <strong>{gardener ? 'Gardener' : 'Client'}</strong> on this booking, while your sidebar is currently set to <strong>{user.role === 'gardener' ? 'Gardener' : 'Client'} Mode</strong>. Switch mode in the sidebar before submitting payments or updating service status.
+            You are the <strong>{gardener ? 'Gardener' : 'Client'}</strong> on this booking, while your workspace is currently set to <strong>{user.role === 'gardener' ? 'Gardener' : 'Client'} Mode</strong>. Switch mode in <Link to="/profile">Profile</Link> before submitting payments or updating service status.
           </p>
         </div>
       )}
@@ -1171,6 +1194,14 @@ function BookingDetails({ id }) {
               ) : (
                 <form className="profile-form payment-submit-form" onSubmit={handlePaymentSubmit}>
                   <p className="auth-section-title">Submit direct payment proof (GCash, Maya, Bank Transfer, or Cash)</p>
+                  <div className="ai-callout-box" style={{ marginBottom: '10px' }}>
+                    <p className="form-note" style={{ margin: '0 0 6px' }}>
+                      Send your payment directly to the gardener via GCash, Maya, bank transfer, or cash, then record the reference or receipt below so they can verify it.
+                    </p>
+                    <button type="button" className="table-action" onClick={openConversation}>
+                      Ask gardener for GCash / Maya / cash details in Messages
+                    </button>
+                  </div>
                   <div className="form-row form-row-3">
                     <label>Payment type
                       <select value={paymentForm.paymentType} onChange={(e) => setPaymentForm({ ...paymentForm, paymentType: e.target.value })}>
@@ -1959,7 +1990,7 @@ function BookingDetails({ id }) {
               {agreementSummary.inquiryPath && (
                 <p className="booking-agreement-link" style={{ marginBottom: 0 }}>
                   <Link className="text-link" to={agreementSummary.inquiryPath}>
-                    Open originating inquiry #{booking.inquiry_id}
+                    View original request
                   </Link>
                 </p>
               )}

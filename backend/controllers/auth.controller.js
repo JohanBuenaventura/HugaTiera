@@ -96,7 +96,7 @@ async function register(req, res, next) {
   const isDual = role === 'both'
   const activeRole = isDual ? 'client' : role
   const requiresClientAddress = role === 'client' || isDual
-  const canActAsClient = role === 'client' || role === 'gardener' || isDual
+  const canActAsClient = role === 'client' || isDual
   const canActAsGardener = role === 'gardener' || isDual
 
   let clientDetails = null
