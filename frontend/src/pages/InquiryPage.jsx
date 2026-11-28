@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Calculator, Check, CheckCircle2, ClipboardCheck, Leaf, MapPin, ShieldCheck, Sparkles, Star } from 'lucide-react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, Calculator, Check, CheckCircle2, ClipboardCheck, Leaf, MapPin, ShieldCheck, Sparkles, Star, Wand2 } from 'lucide-react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
 import { formatStatusLabel, getStatusBadgeClass } from '../services/bookings'
-import { fetchSmartRecommendations, requestPhotoAnalysis, requestRequirementAssistance } from '../services/ai'
+import { fetchAiUsage, fetchSmartRecommendations, requestGardenImagePreview, requestPhotoAnalysis, requestRequirementAssistance } from '../services/ai'
 import {
   ADDON_TYPE_LABELS,
   COMPLEXITY_LABELS,
@@ -68,9 +68,11 @@ function InquiryForm() {
   const validGardenerId = Boolean(gardenerId && /^\d+$/.test(gardenerId))
   const isGeneralRequest = typeParam === 'general' || (!validServiceId && !validGardenerId)
 
+  const location = useLocation()
+  const prefillState = location.state || {}
   const [form, setForm] = useState({
     subject: '',
-    description: '',
+    description: typeof prefillState.prefillDescription === 'string' ? prefillState.prefillDescription : '',
     aiSummary: '',
     requestedDate: '',
     location: '',
@@ -84,10 +86,16 @@ function InquiryForm() {
     siteVisitRequested: true,
     priceComment: '',
   })
-  const [uploadedImages, setUploadedImages] = useState([])
+  const [uploadedImages, setUploadedImages] = useState(
+    Array.isArray(prefillState.prefillImages) ? prefillState.prefillImages : [],
+  )
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [analyzingPhotoId, setAnalyzingPhotoId] = useState(null)
   const [savingPhotoDescId, setSavingPhotoDescId] = useState(null)
+  const [aiUsage, setAiUsage] = useState(null)
+  const [editingVisualPhotoId, setEditingVisualPhotoId] = useState(null)
+  const [visualPromptDraft, setVisualPromptDraft] = useState('')
+  const [generatingVisualPhotoId, setGeneratingVisualPhotoId] = useState(null)
   const [generatingAiReq, setGeneratingAiReq] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState(null)
   const [aiNotice, setAiNotice] = useState('')
@@ -96,6 +104,7 @@ function InquiryForm() {
   const [inquiryStep, setInquiryStep] = useState(1)
 
   useEffect(() => {
+    fetchAiUsage().then(setAiUsage).catch(() => {})
     servicesApi.categories().then((result) => setCategories(result.categories || [])).catch(() => {})
     servicesApi.pricingAddons().then((result) => setPricingAddons(result.addons || [])).catch(() => {})
     if (!isGeneralRequest && validServiceId) {
@@ -189,12 +198,14 @@ function InquiryForm() {
     selectedAddons: selectedAddonsForEstimate,
   })
 
+  const originalPhotoCount = uploadedImages.filter((img) => img.kind !== 'ai_generated').length
+
   async function handlePhotoUpload(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    if (uploadedImages.length >= 5) {
-      setError('You can attach up to 5 garden photos per inquiry.')
+    if (originalPhotoCount >= 5) {
+      setError('You can attach up to 5 original garden photos per inquiry.')
       return
     }
     setUploadingPhoto(true)
@@ -208,6 +219,36 @@ function InquiryForm() {
       setError(uploadErr.message)
     } finally {
       setUploadingPhoto(false)
+    }
+  }
+
+  async function handleGenerateVisualEdit(parentImageId) {
+    const instructions = visualPromptDraft.trim()
+    if (!instructions) {
+      setAiNotice('Please describe what changes you want to remove, clean, or add before generating a visual preview.')
+      return
+    }
+    setGeneratingVisualPhotoId(parentImageId)
+    setAiNotice('')
+    try {
+      const res = await requestGardenImagePreview({
+        parentImageId,
+        instructions,
+      })
+      if (res?.generatedImage) {
+        setUploadedImages((prev) => [...prev, res.generatedImage])
+        setEditingVisualPhotoId(null)
+        setVisualPromptDraft('')
+        setAiNotice(
+          `AI concept preview generated (${res.usage ? `${res.usage.remaining} of ${res.usage.limit} daily previews remaining` : 'informational only'}). Both your original photo and AI preview will be shared clearly with gardeners.`,
+        )
+      }
+      fetchAiUsage().then(setAiUsage).catch(() => {})
+    } catch (editErr) {
+      setAiNotice(editErr.message)
+      fetchAiUsage().then(setAiUsage).catch(() => {})
+    } finally {
+      setGeneratingVisualPhotoId(null)
     }
   }
 
@@ -889,40 +930,95 @@ function InquiryForm() {
         {form.location && (
           <p className="field-note">Shared with providers as: <strong>{form.location}</strong> — exact address shared later.</p>
         )}
-        <label>Garden photos (up to 5 JPEG, PNG, or WebP images; GPS/EXIF stripped automatically)
-          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto || uploadedImages.length >= 5} onChange={handlePhotoUpload} />
+        <label>Garden photos (up to 5 original JPEG, PNG, or WebP images; GPS/EXIF stripped automatically)
+          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto || originalPhotoCount >= 5} onChange={handlePhotoUpload} />
         </label>
         {uploadingPhoto && <p className="form-note">Processing and stripping metadata from photo...</p>}
         {uploadedImages.length > 0 && (
           <div className="request-photo-grid">
-            {uploadedImages.map((img) => (
-              <figure className="request-photo-card" key={img.id}>
-                <img src={getRequestImageUrl(img.id)} alt="Uploaded garden space" />
-                <figcaption className="request-photo-caption">
-                  <textarea
-                    rows="3"
-                    maxLength="2000"
-                    value={img.ai_description || ''}
-                    onChange={(e) => handleLocalPhotoDescriptionChange(img.id, e.target.value)}
-                    onBlur={(e) => handleSavePhotoDescription(img.id, e.target.value)}
-                    placeholder="Optional space description (click 'Describe with AI' or type manually)"
-                  />
-                  <div className="request-photo-actions">
-                    <button
-                      className="table-action"
-                      type="button"
-                      disabled={analyzingPhotoId === img.id || savingPhotoDescId === img.id}
-                      onClick={() => handleAnalyzePhoto(img.id)}
-                    >
-                      <Sparkles size={13} /> {analyzingPhotoId === img.id ? 'Analyzing...' : 'Describe with AI'}
-                    </button>
-                    <button className="table-action" type="button" onClick={() => handleRemovePhoto(img.id)}>
-                      Remove photo
-                    </button>
-                  </div>
-                </figcaption>
-              </figure>
-            ))}
+            {uploadedImages.map((img) => {
+              const isAiGenerated = img.kind === 'ai_generated'
+              const isEditingThis = editingVisualPhotoId === img.id
+              return (
+                <figure className={`request-photo-card${isAiGenerated ? ' is-ai-concept' : ''}`} key={img.id}>
+                  <span className={`photo-kind-badge${isAiGenerated ? ' is-ai' : ''}`}>
+                    {isAiGenerated ? 'AI Concept Preview' : 'Original site photo'}
+                  </span>
+                  <img src={getRequestImageUrl(img.id)} alt={isAiGenerated ? 'AI garden concept preview' : 'Uploaded garden space'} />
+                  <figcaption className="request-photo-caption">
+                    <textarea
+                      rows="3"
+                      maxLength="2000"
+                      value={img.ai_description || ''}
+                      onChange={(e) => handleLocalPhotoDescriptionChange(img.id, e.target.value)}
+                      onBlur={(e) => handleSavePhotoDescription(img.id, e.target.value)}
+                      placeholder={isAiGenerated ? 'Notes on this AI concept preview' : "Optional space description (click 'Describe with AI' or type manually)"}
+                    />
+                    <div className="request-photo-actions">
+                      {!isAiGenerated && (
+                        <button
+                          className="table-action"
+                          type="button"
+                          disabled={analyzingPhotoId === img.id || savingPhotoDescId === img.id}
+                          onClick={() => handleAnalyzePhoto(img.id)}
+                        >
+                          <Sparkles size={13} /> {analyzingPhotoId === img.id ? 'Analyzing...' : 'Describe with AI'}
+                        </button>
+                      )}
+                      {!isAiGenerated && aiUsage?.imageGenerationEnabled && (
+                        <button
+                          className="table-action"
+                          type="button"
+                          disabled={generatingVisualPhotoId === img.id || (aiUsage?.imageQuota && aiUsage.imageQuota.remaining <= 0)}
+                          onClick={() => {
+                            if (isEditingThis) {
+                              setEditingVisualPhotoId(null)
+                            } else {
+                              setEditingVisualPhotoId(img.id)
+                              setVisualPromptDraft((prev) => prev || form.description || '')
+                            }
+                          }}
+                        >
+                          <Wand2 size={13} /> {isEditingThis ? 'Close AI preview' : 'Preview changes with AI'}
+                        </button>
+                      )}
+                      <button className="table-action" type="button" onClick={() => handleRemovePhoto(img.id)}>
+                        {isAiGenerated ? 'Remove preview' : 'Remove photo'}
+                      </button>
+                    </div>
+                    {isEditingThis && (
+                      <div className="inline-ai-edit-panel">
+                        <label>
+                          What should AI remove, clean, or add?
+                          <textarea
+                            rows="3"
+                            maxLength="1000"
+                            value={visualPromptDraft}
+                            onChange={(e) => setVisualPromptDraft(e.target.value)}
+                            placeholder="e.g., Remove yellowish grass and pebbles, trim lawn neatly, and add flowering tropical shrubs along the fence."
+                          />
+                        </label>
+                        <div className="inline-ai-edit-footer">
+                          <span className="field-note">
+                            {aiUsage?.imageQuota
+                              ? `${aiUsage.imageQuota.remaining} of ${aiUsage.imageQuota.limit} daily AI previews left`
+                              : 'Visual concept only'}
+                          </span>
+                          <button
+                            type="button"
+                            className="button button-sm"
+                            disabled={generatingVisualPhotoId === img.id}
+                            onClick={() => handleGenerateVisualEdit(img.id)}
+                          >
+                            <Wand2 size={13} /> {generatingVisualPhotoId === img.id ? 'Generating (~6–10s)...' : 'Generate preview'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </figcaption>
+                </figure>
+              )
+            })}
           </div>
         )}
             <div className="register-step-actions">
@@ -1574,30 +1670,41 @@ function InquiryDetails({ id }) {
           )}
           {images.length > 0 && (
             <div className="inquiry-photos-section">
-              <h3>Garden photos & space descriptions ({images.length})</h3>
+              <h3>Garden photos &amp; concept previews ({images.length})</h3>
               <div className="inquiry-photo-list">
-                {images.map((img) => (
-                  <figure className={`inquiry-photo-card${img.ai_description ? ' has-notes' : ''}`} key={img.id}>
-                    <a className="inquiry-photo-thumb" href={getRequestImageUrl(img.id)} target="_blank" rel="noreferrer">
-                      <img
-                        src={getRequestImageUrl(img.id)}
-                        alt={`Garden photo #${img.id}`}
-                        onError={(event) => {
-                          event.currentTarget.style.display = 'none'
-                          const fallback = event.currentTarget.nextElementSibling
-                          if (fallback) fallback.style.display = 'grid'
-                        }}
-                      />
-                      <span className="inquiry-photo-fallback" style={{ display: 'none' }}>Photo unavailable</span>
-                    </a>
-                    {img.ai_description && (
-                      <figcaption className="inquiry-photo-notes">
-                        <strong>Space notes</strong>
-                        <p>{img.ai_description}</p>
-                      </figcaption>
-                    )}
-                  </figure>
-                ))}
+                {images.map((img) => {
+                  const isAiConcept = img.kind === 'ai_generated'
+                  return (
+                    <figure className={`inquiry-photo-card${img.ai_description ? ' has-notes' : ''}${isAiConcept ? ' is-ai-concept' : ''}`} key={img.id}>
+                      <a className="inquiry-photo-thumb" href={getRequestImageUrl(img.id)} target="_blank" rel="noreferrer">
+                        <span className={`photo-kind-badge${isAiConcept ? ' is-ai' : ''}`}>
+                          {isAiConcept ? 'AI Concept Preview' : 'Original site photo'}
+                        </span>
+                        <img
+                          src={getRequestImageUrl(img.id)}
+                          alt={isAiConcept ? `AI garden concept preview #${img.id}` : `Garden photo #${img.id}`}
+                          onError={(event) => {
+                            event.currentTarget.style.display = 'none'
+                            const fallback = event.currentTarget.nextElementSibling
+                            if (fallback) fallback.style.display = 'grid'
+                          }}
+                        />
+                        <span className="inquiry-photo-fallback" style={{ display: 'none' }}>Photo unavailable</span>
+                      </a>
+                      {(img.ai_description || isAiConcept) && (
+                        <figcaption className="inquiry-photo-notes">
+                          <strong>{isAiConcept ? 'AI Concept Preview (Visual Inspiration Only)' : 'Space notes'}</strong>
+                          {img.ai_description && <p>{img.ai_description}</p>}
+                          {isAiConcept && (
+                            <p className="field-note" style={{ marginTop: '4px' }}>
+                              Generated preview for reference only — base final quotes on the original site photo and agreed scope.
+                            </p>
+                          )}
+                        </figcaption>
+                      )}
+                    </figure>
+                  )
+                })}
               </div>
             </div>
           )}

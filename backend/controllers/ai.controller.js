@@ -1,6 +1,9 @@
 const fsp = require('fs/promises')
 const { pool } = require('../config/database')
-const { resolveRequestImagePath } = require('../middleware/upload.middleware')
+const {
+  processAndSaveRequestImage,
+  resolveRequestImagePath,
+} = require('../middleware/upload.middleware')
 const { serializeRequestImage } = require('./requestImage.controller')
 const {
   scoreOfferForClient,
@@ -13,16 +16,24 @@ const {
   executeWithModelFallback,
   getAiProvider,
   getFallbackModelName,
+  getImageEditModelName,
   getModelName,
   getProviderFailureCode,
+  isImageGenerationEnabled,
   streamWithModelFallback,
 } = require('../services/ai.service')
 
 const DEFAULT_HOURLY_LIMIT = 10
+const DEFAULT_IMAGE_DAILY_LIMIT = 3
 
 function getHourlyLimit() {
   const configured = Number(process.env.AI_HOURLY_LIMIT)
   return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_HOURLY_LIMIT
+}
+
+function getImageDailyLimit() {
+  const configured = Number(process.env.AI_IMAGE_DAILY_LIMIT)
+  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_IMAGE_DAILY_LIMIT
 }
 
 function parsePositiveInt(value) {
@@ -39,11 +50,72 @@ async function getHourlyUsageCount(userId, executor = pool) {
     `SELECT COUNT(*) AS used
      FROM ai_usage_log
      WHERE user_id = ?
+       AND feature <> 'image_generation'
        AND outcome IN ('success', 'error')
        AND created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)`,
     [userId],
   )
   return Number(row?.used || 0)
+}
+
+async function getDailyImageUsageCount(userId, executor = pool) {
+  const [[row]] = await executor.execute(
+    `SELECT COUNT(*) AS used
+     FROM ai_usage_log
+     WHERE user_id = ?
+       AND feature = 'image_generation'
+       AND outcome IN ('success', 'error')
+       AND (error_code IS NULL OR error_code <> 'OFF_TOPIC_EDIT')
+       AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`,
+    [userId],
+  )
+  return Number(row?.used || 0)
+}
+
+async function reserveImageUsageSlot({
+  userId,
+  inquiryId = null,
+  requestImageId = null,
+  model = null,
+}) {
+  const limit = getImageDailyLimit()
+  const resolvedModel = (model || getImageEditModelName()).slice(0, 100)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId])
+
+    const used = await getDailyImageUsageCount(userId, conn)
+    if (used >= limit) {
+      await conn.execute(
+        `INSERT INTO ai_usage_log
+          (user_id, feature, inquiry_id, request_image_id, model, outcome, error_code)
+         VALUES (?, 'image_generation', ?, ?, ?, 'rate_limited', 'IMAGE_DAILY_LIMIT_EXCEEDED')`,
+        [userId, inquiryId, requestImageId, resolvedModel],
+      )
+      await conn.commit()
+      return { allowed: false, usageId: null, used, limit }
+    }
+
+    const [insertRes] = await conn.execute(
+      `INSERT INTO ai_usage_log
+        (user_id, feature, inquiry_id, request_image_id, model, outcome, error_code)
+       VALUES (?, 'image_generation', ?, ?, ?, 'error', 'RESERVED_IN_FLIGHT')`,
+      [userId, inquiryId, requestImageId, resolvedModel],
+    )
+    await conn.commit()
+    return {
+      allowed: true,
+      usageId: insertRes.insertId,
+      used: used + 1,
+      limit,
+    }
+  } catch (err) {
+    await conn.rollback().catch(() => {})
+    throw err
+  } finally {
+    conn.release()
+  }
 }
 
 async function reserveAiUsageSlot({
@@ -121,6 +193,20 @@ function classifyAiError(error) {
       message: error.message,
     }
   }
+  if (error.code === 'OFF_TOPIC_EDIT') {
+    return {
+      status: 400,
+      code: 'OFF_TOPIC_EDIT',
+      message: error.message,
+    }
+  }
+  if (error.code === 'CF_NOT_CONFIGURED') {
+    return {
+      status: 503,
+      code: 'CF_NOT_CONFIGURED',
+      message: 'Cloudflare Workers AI photo editing is enabled, but CF_ACCOUNT_ID or CF_API_TOKEN is missing in backend/.env.',
+    }
+  }
   if (error.message === 'GEMINI_API_KEY is not configured.') {
     return {
       status: 503,
@@ -192,6 +278,9 @@ async function getAiUsageStatus(req, res, next) {
   try {
     const limit = getHourlyLimit()
     const used = await getHourlyUsageCount(req.user.id)
+    const imageLimit = getImageDailyLimit()
+    const imageUsed = await getDailyImageUsageCount(req.user.id)
+    const imageGenerationEnabled = isImageGenerationEnabled()
     const provider = getAiProvider()
     const primaryModel = typeof provider.getModel === 'function' ? provider.getModel() : getModelName()
     const fallbackModel = typeof provider.getFallbackModel === 'function'
@@ -206,7 +295,14 @@ async function getAiUsageStatus(req, res, next) {
       used,
       limit,
       remaining: Math.max(0, limit - used),
-      imageGenerationEnabled: false,
+      imageGenerationEnabled,
+      imageModel: getImageEditModelName(),
+      imageQuota: {
+        used: imageUsed,
+        limit: imageLimit,
+        remaining: Math.max(0, imageLimit - imageUsed),
+        windowHours: 24,
+      },
     })
   } catch (error) {
     return next(error)
@@ -954,8 +1050,193 @@ async function createRecommendationSummary(req, res, next) {
   }
 }
 
+async function createGardenImagePreview(req, res, next) {
+  if (!isImageGenerationEnabled()) {
+    return res.status(501).json({
+      code: 'IMAGE_GENERATION_POSTPONED',
+      message: 'AI photo concept editing is currently disabled. Set AI_IMAGE_GEN_ENABLED=true in backend/.env to enable free Cloudflare Workers AI previews.',
+    })
+  }
+
+  const instructions = text(req.body?.instructions ?? req.body?.prompt)
+  if (!instructions || instructions.length > 1000) {
+    return res.status(400).json({
+      message: 'Please describe the gardening changes you want to preview (1 to 1,000 characters).',
+    })
+  }
+
+  const rawParentId = req.body?.parentImageId ?? req.body?.imageId ?? req.body?.parent_image_id
+  const parentImageId = rawParentId !== undefined && rawParentId !== null && String(rawParentId).trim() !== ''
+    ? parsePositiveInt(rawParentId)
+    : null
+  const hasUploadedFile = Boolean(req.file && Buffer.isBuffer(req.file.buffer))
+
+  if (!parentImageId && !hasUploadedFile) {
+    return res.status(400).json({
+      message: 'Please upload a garden photo or select an existing uploaded photo first.',
+    })
+  }
+
+  const imageModel = getImageEditModelName()
+  let reservedUsageId = null
+  let savedGeneratedPath = null
+
+  try {
+    let parentImageRow = null
+    let sourceBuffer = null
+
+    if (parentImageId) {
+      const [rows] = await pool.execute(
+        `SELECT ri.id, ri.inquiry_id, ri.uploaded_by, ri.kind, ri.parent_image_id,
+                ri.file_path, ri.mime_type, ri.file_size, ri.ai_description, ri.created_at,
+                i.status AS inquiry_status
+         FROM request_images ri
+         LEFT JOIN inquiries i ON i.id = ri.inquiry_id
+         WHERE ri.id = ?
+         LIMIT 1`,
+        [parentImageId],
+      )
+      parentImageRow = rows[0]
+      if (!parentImageRow) {
+        return res.status(404).json({ message: 'Garden photo was not found.' })
+      }
+      if (parentImageRow.uploaded_by !== req.user.id && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: 'You can only generate AI previews for garden photos that you uploaded.' })
+      }
+      if (parentImageRow.inquiry_id && !['open', 'responded'].includes(parentImageRow.inquiry_status)) {
+        return res.status(409).json({
+          message: 'AI concept previews can only be generated while the service request is open.',
+        })
+      }
+      try {
+        const absPath = resolveRequestImagePath(parentImageRow.file_path)
+        sourceBuffer = await fsp.readFile(absPath)
+      } catch {
+        return res.status(404).json({ message: 'Garden photo file was not found on disk.' })
+      }
+    } else {
+      let processedOriginal
+      try {
+        processedOriginal = await processAndSaveRequestImage(req.file.buffer, req.user.id, 'original')
+      } catch (processingError) {
+        if (processingError.statusCode === 400) {
+          return res.status(400).json({ message: processingError.message })
+        }
+        throw processingError
+      }
+      sourceBuffer = await fsp.readFile(processedOriginal.absolutePath)
+      try {
+        const [origInsert] = await pool.execute(
+          `INSERT INTO request_images (inquiry_id, uploaded_by, kind, file_path, mime_type, file_size)
+           VALUES (NULL, ?, 'original', ?, ?, ?)`,
+          [req.user.id, processedOriginal.relativePath, processedOriginal.mimeType, processedOriginal.fileSize],
+        )
+        const [origRows] = await pool.execute(
+          `SELECT id, inquiry_id, uploaded_by, kind, parent_image_id, file_path, mime_type, file_size, ai_description, created_at
+           FROM request_images WHERE id = ? LIMIT 1`,
+          [origInsert.insertId],
+        )
+        parentImageRow = origRows[0]
+      } catch (dbErr) {
+        await fsp.unlink(processedOriginal.absolutePath).catch(() => {})
+        throw dbErr
+      }
+    }
+
+    const rateCheck = await reserveImageUsageSlot({
+      userId: req.user.id,
+      inquiryId: parentImageRow.inquiry_id || null,
+      requestImageId: parentImageRow.id,
+      model: imageModel,
+    })
+    if (!rateCheck.allowed) {
+      return res.status(429).json({
+        message: `AI photo concept previews are limited to ${rateCheck.limit} per 24 hours so free daily capacity stays available for everyone. You can still submit your request with your original photo.`,
+      })
+    }
+    reservedUsageId = rateCheck.usageId
+
+    const provider = getAiProvider()
+    const edited = await provider.generateGardenImage({
+      imageBuffer: sourceBuffer,
+      mimeType: parentImageRow.mime_type,
+      instructions,
+      existingDescription: parentImageRow.ai_description || '',
+      model: imageModel,
+    })
+
+    const savedGenerated = await processAndSaveRequestImage(edited.imageBuffer, req.user.id, 'ai_generated')
+    savedGeneratedPath = savedGenerated.absolutePath
+
+    const [genInsert] = await pool.execute(
+      `INSERT INTO request_images
+        (inquiry_id, uploaded_by, kind, parent_image_id, file_path, mime_type, file_size, ai_description)
+       VALUES (?, ?, 'ai_generated', ?, ?, ?, ?, ?)`,
+      [
+        parentImageRow.inquiry_id || null,
+        req.user.id,
+        parentImageRow.id,
+        savedGenerated.relativePath,
+        savedGenerated.mimeType,
+        savedGenerated.fileSize,
+        `AI concept preview — requested changes: ${instructions}`.slice(0, 2000),
+      ],
+    )
+    savedGeneratedPath = null
+
+    const [genRows] = await pool.execute(
+      `SELECT id, inquiry_id, uploaded_by, kind, parent_image_id, mime_type, file_size, ai_description, created_at
+       FROM request_images WHERE id = ? LIMIT 1`,
+      [genInsert.insertId],
+    )
+
+    await finalizeAiUsageSlot(reservedUsageId, {
+      outcome: 'success',
+      errorCode: null,
+      model: edited.model || imageModel,
+    })
+
+    const imageLimit = getImageDailyLimit()
+    const imageUsed = await getDailyImageUsageCount(req.user.id)
+
+    return res.status(201).json({
+      originalImage: serializeRequestImage(parentImageRow),
+      generatedImage: serializeRequestImage(genRows[0]),
+      model: edited.model || imageModel,
+      refinedPrompt: edited.refinedPrompt || null,
+      usage: {
+        used: imageUsed,
+        limit: imageLimit,
+        remaining: Math.max(0, imageLimit - imageUsed),
+        windowHours: 24,
+      },
+      disclaimer: 'AI concept preview is for visual inspiration only — it does not set final prices, confirm a booking, or guarantee exact site results.',
+    })
+  } catch (error) {
+    if (savedGeneratedPath) {
+      await fsp.unlink(savedGeneratedPath).catch(() => {})
+    }
+    const classified = classifyAiError(error)
+    const auditMeta = buildFailureAuditMetadata(error, imageModel, classified)
+    await finalizeAiUsageSlot(reservedUsageId, {
+      outcome: 'error',
+      errorCode: auditMeta.errorCode,
+      model: auditMeta.model,
+    }).catch(() => {})
+
+    if (classified) {
+      return res.status(classified.status).json({
+        code: classified.code,
+        message: classified.message,
+      })
+    }
+    return next(error)
+  }
+}
+
 module.exports = {
   analyzeUploadedPhoto,
+  createGardenImagePreview,
   createGardenPlan,
   createRecommendationSummary,
   createRequirementAssistance,

@@ -498,7 +498,7 @@ CREATE TABLE request_events (
 CREATE TABLE ai_usage_log (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id INT UNSIGNED NOT NULL,
-  feature ENUM('requirements', 'photo_analysis', 'garden_plan') NOT NULL,
+  feature ENUM('requirements', 'photo_analysis', 'garden_plan', 'image_generation') NOT NULL,
   inquiry_id INT UNSIGNED NULL,
   request_image_id INT UNSIGNED NULL,
   model VARCHAR(100) NOT NULL,

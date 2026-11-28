@@ -118,6 +118,29 @@ export async function requestPhotoAnalysis({ imageId, notes = '' }) {
   })
 }
 
+export async function requestGardenImagePreview({ parentImageId = null, file = null, instructions }) {
+  if (file) {
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('instructions', instructions)
+    const response = await fetch(`${apiBaseUrl}/ai/garden-image`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    })
+    const data = response.status === 204 ? null : await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(data?.message || 'Unable to generate AI garden visual preview right now.')
+    }
+    return data
+  }
+
+  return aiRequest('/ai/garden-image', {
+    method: 'POST',
+    body: JSON.stringify({ parentImageId, instructions }),
+  })
+}
+
 export async function fetchAiUsage() {
   return aiRequest('/ai/usage')
 }

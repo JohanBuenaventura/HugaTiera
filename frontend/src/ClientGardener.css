@@ -4390,3 +4390,177 @@
     text-align: left;
   }
 }
+
+
+/* ============================================================================
+   AI Visual Garden Preview (Cloudflare Photo Editing — Before/After & Badges)
+   ============================================================================ */
+.assistant-mode-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 5px;
+  border-radius: 12px;
+  background: rgba(36, 75, 54, 0.06);
+  border: 1px solid rgba(36, 75, 54, 0.14);
+}
+
+.assistant-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-muted, #4a5a50);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.assistant-mode-tab:hover {
+  color: var(--forest, #244b36);
+  background: rgba(36, 75, 54, 0.08);
+}
+
+.assistant-mode-tab.is-active {
+  background: var(--forest, #244b36);
+  color: #ffffff;
+}
+
+.visual-selected-preview {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(36, 75, 54, 0.14);
+  background: var(--ivory, #f7f5ec);
+}
+
+.visual-selected-preview img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.visual-selected-preview .field-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.visual-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.visual-compare-card {
+  position: relative;
+  margin: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(36, 75, 54, 0.16);
+  background: #ffffff;
+}
+
+.visual-compare-card.is-ai {
+  border-color: rgba(217, 154, 54, 0.55);
+  box-shadow: 0 6px 20px rgba(217, 154, 54, 0.12);
+}
+
+.visual-compare-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.photo-kind-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  background: rgba(36, 75, 54, 0.9);
+  color: #ffffff;
+  pointer-events: none;
+}
+
+.photo-kind-badge.is-ai {
+  background: rgba(180, 115, 22, 0.94);
+  color: #ffffff;
+}
+
+.request-photo-card,
+.inquiry-photo-thumb {
+  position: relative;
+}
+
+.request-photo-card.is-ai-concept,
+.inquiry-photo-card.is-ai-concept {
+  border-color: rgba(217, 154, 54, 0.55);
+}
+
+.inline-ai-edit-panel {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(36, 75, 54, 0.18);
+  background: var(--ivory, #f7f5ec);
+  display: grid;
+  gap: 8px;
+}
+
+.inline-ai-edit-panel label {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.inline-ai-edit-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@media (max-width: 680px) {
+  .visual-compare-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .assistant-mode-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .assistant-mode-tab {
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 0.84rem;
+  }
+}
+
+.visual-compare-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(36, 75, 54, 0.1);
+  background: var(--ivory, #f7f5ec);
+}

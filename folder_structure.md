@@ -1,6 +1,6 @@
 # HugaTiera – Folder Structure
 
-This document reflects the **actual current repository structure** of HugaTiera (verified November 25, 2026 on `mobile-res`).
+This document reflects the **actual current repository structure** of HugaTiera (verified November 28, 2026 on `mobile-res`).
 
 ```text
 HugaTiera/
@@ -55,6 +55,7 @@ HugaTiera/
 │   │   ├── smartMatching.js
 │   │   └── userProfile.js
 │   ├── tests/
+│   │   ├── aiImagePreview.test.js
 │   │   ├── avatarsServicesAdmin.test.js
 │   │   ├── cancellationReschedule.test.js
 │   │   ├── dualRoleAndClerk.test.js
@@ -113,7 +114,9 @@ HugaTiera/
 │   │   ├── 012_dual_role_and_assigned_clerk.sql
 │   │   ├── 012_dual_role_and_assigned_clerk_rollback.sql
 │   │   ├── 013_payment_gateway_sessions.sql
-│   │   └── 013_payment_gateway_sessions_rollback.sql
+│   │   ├── 013_payment_gateway_sessions_rollback.sql
+│   │   ├── 014_ai_image_generation_log.sql
+│   │   └── 014_ai_image_generation_log_rollback.sql
 │   ├── schema/
 │   │   └── hugatiera_schema.sql
 │   ├── seeds/

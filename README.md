@@ -38,11 +38,12 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
   - Editing a proposed agreement creates version $N+1$ (`previous_agreement_id`) and resets counterparty approval.
   - Only when **both** client and gardener approve the **same version** does the backend atomically verify schedule conflicts, mark the agreement `'agreed'`, create the confirmed booking (`status = 'accepted'`), mark the inquiry `'confirmed'`, and decline competing open offers.
   - Booking detail pages display a read-only **Mutual Agreement Summary** panel (`ISS-09`).
-- **Gemini AI Garden Planning Assistant (`Step R6 / R7`):**
-  - Backend-mediated integration with Google Gemini (`GEMINI_MODEL=gemini-3.8-flash` primary, `GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite` automatic fallback on transient `429`/`5xx`/timeout/network errors, `GEMINI_THINKING_LEVEL=low`).
-  - Supports standalone tropical garden planning (`POST /api/ai/garden-plan`), structured inquiry requirement generation (`POST /api/ai/requirements`), and multimodal garden photo analysis (`POST /api/ai/photo-analysis`).
-  - Concurrency-safe per-user rate limiting (`10` calls/hour via `SELECT ... FOR UPDATE` and `ai_usage_log`).
-  - Provider Decision-Support View displays client-reviewed AI summaries and photo descriptions to evaluating gardeners.
+- **Hybrid Gen AI Assistant — Google Gemini + Cloudflare Workers AI (`Step R6 / R7` & Migration `014`):**
+  - Backend-mediated integration with **Google Gemini** (`GEMINI_MODEL=gemini-3.5-flash-lite` / `GEMINI_FALLBACK_MODEL=gemini-3.8-flash`, automatic fallback on transient `429`/`5xx`/timeout/network errors, model-aware thinking level, and strict gardening-only `systemInstruction` domain guardrails).
+  - Supports real-time Server-Sent Events streaming (`POST /api/ai/garden-plan/stream`), standalone tropical garden planning (`POST /api/ai/garden-plan`), structured inquiry requirement generation (`POST /api/ai/requirements`), and multimodal garden photo analysis (`POST /api/ai/photo-analysis`).
+  - Supports optional **free-tier Cloudflare Workers AI instruction-based photo editing** (`POST /api/ai/garden-image`, default `@cf/black-forest-labs/flux-2-klein-4b`, gated by `AI_IMAGE_GEN_ENABLED=true` and `501 IMAGE_GENERATION_POSTPONED` when disabled). Gemini validates and refines gardening-only edit prompts before Cloudflare runs; edited previews are `sharp`-sanitized, stored separately under `uploads/request-images/generated/` with `kind = 'ai_generated'` and `parent_image_id`, and displayed side-by-side with the untouched original site photo.
+  - Concurrency-safe per-user rate limiting in MySQL `ai_usage_log` (`SELECT ... FOR UPDATE`): `10` calls/hour (`AI_HOURLY_LIMIT`) for text/photo analysis, and a separate `3` edits/24 hours (`AI_IMAGE_DAILY_LIMIT`) for AI visual concept previews.
+  - Provider Decision-Support View displays client-reviewed AI summaries, photo descriptions, untouched original site photos, and clearly badged AI concept previews to evaluating gardeners.
 - **Role-Specific Dashboards, Messaging, Notifications & Admin Moderation (`Phases 10–14` & `ISS-02`–`ISS-08`):**
   - Tabbed Client and Gardener dashboards (`Overview` vs `Profile & Settings` — `ISS-05`).
   - Administrator dashboard with live `open / total` inquiry and `completed / total` booking metrics (`ISS-06`), pending gardener approval queue, account activation toggles, category/service moderation, unassigned Case 1 activity monitoring (`ISS-02`), and report resolution.
@@ -57,12 +58,12 @@ HugaTiera is a **services marketplace and coordination platform**, not an e-comm
 | **Frontend** | React.js + Vite | `react` `^19.3.1`, `vite` `^8.3.6`, JavaScript (ES Modules), HTML5, CSS3 |
 | **Routing & UI** | React Router DOM + Lucide React | `react-router-dom` `^7.18.5`, `lucide-react` `^1.69.0`, `axios` `^1.21.0` |
 | **Backend** | Node.js + Express.js | `express` `^5.3.0` (CommonJS REST API, 16 route modules, security headers & auth rate limiting) |
-| **Database** | MySQL / MariaDB (`InnoDB`) | `mysql2` `^3.24.6` (`mysql2/promise` connection pool & transactions), `25` tables, `59` FKs, Migrations `001`–`013` |
+| **Database** | MySQL / MariaDB (`InnoDB`) | `mysql2` `^3.24.6` (`mysql2/promise` connection pool & transactions), `25` tables, `59` FKs, Migrations `001`–`014` |
 | **Authentication** | JWT + bcryptjs | `jsonwebtoken` `^9.0.2` (`HttpOnly` cookie `auth_token`), `bcryptjs` `^3.0.2`, `cookie-parser` `^1.4.7`, Dual-Role & Clerk RBAC |
 | **Image Processing** | Multer + Sharp | `multer` `^2.5.0`, `sharp` `^0.35.5` (validation, resize, EXIF/GPS stripping across avatars, covers, portfolios, receipts, request photos) |
-| **AI & Matching** | Google Gemini REST API + Smart Matching | Primary: `gemini-3.8-flash` \| Fallback: `gemini-3.5-flash-lite` \| Barangay proximity & conduct scoring |
+| **AI & Matching** | Google Gemini + Cloudflare Workers AI + Smart Matching | Gemini (`gemini-3.5-flash-lite` / `gemini-3.8-flash` SSE streaming & vision) \| Cloudflare Workers AI (`@cf/black-forest-labs/flux-2-klein-4b` photo editing, feature-flagged) \| Barangay proximity & conduct scoring |
 | **Payments** | PayMongo Checkout + Sandbox/Demo | PayMongo Checkout API (when `PAYMONGO_SECRET_KEY` is set) + built-in Sandbox/Demo mode & manual receipt proofs |
-| **Testing & Linting** | Node.js Test Runner + ESLint | `node --test` (`80/80` automated backend tests across 15 suites), `eslint` `^10.14.0` |
+| **Testing & Linting** | Node.js Test Runner + ESLint | `node --test` (`83/83` automated backend tests across 16 suites), `eslint` `^10.14.0` |
 
 ---
 
@@ -147,10 +148,16 @@ DB_NAME=hugatiera_db
 JWT_SECRET=replace_with_a_long_random_secret_key
 JWT_EXPIRES_IN=1d
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.8-flash
-GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_FALLBACK_MODEL=gemini-3.8-flash
 GEMINI_THINKING_LEVEL=low
 AI_HOURLY_LIMIT=10
+# Optional free-tier Cloudflare Workers AI photo editing (10,000 Neurons/day)
+AI_IMAGE_GEN_ENABLED=false
+CF_ACCOUNT_ID=
+CF_API_TOKEN=
+CF_IMAGE_TO_IMAGE_MODEL=@cf/black-forest-labs/flux-2-klein-4b
+AI_IMAGE_DAILY_LIMIT=3
 PAYMONGO_SECRET_KEY=
 ```
 
@@ -160,11 +167,11 @@ VITE_API_URL=http://localhost:5000/api
 ```
 
 > [!WARNING]
-> Never commit `backend/.env` or `frontend/.env` to Git, and never expose `GEMINI_API_KEY`, `PAYMONGO_SECRET_KEY`, `JWT_SECRET`, or database credentials in frontend variables.
+> Never commit `backend/.env` or `frontend/.env` to Git, and never expose `GEMINI_API_KEY`, `CF_API_TOKEN`, `PAYMONGO_SECRET_KEY`, `JWT_SECRET`, or database credentials in frontend variables.
 
 ---
 
-## 7. Database Setup & Migrations `001`–`013` Status
+## 7. Database Setup & Migrations `001`–`014` Status
 
 ### 7.1 Fresh Database Installation
 If setting up HugaTiera on a new machine without an existing `hugatiera_db` database, start MySQL in XAMPP and import [database/schema/hugatiera_schema.sql](file:///c:/xampp/htdocs/HugaTiera/database/schema/hugatiera_schema.sql), which creates `hugatiera_db` with all **25 tables** and **59 foreign keys**:
@@ -173,7 +180,7 @@ c:\xampp\mysql\bin\mysql.exe -u root < database/schema/hugatiera_schema.sql
 ```
 
 ### 7.2 Existing Database & Migration Record
-- Incremental migrations `001` through `013` (each paired with a `_rollback.sql` script in `database/migrations/`) have been applied and verified on both `hugatiera_db_migration_test` and local `hugatiera_db` (`25` tables, `59` foreign keys), with pre-migration backups preserved in `database/backups/`.
+- Incremental migrations `001` through `014` (each paired with a `_rollback.sql` script in `database/migrations/`) have been applied and verified on both `hugatiera_db_migration_test` and local `hugatiera_db` (`25` tables, `59` foreign keys), with pre-migration backups preserved in `database/backups/`.
 - **Do NOT rerun already-applied migrations against `hugatiera_db`.**
 - Full table-by-table documentation, the 25-table ERD, Level 0–2 DFDs, and migration history are in [database/README.md](file:///c:/xampp/htdocs/HugaTiera/database/README.md) and [docs/erd-and-dfd.md](file:///c:/xampp/htdocs/HugaTiera/docs/erd-and-dfd.md).
 
@@ -204,7 +211,7 @@ npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-### 8.3 Automated Backend Test Suites (15 Suites / `80` Tests)
+### 8.3 Automated Backend Test Suites (16 Suites / `83` Tests)
 All automated backend test suites run sequentially against the dedicated test database **`hugatiera_db_migration_test`** (`DB_NAME=hugatiera_db_migration_test`) so `hugatiera_db` is never modified:
 ```powershell
 $env:DB_NAME="hugatiera_db_migration_test"
@@ -223,7 +230,8 @@ node --test --test-concurrency=1 `
   backend/tests/r3.agreements.test.js `
   backend/tests/r4.directInquiry.test.js `
   backend/tests/r5.generalRequest.test.js `
-  backend/tests/r6.aiAssistance.test.js
+  backend/tests/r6.aiAssistance.test.js `
+  backend/tests/aiImagePreview.test.js
 ```
 
 ---

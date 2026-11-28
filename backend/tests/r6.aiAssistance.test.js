@@ -250,17 +250,24 @@ describe('Step R6 – Gemini Requirements Assistant, Photo Understanding, Provid
     const defaultProvider = getAiProvider()
     assert.equal(defaultProvider.name, 'gemini')
 
-    await assert.rejects(
-      async () => generateGardenImage({ prompt: 'Generate a 3D garden render' }),
-      (err) => err.statusCode === 501 && err.code === 'IMAGE_GENERATION_POSTPONED',
-    )
+    const prevImageFlag = process.env.AI_IMAGE_GEN_ENABLED
+    process.env.AI_IMAGE_GEN_ENABLED = 'false'
+    try {
+      await assert.rejects(
+        async () => generateGardenImage({ prompt: 'Generate a 3D garden render' }),
+        (err) => err.statusCode === 501 && err.code === 'IMAGE_GENERATION_POSTPONED',
+      )
 
-    const usageRes = await apiRequest('/ai/usage', { cookie: clientACookie })
-    assert.equal(usageRes.status, 200)
-    assert.equal(usageRes.data.limit, 10)
-    assert.equal(usageRes.data.used, 0)
-    assert.equal(usageRes.data.remaining, 10)
-    assert.equal(usageRes.data.imageGenerationEnabled, false)
+      const usageRes = await apiRequest('/ai/usage', { cookie: clientACookie })
+      assert.equal(usageRes.status, 200)
+      assert.equal(usageRes.data.limit, 10)
+      assert.equal(usageRes.data.used, 0)
+      assert.equal(usageRes.data.remaining, 10)
+      assert.equal(usageRes.data.imageGenerationEnabled, false)
+    } finally {
+      if (prevImageFlag === undefined) delete process.env.AI_IMAGE_GEN_ENABLED
+      else process.env.AI_IMAGE_GEN_ENABLED = prevImageFlag
+    }
   })
 
   test('R6-02: Uploaded-photo understanding (POST /api/ai/photo-analysis) & client editorial control over photo description (PATCH /api/request-images/:id)', async () => {

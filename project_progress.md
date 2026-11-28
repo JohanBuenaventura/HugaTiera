@@ -113,8 +113,8 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 - Optional idempotent demo seeder (`npm --prefix backend run seed:demo`) for Zamboanga City showcase data.
 
 ## Database Status
-- **Production Database (`hugatiera_db`):** Migrated through **Migration 013** (latest applied **November 21, 2026**). Confirmed `25` tables and `59` foreign keys, with pre-migration backups preserved in `database/backups/` (git-ignored). **Do not rerun already-applied migrations on `hugatiera_db`.**
-- **Automated Test Database (`hugatiera_db_migration_test`):** Confirmed `25` tables and `59` foreign keys (all Migrations `001`–`013` rehearsed via apply → rollback → re-apply). Used exclusively by the automated backend test suites (`DB_NAME=hugatiera_db_migration_test`).
+- **Production Database (`hugatiera_db`):** Migrated through **Migration 014** (latest applied **November 28, 2026**; pre-migration backup saved to `database/backups/hugatiera_db_pre_migration014_20261128.sql`). Confirmed `25` tables and `59` foreign keys, with pre-migration backups preserved in `database/backups/` (git-ignored). **Do not rerun already-applied migrations on `hugatiera_db`.**
+- **Automated Test Database (`hugatiera_db_migration_test`):** Confirmed `25` tables and `59` foreign keys (all Migrations `001`–`014` rehearsed via apply → rollback → re-apply). Used exclusively by the automated backend test suites (`DB_NAME=hugatiera_db_migration_test`).
 - Fresh-install schema is synced in `database/schema/hugatiera_schema.sql`.
 
 ## Known Issues & Limitations
@@ -196,3 +196,20 @@ Scope revision (approved 2026-11-10): the system concept was revised after the p
 - **Wave 2 Accessibility & Resilience Integration:**
   - Integrated `ErrorBoundary.jsx` (wrapping `<Routes>`), native `<dialog>` `Modal.jsx` (replacing `window.confirm`/`window.prompt` in Admin gardener approvals and standardizing dialogs across `DashboardPage`, `ClerkDashboard`, `GardenerClerksPanel`, and `BookingPage`), `currency.js` (`formatPHP`), `RouteTitleUpdater`, `Skip to main content` links, `AuthContext.updateUser` live sidebar sync, and the Gardener-mode guard with 1-click `Switch to Client Mode` on `/inquiries/new`.
 - **UI/UX Audit Docs:** Added `docs/ui-ux/` audit, inventory, research, recommendations, and implementation roadmap notes.
+
+
+## Waves 3–5 UX/Perf Polish, Gemini SSE Streaming & Cloudflare AI Photo Editing — `mobile-res` (2026-11-28)
+- **Waves 3–5 Usability, Performance & Mobile Hardening (`990ec07`):**
+  - Added safe same-origin `?next=` post-login redirect, Inquiry status filter pills with live counts & `formatPHP()`, Admin Accounts search/role/status filters/pagination & mobile cards, Gardener Overview live category dropdown & Earnings snapshot, working-day presets, Clerk `/profile`, and mobile calendar dots.
+  - Restructured `BookingDetails` (`BookingPage.jsx`) into a responsive 2-column sticky workspace and added debounced search + skeleton loading on `ServicesPage.jsx`.
+  - Eliminated frontend N+1 image fetch waterfalls by adding scalar SQL subqueries for `first_portfolio_id` (`service.controller.js`) and `first_image_id` (`inquiry.controller.js`, `booking.controller.js`).
+- **Gemini SSE Streaming & Domain Guardrails:**
+  - Added `POST /api/ai/garden-plan/stream` (`ai.routes.js`, `ai.controller.js`, `ai.service.js`, `frontend/src/services/ai.js`) with live streaming in `AssistantPage.jsx` and `AiAssistantWidget.jsx`, model-aware `thinkingLevel` (`minimal` on `-lite`, `low` on `gemini-3.8-flash`), split first-chunk (8s) vs total (30s) timeouts, and strict gardening-only `systemInstruction` domain guardrails (`GARDEN_PLAN_SYSTEM_INSTRUCTION`) that decline off-topic prompts (such as code/homework).
+- **Approved Free-Tier Cloudflare Workers AI Photo Concept Editing & Migration `014`:**
+  - Created `database/migrations/014_ai_image_generation_log.sql` (+ rollback) and synced `database/schema/hugatiera_schema.sql` to extend `ai_usage_log.feature` with `'image_generation'`; rehearsed apply → rollback → re-apply on `hugatiera_db_migration_test`, backed up `hugatiera_db` (`hugatiera_db_pre_migration014_20261128.sql`), and applied Migration `014` to `hugatiera_db`.
+  - Added `POST /api/ai/garden-image` using Cloudflare Workers AI `@cf/black-forest-labs/flux-2-klein-4b` (`multipart/form-data` `input_image_0`), gated behind `AI_IMAGE_GEN_ENABLED` (`501 IMAGE_GENERATION_POSTPONED` when disabled), protected by a Gemini gardening-only prompt guard/refiner (`400 OFF_TOPIC_EDIT`), `sharp` sanitization into `uploads/request-images/generated/` (`kind = 'ai_generated'`, `parent_image_id`), and a separate concurrency-safe 24-hour quota (`AI_IMAGE_DAILY_LIMIT`, default `3`).
+  - Added **Visual Garden Preview** tab (with Before/After side-by-side comparison, full-size zoom/save actions, single-upload re-edit reuse, and 1-click handoff to `/inquiries/new`) on `AssistantPage.jsx`, plus inline **"Preview changes with AI"** and distinct `Original site photo` / `AI Concept Preview` badges on `InquiryPage.jsx`.
+- **Verified by Execution (2026-11-28):**
+  - All **`16` automated backend test suites (`83/83` tests, `0` failures)** pass against `hugatiera_db_migration_test` (including new `backend/tests/aiImagePreview.test.js` `3/3`).
+  - Frontend `npm --prefix frontend run lint` (`0` errors, `0` warnings) and `npm --prefix frontend run build` pass.
+  - Live Gemini SSE streaming (`701 ms` first chunk / `1,327 ms` total on `gemini-3.5-flash-lite`), off-topic prompt refusal, and live Cloudflare FLUX.2 [klein] 4B garden photo editing (`6.1 s`) verified end-to-end.

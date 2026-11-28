@@ -1,10 +1,14 @@
+const sharp = require('sharp')
+
 const DEFAULT_MODEL = 'gemini-3.8-flash'
+const DEFAULT_IMAGE_EDIT_MODEL = '@cf/black-forest-labs/flux-2-klein-4b'
 const MAX_INPUT_LENGTH = 3000
 const MAX_OUTPUT_TOKENS = 2048
 const GARDEN_PLAN_MAX_OUTPUT_TOKENS = 1536
 const PHOTO_ANALYSIS_MAX_OUTPUT_TOKENS = 1024
 const REQUEST_TIMEOUT_MS = 30000
 const FAST_PRIMARY_TIMEOUT_MS = 8000
+const IMAGE_EDIT_TIMEOUT_MS = 45000
 const VALID_THINKING_LEVELS = new Set(['minimal', 'low', 'medium', 'high'])
 const FALLBACK_HTTP_STATUSES = new Set([429, 500, 502, 503, 504])
 const NETWORK_ERROR_CODES = new Set([
@@ -43,6 +47,17 @@ function normalizeModelName(configuredModel) {
 
 function getModelName() {
   return normalizeModelName(process.env.GEMINI_MODEL)
+}
+
+function isImageGenerationEnabled() {
+  return String(process.env.AI_IMAGE_GEN_ENABLED || '').trim().toLowerCase() === 'true'
+}
+
+function getImageEditModelName() {
+  const configured = typeof process.env.CF_IMAGE_TO_IMAGE_MODEL === 'string'
+    ? process.env.CF_IMAGE_TO_IMAGE_MODEL.trim()
+    : ''
+  return configured || DEFAULT_IMAGE_EDIT_MODEL
 }
 
 function getFallbackModelName(primaryModel = getModelName()) {
@@ -470,6 +485,184 @@ Do NOT attempt to identify private addresses or personal identities, do NOT diag
 ${clientNotes ? `\nClient notes about this photo: ${clientNotes}` : ''}`
 }
 
+const GARDEN_IMAGE_GUARD_SYSTEM_INSTRUCTION = `You are HugaTiera's Garden Concept Image Prompt Guard for Zamboanga City, Philippines.
+Evaluate whether a user's requested photo edit is genuinely about gardening, lawn/yard cleanup, landscaping, plants, pathways, planters, fences/borders, or outdoor garden improvements.
+STRICT BOUNDARY:
+- Reject (allowed: false) anything unrelated to gardening/outdoor yard improvement: programming/code, portraits/faces/people edits, indoor bedrooms/living rooms, cars/vehicles, logos/text posters, weapons/violence, inappropriate/NSFW content, or fantasy sci-fi scenes.
+- When allowed is true, rewrite the request into a concise, vivid, photorealistic photo-editing prompt (under 90 words) that explicitly instructs the image editor to preserve the existing buildings, walls, fences, poles, camera angle, and daytime lighting from the uploaded yard photo, while cleanly applying ONLY the requested removals, cleanup, and Zamboanga City tropical plant/landscaping additions.
+Respond ONLY with valid JSON:
+{
+  "allowed": true,
+  "refusalReason": "",
+  "refinedPrompt": "..."
+}`
+
+const OFF_TOPIC_IMAGE_REGEX = /\b(c\+\+|python|javascript|html|sql|program|code|homework|essay|bitcoin|crypto|selfie|portrait|anime|bikini|nude|nsfw|weapon|gun|spaceship|cyberpunk|car|motorcycle|interior bedroom|kitchen)\b/i
+
+async function refineGardenImageEditPrompt({ instructions, existingDescription = '' }) {
+  const cleanInstructions = String(instructions || '').trim()
+  if (!cleanInstructions) {
+    const err = new Error('Please describe the changes you want to see in your garden photo.')
+    err.statusCode = 400
+    throw err
+  }
+
+  const fallbackResult = () => {
+    if (OFF_TOPIC_IMAGE_REGEX.test(cleanInstructions)) {
+      return {
+        allowed: false,
+        refusalReason: 'AI visual previews can only edit outdoor yard and gardening scenes (such as removing weeds/debris, trimming grass, or adding tropical plants and walkways).',
+        refinedPrompt: '',
+      }
+    }
+    return {
+      allowed: true,
+      refusalReason: '',
+      refinedPrompt: `Edit this outdoor yard photo while keeping the existing structures, walls, fences, lighting, and camera angle unchanged. Apply these requested gardening changes naturally for a Zamboanga City tropical home garden: ${cleanInstructions}. Realistic daytime photograph.`,
+    }
+  }
+
+  if (!process.env.GEMINI_API_KEY || !String(process.env.GEMINI_API_KEY).trim()) {
+    return fallbackResult()
+  }
+
+  try {
+    const userPrompt = [
+      existingDescription ? `Current photo description: ${existingDescription}` : null,
+      `Client requested changes: ${cleanInstructions}`,
+    ].filter(Boolean).join('\n')
+
+    const targetModel = getModelName()
+    const { text } = await callGeminiGenerateContent({
+      model: targetModel,
+      systemInstruction: GARDEN_IMAGE_GUARD_SYSTEM_INSTRUCTION,
+      parts: [{ text: userPrompt }],
+      temperature: 0.2,
+      maxOutputTokens: 512,
+      responseMimeType: 'application/json',
+      thinkingLevel: resolveGardenPlanThinkingLevel(targetModel),
+      timeoutMs: 10000,
+    })
+
+    let cleaned = String(text || '').trim()
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    }
+    const parsed = JSON.parse(cleaned)
+    if (parsed && typeof parsed.allowed === 'boolean') {
+      if (!parsed.allowed) {
+        return {
+          allowed: false,
+          refusalReason: typeof parsed.refusalReason === 'string' && parsed.refusalReason.trim()
+            ? parsed.refusalReason.trim()
+            : 'AI visual previews can only be used for gardening, lawn cleanup, and outdoor landscaping changes.',
+          refinedPrompt: '',
+        }
+      }
+      const refined = typeof parsed.refinedPrompt === 'string' && parsed.refinedPrompt.trim()
+        ? parsed.refinedPrompt.trim().slice(0, 1000)
+        : fallbackResult().refinedPrompt
+      return { allowed: true, refusalReason: '', refinedPrompt: refined }
+    }
+  } catch {
+    // Fall back safely to local domain check & prompt wrapper if Gemini guard times out
+  }
+
+  return fallbackResult()
+}
+
+async function callCloudflareImageEdit({ imageBuffer, prompt, model = getImageEditModelName() }) {
+  const accountId = String(process.env.CF_ACCOUNT_ID || '').trim()
+  const apiToken = String(process.env.CF_API_TOKEN || '').trim()
+  if (!accountId || !apiToken) {
+    const err = new Error('Cloudflare Workers AI credentials (CF_ACCOUNT_ID / CF_API_TOKEN) are not configured.')
+    err.code = 'CF_NOT_CONFIGURED'
+    err.statusCode = 503
+    throw err
+  }
+
+  const resizedInput = await sharp(imageBuffer)
+    .rotate()
+    .resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 88 })
+    .toBuffer()
+
+  const resizedMeta = await sharp(resizedInput).metadata()
+  const round16 = (n) => Math.max(512, Math.min(1024, Math.round(n / 16) * 16))
+  const outWidth = round16((resizedMeta.width || 512) * 1.5)
+  const outHeight = round16((resizedMeta.height || 512) * 1.5)
+
+  const form = new FormData()
+  form.append('prompt', prompt)
+  form.append('input_image_0', new Blob([resizedInput], { type: 'image/jpeg' }), 'garden-input.jpg')
+  form.append('width', String(outWidth))
+  form.append('height', String(outHeight))
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), IMAGE_EDIT_TIMEOUT_MS)
+
+  try {
+    let response
+    try {
+      response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+          },
+          signal: controller.signal,
+          body: form,
+        },
+      )
+    } catch (fetchErr) {
+      if (fetchErr && fetchErr.name !== 'AbortError') {
+        fetchErr.isNetworkError = true
+      }
+      throw fetchErr
+    }
+
+    const contentType = response.headers.get('content-type') || ''
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '')
+      let errMsg = 'The AI image editing provider rejected the request.'
+      try {
+        const parsedErr = JSON.parse(errBody)
+        errMsg = parsedErr?.errors?.[0]?.message || parsedErr?.message || errMsg
+      } catch {
+        // Keep generic message
+      }
+      const err = new Error(errMsg)
+      err.providerStatus = response.status
+      throw err
+    }
+
+    let outputBuffer
+    if (contentType.includes('application/json')) {
+      const json = await response.json().catch(() => null)
+      const b64 = json?.result?.image || json?.image
+      if (!b64 || typeof b64 !== 'string') {
+        throw new Error('The AI image editing provider returned an empty image payload.')
+      }
+      outputBuffer = Buffer.from(b64, 'base64')
+    } else {
+      outputBuffer = Buffer.from(await response.arrayBuffer())
+    }
+
+    if (!outputBuffer || outputBuffer.length < 100) {
+      throw new Error('The AI image editing provider returned an invalid image.')
+    }
+
+    return {
+      imageBuffer: outputBuffer,
+      mimeType: 'image/png',
+      model,
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 function parseRequirementsJson(rawText, categories = []) {
   let cleaned = String(rawText || '').trim()
   if (cleaned.startsWith('```')) {
@@ -606,13 +799,50 @@ function createGeminiProvider() {
       })
       return text.slice(0, 2000)
     },
-    async generateGardenImage() {
-      const error = new Error(
-        'AI image generation and editing are postponed and disabled. Only text and uploaded-photo understanding are enabled.',
-      )
-      error.statusCode = 501
-      error.code = 'IMAGE_GENERATION_POSTPONED'
-      throw error
+    async generateGardenImage(payload = {}) {
+      if (!isImageGenerationEnabled()) {
+        const error = new Error(
+          'AI image generation and editing are postponed and disabled. Only text and uploaded-photo understanding are enabled.',
+        )
+        error.statusCode = 501
+        error.code = 'IMAGE_GENERATION_POSTPONED'
+        throw error
+      }
+
+      const { imageBuffer, instructions, existingDescription = '', model = null } = payload
+      if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
+        const err = new Error('A valid uploaded garden photo is required for AI concept editing.')
+        err.statusCode = 400
+        throw err
+      }
+      const cleanInstructions = String(instructions || '').trim()
+      if (!cleanInstructions) {
+        const err = new Error('Please describe the gardening changes you want to preview.')
+        err.statusCode = 400
+        throw err
+      }
+
+      const guard = await refineGardenImageEditPrompt({
+        instructions: cleanInstructions,
+        existingDescription,
+      })
+      if (!guard.allowed) {
+        const err = new Error(guard.refusalReason)
+        err.statusCode = 400
+        err.code = 'OFF_TOPIC_EDIT'
+        throw err
+      }
+
+      const edited = await callCloudflareImageEdit({
+        imageBuffer,
+        prompt: guard.refinedPrompt,
+        model: model || getImageEditModelName(),
+      })
+
+      return {
+        ...edited,
+        refinedPrompt: guard.refinedPrompt,
+      }
     },
   }
 }
@@ -795,6 +1025,7 @@ async function generateGardenImage(payload) {
 
 module.exports = {
   AI_SAFETY_DISCLAIMER,
+  DEFAULT_IMAGE_EDIT_MODEL,
   DEFAULT_MODEL,
   GARDEN_PLAN_MAX_OUTPUT_TOKENS,
   LEGACY_MODEL_MAP,
@@ -803,6 +1034,7 @@ module.exports = {
   PHOTO_ANALYSIS_MAX_OUTPUT_TOKENS,
   analyzeGardenPhoto,
   buildGenerationConfig,
+  callCloudflareImageEdit,
   createGeminiProvider,
   executeWithModelFallback,
   extractCandidateText,
@@ -811,13 +1043,16 @@ module.exports = {
   generateRequirementAssistance,
   getAiProvider,
   getFallbackModelName,
+  getImageEditModelName,
   getModelName,
   getProviderFailureCode,
   isEligibleForFallback,
   isGemini25Model,
   isGemini3Model,
+  isImageGenerationEnabled,
   normalizeModelName,
   parseRequirementsJson,
+  refineGardenImageEditPrompt,
   resetAiProvider,
   setAiProviderForTesting,
   streamWithModelFallback,

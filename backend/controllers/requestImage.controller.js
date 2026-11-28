@@ -218,7 +218,7 @@ async function uploadRequestImage(req, res, next) {
       }
     } else {
       const [[draftCountRow]] = await pool.execute(
-        'SELECT COUNT(*) AS total FROM request_images WHERE uploaded_by = ? AND inquiry_id IS NULL',
+        "SELECT COUNT(*) AS total FROM request_images WHERE uploaded_by = ? AND inquiry_id IS NULL AND kind = 'original'",
         [req.user.id],
       )
       if (Number(draftCountRow.total) >= MAX_UNATTACHED_IMAGES_PER_USER) {
@@ -497,15 +497,15 @@ async function attachImagesToInquiry(connection, { inquiryId, clientId, imageIds
   if (!Array.isArray(imageIds) || imageIds.length === 0) return []
   const uniqueIds = [...new Set(imageIds.map(parsePositiveInt).filter(Boolean))]
   if (uniqueIds.length === 0) return []
-  if (uniqueIds.length > MAX_IMAGES_PER_INQUIRY) {
-    const err = new Error(`You can attach up to ${MAX_IMAGES_PER_INQUIRY} garden photos per request.`)
+  if (uniqueIds.length > MAX_IMAGES_PER_INQUIRY * 2) {
+    const err = new Error(`You can attach up to ${MAX_IMAGES_PER_INQUIRY} garden photos and their AI concept previews per request.`)
     err.statusCode = 400
     throw err
   }
 
   const placeholders = uniqueIds.map(() => '?').join(', ')
   const [rows] = await connection.execute(
-    `SELECT id, inquiry_id, uploaded_by
+    `SELECT id, inquiry_id, uploaded_by, kind
      FROM request_images
      WHERE id IN (${placeholders})
      FOR UPDATE`,
@@ -518,6 +518,7 @@ async function attachImagesToInquiry(connection, { inquiryId, clientId, imageIds
     throw err
   }
 
+  let originalCount = 0
   for (const row of rows) {
     if (row.uploaded_by !== clientId) {
       const err = new Error('You can only attach garden photos that you uploaded.')
@@ -529,6 +530,13 @@ async function attachImagesToInquiry(connection, { inquiryId, clientId, imageIds
       err.statusCode = 400
       throw err
     }
+    if (row.kind === 'original') originalCount += 1
+  }
+
+  if (originalCount > MAX_IMAGES_PER_INQUIRY) {
+    const err = new Error(`You can attach up to ${MAX_IMAGES_PER_INQUIRY} original garden photos per request.`)
+    err.statusCode = 400
+    throw err
   }
 
   await connection.execute(
