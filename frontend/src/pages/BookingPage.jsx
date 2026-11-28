@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CalendarDays, Check, CheckCircle2, Clock, CreditCard, ExternalLink, FileCheck2, Leaf, Lock, MapPin, Printer, ShieldAlert, ShieldCheck, Star, Upload } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CalendarDays, Check, CheckCircle2, Clock, CreditCard, ExternalLink, FileCheck2, Layers, Leaf, Lock, MapPin, Printer, Search, ShieldAlert, ShieldCheck, Sparkles, Star, Upload, X } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { agreementsApi } from '../services/agreements'
@@ -20,6 +20,7 @@ import { reviewsApi } from '../services/reviews'
 import { servicesApi } from '../services/services'
 import { communicationApi } from '../services/communication'
 import AppSidebar from '../components/AppSidebar'
+import { GardenerCareIllustration } from '../components/BotanicalIllustrations'
 import Modal from '../components/Modal'
 import StarRating from '../components/StarRating'
 import TransientSuccess from '../components/TransientSuccess'
@@ -1922,8 +1923,11 @@ function BookingList() {
   const [bookings, setBookings] = useState([])
   const [covers, setCovers] = useState({})
   const [filter, setFilter] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState('schedule')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
   useEffect(() => {
     let active = true
     bookingsApi.list()
@@ -1956,7 +1960,7 @@ function BookingList() {
   }, [])
 
   const filterGroups = [
-    { key: 'all', label: 'All', match: () => true },
+    { key: 'all', label: 'All records', match: () => true },
     {
       key: 'reservations',
       label: 'Reservations & Payments',
@@ -1978,17 +1982,174 @@ function BookingList() {
       match: (b) => b.status === 'cancelled' || b.status === 'declined',
     },
   ]
+
+  const stats = {
+    all: bookings.length,
+    reservations: bookings.filter(filterGroups[1].match).length,
+    active: bookings.filter(filterGroups[2].match).length,
+    completed: bookings.filter(filterGroups[3].match).length,
+  }
+
   const activeFilterDef = filterGroups.find((f) => f.key === filter) || filterGroups[0]
-  const filteredBookings = bookings.filter(activeFilterDef.match)
+  const normalizedQuery = searchTerm.trim().toLowerCase()
+
+  const filteredBookings = bookings
+    .filter(activeFilterDef.match)
+    .filter((b) => {
+      if (!normalizedQuery) return true
+      const haystack = [
+        b.service_title,
+        b.agreed_scope,
+        b.notes,
+        b.location,
+        b.client_name,
+        b.gardener_name,
+        b.payment_status,
+        b.status,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(normalizedQuery)
+    })
+    .sort((a, b) => {
+      if (sortBy === 'amount') {
+        return Number(b.agreed_amount || 0) - Number(a.agreed_amount || 0)
+      }
+      if (sortBy === 'newest') {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : Number(a.id || 0)
+        const tb = b.created_at ? new Date(b.created_at).getTime() : Number(b.id || 0)
+        return tb - ta
+      }
+      const sa = a.scheduled_start ? new Date(a.scheduled_start).getTime() : Number.MAX_SAFE_INTEGER
+      const sb = b.scheduled_start ? new Date(b.scheduled_start).getTime() : Number.MAX_SAFE_INTEGER
+      return sa - sb
+    })
+
+  function resetFilters() {
+    setFilter('all')
+    setSearchTerm('')
+    setSortBy('schedule')
+  }
 
   return (
-    <section className="container booking-content">
-      <h1>Reservations and bookings.</h1>
-      <p className="booking-note">
-        Approved agreements start as <strong>Reservations</strong>. Once a partial deposit or full payment is verified, they become <strong>Confirmed Bookings</strong>. After work completion and full payment, both parties sign the closing agreement to unlock rating.
-      </p>
-      {bookings.length > 0 && (
-        <div className="booking-filter-bar" role="tablist" aria-label="Filter bookings by stage">
+    <section className="container booking-content inq-hub-shell">
+      <header className="inq-hub-hero">
+        <div>
+          <p className="inq-hub-eyebrow">
+            <Sparkles size={14} />
+            Agreements, Reservations & Schedule
+          </p>
+          <h1>Reservations & bookings</h1>
+          <p className="inq-hub-subtitle">
+            Approved agreements start as <strong>Reservations</strong>. Once a deposit or full payment is verified, they become <strong>Confirmed Bookings</strong> and close with mutual sign-off.
+          </p>
+        </div>
+
+        <div className="inq-hub-actions">
+          {user?.role === 'gardener' ? (
+            <>
+              <Link className="inq-hub-btn-primary" to="/inquiries?tab=open">
+                <Search size={15} />
+                Open requests board
+              </Link>
+              <Link className="inq-hub-btn-soft" to="/dashboard?tab=calendar">
+                <CalendarDays size={15} />
+                Calendar
+              </Link>
+              <Link className="inq-hub-btn-soft" to="/inquiries">
+                My inquiries
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link className="inq-hub-btn-primary" to="/inquiries">
+                <FileCheck2 size={15} />
+                View inquiries & offers
+              </Link>
+              <Link className="inq-hub-btn-soft" to="/inquiries/new?type=general">
+                New request
+              </Link>
+              <Link className="inq-hub-btn-soft" to="/services">
+                Browse services
+              </Link>
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className="inq-hub-stats" role="group" aria-label="Filter bookings by stage">
+        <button
+          type="button"
+          className={`inq-hub-stat ${filter === 'all' ? 'is-active' : ''}`}
+          onClick={() => setFilter('all')}
+        >
+          <div>
+            <span className="inq-hub-stat-label">All records</span>
+            <strong className="inq-hub-stat-value">{stats.all}</strong>
+          </div>
+          <span className="inq-hub-stat-icon"><Layers size={18} /></span>
+        </button>
+
+        <button
+          type="button"
+          className={`inq-hub-stat ${filter === 'reservations' ? 'is-active' : ''}`}
+          onClick={() => setFilter((prev) => (prev === 'reservations' ? 'all' : 'reservations'))}
+        >
+          <div>
+            <span className="inq-hub-stat-label">Reservations & Pay</span>
+            <strong className="inq-hub-stat-value">{stats.reservations}</strong>
+          </div>
+          <span className="inq-hub-stat-icon"><CreditCard size={18} /></span>
+        </button>
+
+        <button
+          type="button"
+          className={`inq-hub-stat ${filter === 'active' ? 'is-active' : ''}`}
+          onClick={() => setFilter((prev) => (prev === 'active' ? 'all' : 'active'))}
+        >
+          <div>
+            <span className="inq-hub-stat-label">Active Bookings</span>
+            <strong className="inq-hub-stat-value">{stats.active}</strong>
+          </div>
+          <span className="inq-hub-stat-icon"><CalendarClock size={18} /></span>
+        </button>
+
+        <button
+          type="button"
+          className={`inq-hub-stat ${filter === 'completed' ? 'is-active' : ''}`}
+          onClick={() => setFilter((prev) => (prev === 'completed' ? 'all' : 'completed'))}
+        >
+          <div>
+            <span className="inq-hub-stat-label">Completed & Closed</span>
+            <strong className="inq-hub-stat-value">{stats.completed}</strong>
+          </div>
+          <span className="inq-hub-stat-icon"><CheckCircle2 size={18} /></span>
+        </button>
+      </div>
+
+      <div className="inq-hub-toolbar">
+        <label className="inq-hub-search" aria-label="Search bookings">
+          <Search size={16} />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by service, barangay, client, or gardener..."
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              className="inq-hub-search-clear"
+              aria-label="Clear search"
+              onClick={() => setSearchTerm('')}
+            >
+              <X size={13} />
+            </button>
+          )}
+        </label>
+
+        <div className="inq-hub-filters" role="tablist" aria-label="Booking stages">
           {filterGroups.map((group) => {
             const count = bookings.filter(group.match).length
             return (
@@ -1997,98 +2158,204 @@ function BookingList() {
                 type="button"
                 role="tab"
                 aria-selected={filter === group.key}
-                className={`booking-filter-pill${filter === group.key ? ' is-active' : ''}`}
+                className={`inq-hub-chip ${filter === group.key ? 'is-active' : ''}`}
                 onClick={() => setFilter(group.key)}
               >
-                <span>{group.label}</span>
-                <span className="booking-filter-count">{count}</span>
+                {group.label} ({count})
               </button>
+            )
+          })}
+
+          <select
+            className="inq-hub-sort"
+            aria-label="Sort bookings"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="schedule">Soonest scheduled</option>
+            <option value="newest">Newest created</option>
+            <option value="amount">Highest amount</option>
+          </select>
+        </div>
+      </div>
+
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {loading && (
+        <div className="inq-hub-empty" aria-busy="true" role="status" aria-label="Loading reservations and bookings">
+          <p className="muted">Loading your reservations and bookings...</p>
+        </div>
+      )}
+
+      {!loading && !error && bookings.length === 0 && (
+        <div className="inq-hub-empty">
+          <div className="inq-hub-empty-art">
+            <GardenerCareIllustration />
+          </div>
+          <h2>No reservations or bookings yet</h2>
+          <p>
+            {user?.role === 'gardener'
+              ? 'Bookings are created automatically once you and a client approve the same mutual service agreement.'
+              : 'Bookings are created once you compare gardener offers and both sides approve a mutual service agreement.'}
+          </p>
+
+          <div className="inq-hub-starter-grid">
+            {user?.role === 'gardener' ? (
+              <>
+                <Link className="inq-hub-starter-card" to="/inquiries?tab=open">
+                  <span className="inq-hub-starter-icon"><Search size={16} /></span>
+                  <strong>Browse Open Requests</strong>
+                  <span>Submit indicative quotations on local Zamboanga garden requests.</span>
+                </Link>
+                <Link className="inq-hub-starter-card" to="/inquiries">
+                  <span className="inq-hub-starter-icon"><FileCheck2 size={16} /></span>
+                  <strong>Check Direct Inquiries</strong>
+                  <span>Review client inquiries and propose a mutual agreement.</span>
+                </Link>
+                <Link className="inq-hub-starter-card" to="/dashboard?tab=calendar">
+                  <span className="inq-hub-starter-icon"><CalendarDays size={16} /></span>
+                  <strong>Schedule & Availability</strong>
+                  <span>Verify your working days before confirming new bookings.</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link className="inq-hub-starter-card" to="/inquiries">
+                  <span className="inq-hub-starter-icon"><FileCheck2 size={16} /></span>
+                  <strong>Review Active Inquiries</strong>
+                  <span>Compare gardener offers and approve a mutual agreement.</span>
+                </Link>
+                <Link className="inq-hub-starter-card" to="/inquiries/new?type=general">
+                  <span className="inq-hub-starter-icon"><Leaf size={16} /></span>
+                  <strong>Post a Garden Request</strong>
+                  <span>Upload yard photos and invite offers from local gardeners.</span>
+                </Link>
+                <Link className="inq-hub-starter-card" to="/gardeners">
+                  <span className="inq-hub-starter-icon"><Sparkles size={16} /></span>
+                  <strong>Explore Gardeners</strong>
+                  <span>Browse portfolios, ratings, and services in Zamboanga City.</span>
+                </Link>
+              </>
+            )}
+          </div>
+
+          <div className="inq-hub-guide">
+            <div className="inq-hub-guide-step">
+              <span className="inq-hub-guide-num">1</span>
+              <div>
+                <strong>Mutual Agreement</strong>
+                <span>Both client and gardener approve scope, price, and schedule.</span>
+              </div>
+            </div>
+            <div className="inq-hub-guide-step">
+              <span className="inq-hub-guide-num">2</span>
+              <div>
+                <strong>Reservation & Payment</strong>
+                <span>Deposit or payment verification confirms the booking slot.</span>
+              </div>
+            </div>
+            <div className="inq-hub-guide-step">
+              <span className="inq-hub-guide-num">3</span>
+              <div>
+                <strong>Completion & Review</strong>
+                <span>Both parties sign the closing agreement to unlock ratings.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && !error && bookings.length > 0 && filteredBookings.length === 0 && (
+        <div className="inq-hub-empty">
+          <h2>No matching bookings</h2>
+          <p>No bookings match "{activeFilterDef.label}"{normalizedQuery ? ` for "${searchTerm}"` : ''}.</p>
+          <button type="button" className="inq-hub-btn-primary" onClick={resetFilters}>
+            Reset filters
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && filteredBookings.length > 0 && (
+        <div className="marketplace-grid marketplace-card-grid">
+          {filteredBookings.map((booking) => {
+            const coverUrl = booking.inquiry_id ? covers[booking.inquiry_id] : null
+            const otherParty = user?.role === 'gardener' ? booking.client_name : booking.gardener_name
+            const stageBadgeKey = booking.transaction_status === 'closed'
+              ? 'closed'
+              : booking.transaction_status === 'pending_closure'
+                ? 'pending_closure'
+                : (booking.status === 'completed' || booking.status === 'cancelled'
+                  ? booking.status
+                  : (booking.booking_stage || 'reserved'))
+            const stageBadgeLabel = booking.transaction_status === 'closed'
+              ? 'Transaction Closed'
+              : formatStatusLabel(stageBadgeKey)
+            const ctaLabel = booking.transaction_status === 'closed'
+              ? 'View closed record'
+              : (booking.status === 'completed' && booking.payment_status === 'fully_paid'
+                ? 'Sign closing agreement'
+                : (booking.booking_stage === 'reserved' || (booking.status === 'completed' && booking.payment_status !== 'fully_paid')
+                  ? 'Manage payment'
+                  : 'View booking'))
+            return (
+              <article className="marketplace-card visual-market-card inq-hub-card" key={booking.id}>
+                <Link className="marketplace-card-media card-media-link" to={`/bookings/${booking.id}`} aria-label={`Open ${booking.service_title || 'booking'}`}>
+                  {coverUrl ? (
+                    <img src={coverUrl} alt={booking.service_title || 'Gardening service'} loading="lazy" />
+                  ) : (
+                    <div className="marketplace-card-placeholder" aria-hidden="true">
+                      <Leaf size={26} />
+                      <span>{booking.agreement_version != null ? `Agreement v${booking.agreement_version}` : 'Service arrangement'}</span>
+                    </div>
+                  )}
+                  <span className={`${getStatusBadgeClass(stageBadgeKey)} media-status-badge`}>
+                    {stageBadgeLabel}
+                  </span>
+                </Link>
+                <div className="marketplace-card-body">
+                  <div className="inq-hub-card-tags">
+                    <span className="inq-hub-tag">
+                      {booking.agreement_version != null ? `Agreement v${booking.agreement_version}` : 'Booking'}
+                    </span>
+                    <span className={`inq-hub-tag ${booking.payment_status !== 'fully_paid' ? 'is-accent' : ''}`}>
+                      {formatStatusLabel(booking.payment_status)}
+                    </span>
+                    {Number(booking.pending_reschedule_count) > 0 && (
+                      <span className="inq-hub-tag is-accent">Reschedule pending</span>
+                    )}
+                  </div>
+                  <h2>
+                    <Link className="card-title-link" to={`/bookings/${booking.id}`}>
+                      {booking.service_title || 'Gardening service'}
+                    </Link>
+                  </h2>
+                  <p>
+                    {booking.agreed_scope || booking.notes || 'Gardening service arrangement.'}
+                  </p>
+                  <div className="service-meta">
+                    <span>
+                      {otherParty || 'Confirmed party'}
+                    </span>
+                    <strong className="card-price">
+                      {booking.agreed_amount != null ? `₱${Number(booking.agreed_amount).toLocaleString()}` : 'See agreement'}
+                    </strong>
+                  </div>
+                  <div className="marketplace-card-footer">
+                    <span className="card-area">
+                      <CalendarDays size={13} />
+                      {booking.scheduled_start ? new Date(booking.scheduled_start).toLocaleDateString() : 'TBD'}
+                      {booking.location ? ' · ' : ''}
+                      {booking.location && <><MapPin size={13} /> {booking.location}</>}
+                    </span>
+                    <Link className="card-cta" to={`/bookings/${booking.id}`}>
+                      {ctaLabel} <ArrowRight size={15} />
+                    </Link>
+                  </div>
+                </div>
+              </article>
             )
           })}
         </div>
       )}
-      {error && <div className="form-error" role="alert">{error}</div>}
-      {loading && (
-        <div className="dashboard-panel skeleton-stack" aria-busy="true" role="status" aria-label="Loading reservations and bookings">
-          <div className="skeleton-line" />
-          <div className="skeleton-line short" />
-          <div className="skeleton-line" />
-        </div>
-      )}
-      {!loading && !error && bookings.length === 0 && <div className="empty-state">You do not have any reservations or bookings yet.</div>}
-      {!loading && !error && bookings.length > 0 && filteredBookings.length === 0 && (
-        <div className="empty-state">No bookings match "{activeFilterDef.label}". Select another tab above to view your other records.</div>
-      )}
-      <div className="marketplace-grid marketplace-card-grid">
-        {filteredBookings.map((booking) => {
-          const coverUrl = booking.inquiry_id ? covers[booking.inquiry_id] : null
-          const otherParty = user?.role === 'gardener' ? booking.client_name : booking.gardener_name
-          const stageBadgeKey = booking.transaction_status === 'closed'
-            ? 'closed'
-            : booking.transaction_status === 'pending_closure'
-              ? 'pending_closure'
-              : (booking.status === 'completed' || booking.status === 'cancelled'
-                ? booking.status
-                : (booking.booking_stage || 'reserved'))
-          const stageBadgeLabel = booking.transaction_status === 'closed'
-            ? 'Transaction Closed'
-            : formatStatusLabel(stageBadgeKey)
-          const ctaLabel = booking.transaction_status === 'closed'
-            ? 'View closed record'
-            : (booking.status === 'completed' && booking.payment_status === 'fully_paid'
-              ? 'Sign closing agreement'
-              : (booking.booking_stage === 'reserved' || (booking.status === 'completed' && booking.payment_status !== 'fully_paid')
-                ? 'Manage payment'
-                : 'View booking'))
-          return (
-            <article className="marketplace-card visual-market-card" key={booking.id}>
-              <Link className="marketplace-card-media card-media-link" to={`/bookings/${booking.id}`} aria-label={`Open ${booking.service_title || 'booking'}`}>
-                {coverUrl ? (
-                  <img src={coverUrl} alt={booking.service_title || 'Gardening service'} loading="lazy" />
-                ) : (
-                  <div className="marketplace-card-placeholder" aria-hidden="true">
-                    <Leaf size={26} />
-                    <span>{booking.agreement_version != null ? `Agreement v${booking.agreement_version}` : 'Service arrangement'}</span>
-                  </div>
-                )}
-                <span className={`${getStatusBadgeClass(stageBadgeKey)} media-status-badge`}>
-                  {stageBadgeLabel}
-                </span>
-              </Link>
-              <div className="marketplace-card-body">
-                <h2>
-                  <Link className="card-title-link" to={`/bookings/${booking.id}`}>
-                    {booking.service_title || 'Gardening service'}
-                  </Link>
-                </h2>
-                <p>
-                  {booking.agreed_scope || booking.notes || 'Gardening service arrangement.'}
-                </p>
-                <div className="service-meta">
-                  <span>
-                    {otherParty || 'Confirmed party'} · {formatStatusLabel(booking.payment_status)}
-                    {Number(booking.pending_reschedule_count) > 0 ? ' · Reschedule Pending' : ''}
-                  </span>
-                  <strong className="card-price">
-                    {booking.agreed_amount != null ? `₱${Number(booking.agreed_amount).toLocaleString()}` : 'See agreement'}
-                  </strong>
-                </div>
-                <div className="marketplace-card-footer">
-                  <span className="card-area">
-                    <CalendarDays size={13} />
-                    {booking.scheduled_start ? new Date(booking.scheduled_start).toLocaleDateString() : 'TBD'}
-                    {booking.location ? ` · ` : ''}
-                    {booking.location && <><MapPin size={13} /> {booking.location}</>}
-                  </span>
-                  <Link className="card-cta" to={`/bookings/${booking.id}`}>
-                    {ctaLabel} <ArrowRight size={15} />
-                  </Link>
-                </div>
-              </div>
-            </article>
-          )
-        })}
-      </div>
     </section>
   )
 }
