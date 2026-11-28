@@ -2873,4 +2873,81 @@ textarea {
   .service-detail-cover:hover img {
     transform: none;
   }
+  .auth-spin,
+  .auth-login-badge,
+  .auth-login-progress span {
+    animation: none !important;
+  }
+}
+
+/* 21. Login Loading & Transition */
+.auth-btn-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.auth-spin {
+  animation: botanicalSpinSlow 0.9s linear infinite;
+}
+
+.auth-login-transition {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 28px 12px;
+  animation: botanicalFadeUp 0.25s ease both;
+}
+
+.auth-login-badge {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #E4EDE0;
+  color: var(--forest);
+  animation: botanicalPulse 1.4s ease-in-out infinite;
+}
+
+.auth-login-transition h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  color: var(--forest);
+}
+
+.auth-login-transition p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.auth-login-progress {
+  width: 100%;
+  max-width: 240px;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: var(--radius-pill);
+  background: #E4EDE0;
+  overflow: hidden;
+}
+
+.auth-login-progress span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--forest);
+  transform-origin: left center;
+  animation: authProgressFill 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes authProgressFill {
+  from {
+    transform: scaleX(0.08);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }

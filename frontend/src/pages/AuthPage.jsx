@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Leaf } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Leaf, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import {
   MIN_REGISTRATION_AGE,
@@ -87,18 +87,23 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [loginStage, setLoginStage] = useState('idle')
 
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
     setSubmitting(true)
+    setLoginStage('authenticating')
     try {
       await login(form)
       saveRecentEmail(form.email)
       setRecentEmails(loadRecentEmails())
+      setLoginStage('success')
+      await new Promise((resolve) => setTimeout(resolve, 550))
       navigate('/dashboard')
     } catch (submitError) {
       setError(submitError.message)
+      setLoginStage('idle')
     } finally {
       setSubmitting(false)
     }
@@ -114,7 +119,19 @@ export function LoginPage() {
     }
   }
 
-  return <AuthLayout mode="login" title="Welcome back." footer={<>New to HugaTiera? <Link to="/register">Create an account</Link></>}>
+  return <AuthLayout mode="login" title={loginStage === 'success' ? 'Signing you in...' : 'Welcome back.'} footer={<>New to HugaTiera? <Link to="/register">Create an account</Link></>}>
+    {loginStage === 'success' ? (
+      <div className="auth-login-transition" role="status" aria-live="polite">
+        <div className="auth-login-badge" aria-hidden="true">
+          <Leaf size={24} />
+        </div>
+        <h2>Welcome back!</h2>
+        <p className="muted">Opening your HugaTiera workspace...</p>
+        <div className="auth-login-progress" aria-hidden="true">
+          <span />
+        </div>
+      </div>
+    ) : (
     <form className="auth-form" onSubmit={handleSubmit} autoComplete="on">
       {error && <div className="form-error" role="alert">{error}</div>}
       <label>
@@ -177,8 +194,16 @@ export function LoginPage() {
           </button>
         </div>
       </label>
-      <button className="button" type="submit" disabled={submitting}>{submitting ? 'Signing in...' : 'Sign in'}</button>
+      <button className="button" type="submit" disabled={submitting}>
+        {submitting ? (
+          <span className="auth-btn-loading">
+            <Loader2 size={16} className="auth-spin" aria-hidden="true" />
+            <span>Signing in...</span>
+          </span>
+        ) : 'Sign in'}
+      </button>
     </form>
+    )}
   </AuthLayout>
 }
 
