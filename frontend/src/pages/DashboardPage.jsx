@@ -2146,6 +2146,7 @@ function OnboardingGuide({ role, form, counts }) {
 function UserDashboard({ user, profileData, loading = false, onSaved, activeTab }) {
   const { switchRole, enableDualRole } = useAuth()
   const [roleBusy, setRoleBusy] = useState(false)
+  const [switchingTargetRole, setSwitchingTargetRole] = useState('')
   const [roleNotice, setRoleNotice] = useState('')
   const [roleError, setRoleError] = useState('')
   const role = user.role
@@ -2163,15 +2164,19 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
 
   async function handleQuickSwitchRole() {
     if (!user.isDualRole || roleBusy) return
-    setRoleBusy(true); setRoleError(''); setRoleNotice('')
+    const nextRole = role === 'client' ? 'gardener' : 'client'
+    setRoleBusy(true); setSwitchingTargetRole(nextRole); setRoleError(''); setRoleNotice('')
     try {
-      const nextRole = role === 'client' ? 'gardener' : 'client'
-      await switchRole(nextRole)
+      await Promise.all([
+        switchRole(nextRole),
+        new Promise((resolve) => setTimeout(resolve, 480)),
+      ])
       setRoleNotice(`Switched workspace to ${nextRole === 'gardener' ? 'Gardener' : 'Client'} Mode.`)
     } catch (err) {
       setRoleError(err.message)
     } finally {
       setRoleBusy(false)
+      setSwitchingTargetRole('')
     }
   }
 
@@ -2197,6 +2202,22 @@ function UserDashboard({ user, profileData, loading = false, onSaved, activeTab 
     <main className="dashboard-page member-workspace" data-workspace={role}>
       <AppSidebar />
       <section className="container dashboard-content">
+        {switchingTargetRole && (
+          <div className="workspace-switch-overlay" role="status" aria-live="polite">
+            <div className="workspace-switch-card">
+              <div className="auth-login-badge" aria-hidden="true">
+                <ArrowLeftRight size={24} />
+              </div>
+              <h2>
+                Switching to {switchingTargetRole === 'gardener' ? 'Gardener' : 'Client'} Mode
+              </h2>
+              <p className="muted">Updating your HugaTiera workspace...</p>
+              <div className="auth-login-progress" aria-hidden="true">
+                <span />
+              </div>
+            </div>
+          </div>
+        )}
         <div className="dashboard-hero-row">
           <div>
             <h1>{isProfileView ? 'Profile & settings.' : activeTab === 'calendar' ? 'Schedule.' : activeTab === 'services' ? 'My services.' : activeTab === 'portfolio' ? 'Portfolio.' : activeTab === 'clerks' ? 'My Staff.' : `Welcome, ${user.firstName}.`}</h1>

@@ -12,6 +12,7 @@ import {
   CreditCard,
   Images,
   Leaf,
+  Loader2,
   LogOut,
   Menu,
   MessageCircle,
@@ -40,10 +41,12 @@ export default function AppSidebar() {
   const navigate = useNavigate()
   const [unreadCounts, setUnreadCounts] = useState({})
   const [switchingRole, setSwitchingRole] = useState(false)
+  const [switchingTargetRole, setSwitchingTargetRole] = useState('')
   const [roleSwitchError, setRoleSwitchError] = useState('')
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('hugatiera.sidebar.collapsed') === 'true')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState(() => {
     try {
       const raw = localStorage.getItem('hugatiera.sidebar.collapsedGroups')
@@ -157,9 +160,13 @@ export default function AppSidebar() {
     if (!user?.isDualRole || switchingRole) return
     const nextRole = user.role === 'client' ? 'gardener' : 'client'
     setSwitchingRole(true)
+    setSwitchingTargetRole(nextRole)
     setRoleSwitchError('')
     try {
-      await switchRole(nextRole)
+      await Promise.all([
+        switchRole(nextRole),
+        new Promise((resolve) => setTimeout(resolve, 480)),
+      ])
       setCollapsedGroups({})
       setUnreadCounts({})
       closeMobile()
@@ -169,6 +176,20 @@ export default function AppSidebar() {
       setRoleSwitchError(error?.message || 'Unable to switch role right now.')
     } finally {
       setSwitchingRole(false)
+      setSwitchingTargetRole('')
+    }
+  }
+
+  async function handleConfirmLogout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 520))
+      setLogoutConfirmOpen(false)
+      closeMobile()
+      await logout()
+    } finally {
+      setLoggingOut(false)
     }
   }
 
@@ -343,11 +364,23 @@ export default function AppSidebar() {
       </aside>
       <Modal
         open={logoutConfirmOpen}
-        onClose={() => setLogoutConfirmOpen(false)}
-        eyebrow="Leaving your garden?"
-        title="Do you want to log out?"
+        onClose={() => { if (!loggingOut) setLogoutConfirmOpen(false) }}
+        eyebrow={loggingOut ? 'Securing session' : 'Leaving your garden?'}
+        title={loggingOut ? 'Logging you out...' : 'Do you want to log out?'}
         className="botanical-logout-modal"
       >
+        {loggingOut ? (
+          <div className="auth-login-transition" role="status" aria-live="polite">
+            <div className="auth-login-badge" aria-hidden="true">
+              <Loader2 size={24} className="auth-spin" />
+            </div>
+            <h2>See you soon!</h2>
+            <p className="muted">Closing your HugaTiera session...</p>
+            <div className="auth-login-progress" aria-hidden="true">
+              <span />
+            </div>
+          </div>
+        ) : (
         <div className="botanical-logout-body">
           <div className="botanical-logout-scene">
             <LogoutBotanicalScene />
@@ -366,17 +399,30 @@ export default function AppSidebar() {
             <button
               className="button"
               type="button"
-              onClick={() => {
-                setLogoutConfirmOpen(false)
-                closeMobile()
-                logout()
-              }}
+              onClick={handleConfirmLogout}
             >
               <LogOut size={15} /> Yes, log out
             </button>
           </div>
         </div>
+        )}
       </Modal>
+      {switchingRole && (
+        <div className="workspace-switch-overlay" role="status" aria-live="polite">
+          <div className="workspace-switch-card">
+            <div className="auth-login-badge" aria-hidden="true">
+              <ArrowLeftRight size={24} />
+            </div>
+            <h2>
+              Switching to {switchingTargetRole === 'gardener' ? 'Gardener' : 'Client'} Mode
+            </h2>
+            <p className="muted">Updating your HugaTiera workspace...</p>
+            <div className="auth-login-progress" aria-hidden="true">
+              <span />
+            </div>
+          </div>
+        </div>
+      )}
       <nav className="mobile-bottom-nav" aria-label="Mobile quick navigation">
         {mobileNavLinks.map((item) => {
           const Icon = iconFor(item.label)

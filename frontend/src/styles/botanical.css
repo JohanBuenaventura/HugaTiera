@@ -2951,3 +2951,39 @@ textarea {
     transform: scaleX(1);
   }
 }
+
+.workspace-switch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(247, 245, 236, 0.84);
+  backdrop-filter: blur(8px);
+  animation: botanicalFadeUp 0.18s ease both;
+}
+
+.workspace-switch-card {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 10px;
+  width: min(360px, 100%);
+  padding: 28px 24px;
+  border: 1px solid #D5E0CE;
+  border-radius: 22px;
+  background: var(--surface-white);
+  box-shadow: var(--shadow-lg);
+}
+
+.workspace-switch-card h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  color: var(--forest);
+}
+
+.workspace-switch-card p {
+  margin: 0;
+  font-size: 13.5px;
+}
