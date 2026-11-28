@@ -204,8 +204,8 @@ Administrators have a dedicated multi-tab governance workspace (and are intentio
 
 ## 7. Cross-Cutting Platform Features
 
-- **In-App 1-to-1 Messaging (`/messages`, `/api/conversations`):** Real-time inbox with unread counters, auto-read tracking on thread open, and Case 1 anti-spam gating (gardeners can only message on a general request while holding an active `sent` or `accepted` offer).
-- **In-App Notifications (`/notifications`, `/api/notifications`):** Dedicated notification feed with `All` / `Unread` filters, single-item and mark-all-read actions, sidebar unread badges, and deep-link routing to inquiries, bookings, conversations, reviews, or profiles.
+- **In-App 1-to-1 Messaging (`/messages`, `/api/conversations`):** Role-scoped inbox (`client_id` in Client Mode, `gardener_id` in Gardener Mode so dual-role chats never bleed across workspaces), unread counters, auto-read tracking on thread open, and Case 1 anti-spam gating (gardeners can only message on a general request while holding an active `sent` or `accepted` offer).
+- **In-App Notifications (`/notifications`, `/api/notifications`):** Role-scoped notification feed and sidebar unread badges (isolating client-side vs. gardener-side inquiry, booking, conversation, profile, and review alerts), `All` / `Unread` filters, mode-scoped single-item and mark-all-read actions, and deep-link routing to inquiries, bookings, conversations, reviews, or profiles.
 - **User Reporting (`POST /api/profiles/reports`):** Any authenticated user can report abusive users, inaccurate services, or messages (with self-report prevention) for Administrator review.
 - **Responsive Design & Accessibility:** Consistent Three-Color Editorial Design System (`#244B36` Forest, `#F7F5EC` Ivory, `#D99A36` Amber), collapsible desktop sidebar + mobile navigation drawer, accessible modal dialogs, skeleton loaders, and print/PDF receipt styles.
 - **Local Demo Seeding:**

@@ -241,10 +241,10 @@ This document provides the complete technical reference for all **16 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/conversations` | Required | `client`, `gardener`, `administrator` | Lists conversation threads for the authenticated user with `other_party_id`, `other_party_role`, `other_party_name`, inquiry/service context (`inquiry_subject`, `inquiry_status`, `inquiry_location`, `service_title`), latest linked booking context (`booking_id`, `booking_status`, `booking_stage`, `booking_scheduled_start`), `latest_message`, `latest_message_at`, `latest_sender_id`, and `unread_count`. |
-| `POST` | `/api/conversations` | Required | `client`, `gardener` | Opens or retrieves an existing conversation thread from `{ inquiryId, gardenerId }` or `{ bookingId }`. On Case 1 general requests, a gardener must hold an active (`sent` or `accepted`) offer (`403` otherwise). |
-| `GET` | `/api/conversations/:conversationId/messages` | Required | `client`, `gardener`, `administrator` | Returns chronological messages in a thread and marks incoming unread messages as read (`read_at = CURRENT_TIMESTAMP`). |
-| `POST` | `/api/conversations/:conversationId/messages` | Required | `client`, `gardener` | Sends a message (`messageText`, 1–2000 chars) and creates an in-app notification for the recipient. |
+| `GET` | `/api/conversations` | Required | `client`, `gardener`, `administrator` | Lists conversation threads scoped to the authenticated user's active workspace role (`client_id` in Client Mode, `gardener_id` in Gardener Mode) with `other_party_id`, `other_party_role`, `other_party_name`, inquiry/service context (`inquiry_subject`, `inquiry_status`, `inquiry_location`, `service_title`), latest linked booking context (`booking_id`, `booking_status`, `booking_stage`, `booking_scheduled_start`), `latest_message`, `latest_message_at`, `latest_sender_id`, and `unread_count`. |
+| `POST` | `/api/conversations` | Required | `client`, `gardener` | Opens or retrieves an existing conversation thread from `{ inquiryId, gardenerId }` or `{ bookingId }`, scoped to the caller's active workspace role. On Case 1 general requests, a gardener must hold an active (`sent` or `accepted`) offer (`403` otherwise). |
+| `GET` | `/api/conversations/:conversationId/messages` | Required | `client`, `gardener`, `administrator` | Returns chronological messages in a thread accessible in the caller's active workspace role (`404` for opposite-mode threads) and marks incoming unread messages as read (`read_at = CURRENT_TIMESTAMP`). |
+| `POST` | `/api/conversations/:conversationId/messages` | Required | `client`, `gardener` | Sends a message (`message`, 1–5,000 chars) in a thread accessible in the caller's active workspace role and creates an in-app notification for the recipient. |
 
 ---
 
@@ -252,9 +252,9 @@ This document provides the complete technical reference for all **16 REST API ro
 
 | Method | Path | Auth | Allowed Roles | Purpose |
 |---|---|---|---|---|
-| `GET` | `/api/notifications` | Required | `client`, `gardener`, `clerk`, `administrator` | Returns recent notifications (`limit 50`) and `unreadCount` for the authenticated user. |
-| `PATCH` | `/api/notifications/read-all` | Required | `client`, `gardener`, `clerk`, `administrator` | Marks all unread notifications for the user as read. |
-| `PATCH` | `/api/notifications/:notificationId/read` | Required | `client`, `gardener`, `clerk`, `administrator` | Marks a single notification owned by the user as read. |
+| `GET` | `/api/notifications` | Required | `client`, `gardener`, `clerk`, `administrator` | Returns recent notifications (`limit 50`) and `unreadCount` scoped to the authenticated user's active workspace role (Client Mode shows client-side inquiry/booking/conversation + general alerts; Gardener Mode shows gardener-side inquiry/booking/conversation + `gardener_profile`/`review` + general alerts). |
+| `PATCH` | `/api/notifications/read-all` | Required | `client`, `gardener`, `clerk`, `administrator` | Marks all unread notifications belonging to the user's active workspace role as read without clearing opposite-mode alerts. |
+| `PATCH` | `/api/notifications/:notificationId/read` | Required | `client`, `gardener`, `clerk`, `administrator` | Marks a single notification owned by the user (and accessible in the active workspace role) as read. |
 
 ---
 
