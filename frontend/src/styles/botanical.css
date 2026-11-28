@@ -2987,3 +2987,96 @@ textarea {
   margin: 0;
   font-size: 13.5px;
 }
+
+/* 22. Landing Page Hover & Soft Mouse Spotlight */
+.landing-spotlight-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-spotlight-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(91, 130, 102, 0.12),
+    transparent 70%
+  );
+  transition: opacity 0.25s ease;
+}
+
+@media (hover: hover) {
+  .landing-spotlight-surface:hover::after {
+    opacity: 1;
+  }
+}
+
+.landing-category-card {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.landing-category-card:hover {
+  transform: translateY(-3px);
+  border-color: #9BB894;
+  box-shadow: var(--shadow-md);
+}
+
+.landing-category-card:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+.landing-category-icon {
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.landing-category-card:hover .landing-category-icon {
+  background: var(--forest);
+  color: var(--cream);
+  transform: scale(1.06);
+}
+
+.landing-category-arrow svg {
+  transition: transform 0.2s ease;
+}
+
+.landing-category-card:hover .landing-category-arrow svg {
+  transform: translate(2px, -2px);
+}
+
+.botanical-tile {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
+}
+
+.botanical-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.botanical-tile:active,
+.landing-btn:active {
+  transform: scale(0.98);
+}
+
+.landing-btn svg,
+.landing-inline-link svg {
+  transition: transform 0.18s ease;
+}
+
+.landing-btn:hover svg,
+.landing-inline-link:hover svg {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-spotlight-surface::after {
+    display: none;
+  }
+  .landing-category-card:hover,
+  .botanical-tile:hover,
+  .landing-category-card:hover .landing-category-icon {
+    transform: none;
+  }
+}

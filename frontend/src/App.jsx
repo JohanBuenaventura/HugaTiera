@@ -292,7 +292,14 @@ function HomePage() {
             </div>
 
             <div className="landing-hero-visual">
-              <div className="botanical-landing-hero-card">
+              <div
+                className="botanical-landing-hero-card landing-spotlight-surface"
+                onMouseMove={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  event.currentTarget.style.setProperty('--mx', `${event.clientX - rect.left}px`)
+                  event.currentTarget.style.setProperty('--my', `${event.clientY - rect.top}px`)
+                }}
+              >
                 <WelcomeBotanicalScene />
                 <div className="botanical-feature-tiles" style={{ marginTop: '14px', marginBottom: 0 }}>
                   <Link className="botanical-tile is-sage" to="/services" style={{ padding: '14px 16px' }}>
@@ -332,7 +339,16 @@ function HomePage() {
                 const matchedId = categoryMap[title.toLowerCase()]
                 const targetUrl = matchedId ? `/services?categoryId=${matchedId}` : '/services'
                 return (
-                  <Link className="landing-category-card" to={targetUrl} key={title}>
+                  <Link
+                    className="landing-category-card landing-spotlight-surface"
+                    to={targetUrl}
+                    key={title}
+                    onMouseMove={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect()
+                      event.currentTarget.style.setProperty('--mx', `${event.clientX - rect.left}px`)
+                      event.currentTarget.style.setProperty('--my', `${event.clientY - rect.top}px`)
+                    }}
+                  >
                     <span className="landing-category-icon" aria-hidden="true">
                       <Icon size={19} />
                     </span>
